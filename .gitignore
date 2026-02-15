@@ -1,0 +1,63 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# Jupyter
+.ipynb_checkpoints
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Environment & Secrets
+.env
+.env.*
+!.env.example
+.aws/
+*.pem
+*.key
+
+# Terraform
+*.tfstate
+*.tfstate.*
+*.tfvars
+.terraform/
+.terraform.lock.hcl
+
+# Node/Frontend
+node_modules/
+dist/
+build/
+.next/
+
+# Logs
+*.log
+logs/
+
+# Database
+*.db
+*.sqlite
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data & Models
+data/raw/
+data/processed/
+models/*.pkl
+models/*.joblib
+mlruns/
+
+# Test
+.coverage
+.pytest_cache/
+htmlcov/
