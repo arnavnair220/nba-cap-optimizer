@@ -25,7 +25,7 @@ variable "db_password" {
 variable "db_username" {
   description = "RDS database master username"
   type        = string
-  default     = "admin"
+  default     = "nbacapdb"
 }
 
 variable "db_instance_class" {
