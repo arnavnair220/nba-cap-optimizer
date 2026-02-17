@@ -1,5 +1,6 @@
 # Common configuration shared across all environments
 # Environment-specific files (dev.yaml, prod.yaml) will override these values
+# Phase 1 (MVP): ETL Pipeline Only
 
 project:
   name: nba-cap-optimizer
@@ -11,24 +12,16 @@ aws:
     lambda:
       runtime: python3.11
       timeout: 300
-      memory_size: 1024
-    sagemaker:
-      instance_type: ml.m5.xlarge
+      memory_size: 512
     rds:
       engine: postgres
-      engine_version: "15.3"
+      engine_version: "15.4"
       port: 5432
 
 database:
   pool_size: 10
   pool_recycle: 3600
   echo_sql: false
-
-api:
-  version: v1
-  timeout: 30
-  max_retries: 3
-  retry_delay: 1
 
 data_sources:
   nba_api:
@@ -39,25 +32,15 @@ data_sources:
   basketball_reference:
     base_url: https://www.basketball-reference.com
     timeout: 30
-  spotrac:
+  hoopshype:
     base_url: https://www.hoopshype.com/salaries
     timeout: 30
-
-model:
-  algorithms:
-    - xgboost
-    - lightgbm
-  features:
-    min_games_played: 10
-    rolling_window_games: 10
-  evaluation:
-    cv_folds: 5
-    test_size: 0.2
 
 data_pipeline:
   schedule: "0 6 * * *"  # Daily at 6 AM UTC
   batch_size: 100
   max_retries: 3
+  retry_delay: 2
 
 logging:
   format: json
@@ -68,3 +51,8 @@ logging:
 monitoring:
   metrics_interval: 60
   health_check_interval: 300
+
+# Notes:
+# - Phase 2 will add: ML model configuration (XGBoost, LightGBM)
+# - Phase 3 will add: API configuration
+# - Phase 4 will add: Frontend configuration
