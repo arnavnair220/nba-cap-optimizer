@@ -9,15 +9,7 @@ db_allocated_storage = 20
 lambda_memory_size = 512
 lambda_timeout     = 300
 
-# SageMaker - use spot instances for cost savings
-sagemaker_instance_type          = "ml.m5.xlarge"
-sagemaker_endpoint_instance_type = "ml.t3.medium"
-
-# API Gateway - lower rate limits for dev
-api_throttle_burst_limit = 100
-api_throttle_rate_limit  = 50
-
 tags = {
-  CostCenter = "development"
+  CostCenter   = "development"
   AutoShutdown = "true"
 }

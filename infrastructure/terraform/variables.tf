@@ -59,45 +59,6 @@ variable "lambda_memory_size" {
   default     = 512
 }
 
-# SageMaker variables
-variable "sagemaker_instance_type" {
-  description = "SageMaker instance type for training/processing"
-  type        = string
-  default     = "ml.m5.xlarge"
-}
-
-variable "sagemaker_endpoint_instance_type" {
-  description = "SageMaker endpoint instance type"
-  type        = string
-  default     = "ml.t3.medium"
-}
-
-# API Gateway variables
-variable "api_stage_name" {
-  description = "API Gateway stage name"
-  type        = string
-  default     = "v1"
-}
-
-variable "api_throttle_burst_limit" {
-  description = "API Gateway throttle burst limit"
-  type        = number
-  default     = 500
-}
-
-variable "api_throttle_rate_limit" {
-  description = "API Gateway throttle rate limit"
-  type        = number
-  default     = 100
-}
-
-# Frontend variables
-variable "frontend_domain_name" {
-  description = "Custom domain name for frontend (optional)"
-  type        = string
-  default     = ""
-}
-
 # Tags
 variable "tags" {
   description = "Additional tags for resources"
