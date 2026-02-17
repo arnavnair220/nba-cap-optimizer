@@ -28,7 +28,9 @@ build/
 # Terraform
 *.tfstate
 *.tfstate.*
-*.tfvars
+*.tfvars.json
+secrets.tfvars
+*.auto.tfvars
 .terraform/
 .terraform.lock.hcl
 
