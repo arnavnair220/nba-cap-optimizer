@@ -140,7 +140,7 @@ resource "aws_security_group" "lambda" {
 resource "aws_db_instance" "main" {
   identifier     = "${local.name_prefix}-db"
   engine         = "postgres"
-  engine_version = "15.4"
+  engine_version = "15"
 
   instance_class    = var.db_instance_class
   allocated_storage = var.db_allocated_storage
@@ -326,8 +326,7 @@ resource "aws_lambda_function" "fetch_data" {
   lifecycle {
     ignore_changes = [
       filename,
-      source_code_hash,
-      last_modified
+      source_code_hash
     ]
   }
 }
@@ -356,8 +355,7 @@ resource "aws_lambda_function" "validate_data" {
   lifecycle {
     ignore_changes = [
       filename,
-      source_code_hash,
-      last_modified
+      source_code_hash
     ]
   }
 }
@@ -386,8 +384,7 @@ resource "aws_lambda_function" "transform_data" {
   lifecycle {
     ignore_changes = [
       filename,
-      source_code_hash,
-      last_modified
+      source_code_hash
     ]
   }
 }
@@ -422,8 +419,7 @@ resource "aws_lambda_function" "load_to_rds" {
   lifecycle {
     ignore_changes = [
       filename,
-      source_code_hash,
-      last_modified
+      source_code_hash
     ]
   }
 }
