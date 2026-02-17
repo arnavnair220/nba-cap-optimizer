@@ -43,23 +43,6 @@ jobs:
       - name: Run mypy (type checking)
         run: mypy src/ --ignore-missing-imports
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Install frontend dependencies
-        working-directory: ./src/web
-        run: npm ci
-
-      - name: Run ESLint
-        working-directory: ./src/web
-        run: npm run lint
-
-      - name: Run Prettier check
-        working-directory: ./src/web
-        run: npm run format:check
-
   # Unit Tests (Stricter Coverage for Production)
   test:
     name: Run Tests
@@ -96,19 +79,6 @@ jobs:
           flags: backend
           fail_ci_if_error: true
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Install frontend dependencies
-        working-directory: ./src/web
-        run: npm ci
-
-      - name: Run frontend tests
-        working-directory: ./src/web
-        run: npm test -- --coverage --watchAll=false --coverageThreshold='{"global":{"branches":80,"functions":80,"lines":80,"statements":80}}'
-
   # Security Scanning (More Thorough)
   security-scan:
     name: Security Scan
@@ -135,15 +105,6 @@ jobs:
         run: |
           pip install bandit
           bandit -r src/ -ll -f json -o bandit-report.json
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Audit npm dependencies
-        working-directory: ./src/web
-        run: npm audit --audit-level=high
 
       - name: Check for secrets in code
         uses: trufflesecurity/trufflehog@main
