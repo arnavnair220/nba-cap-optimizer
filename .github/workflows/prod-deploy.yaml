@@ -1,0 +1,456 @@
+name: Production Deployment
+
+on:
+  push:
+    branches:
+      - main
+  release:
+    types: [published]
+
+env:
+  ENV: production
+  AWS_REGION: us-east-1
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "18"
+
+jobs:
+  # Code Quality Checks (Stricter for Production)
+  lint-and-format:
+    name: Lint & Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Python linting tools
+        run: |
+          pip install black flake8 isort mypy
+
+      - name: Run black (format check)
+        run: black --check .
+
+      - name: Run isort (import sorting)
+        run: isort --check-only .
+
+      - name: Run flake8 (linting)
+        run: flake8 src/ --max-line-length=100 --extend-ignore=E203,W503
+
+      - name: Run mypy (type checking)
+        run: mypy src/ --ignore-missing-imports
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install frontend dependencies
+        working-directory: ./src/web
+        run: npm ci
+
+      - name: Run ESLint
+        working-directory: ./src/web
+        run: npm run lint
+
+      - name: Run Prettier check
+        working-directory: ./src/web
+        run: npm run format:check
+
+  # Unit Tests (Stricter Coverage for Production)
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    needs: lint-and-format
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Run Python unit tests
+        run: |
+          pytest tests/ \
+            --cov=src \
+            --cov-report=xml \
+            --cov-report=term \
+            --cov-fail-under=80
+        env:
+          ENV: test
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          flags: backend
+          fail_ci_if_error: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install frontend dependencies
+        working-directory: ./src/web
+        run: npm ci
+
+      - name: Run frontend tests
+        working-directory: ./src/web
+        run: npm test -- --coverage --watchAll=false --coverageThreshold='{"global":{"branches":80,"functions":80,"lines":80,"statements":80}}'
+
+  # Security Scanning (More Thorough)
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: lint-and-format
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install safety
+        run: pip install safety
+
+      - name: Check Python dependencies for vulnerabilities
+        run: |
+          pip install -r requirements.txt
+          safety check --json
+
+      - name: Run Bandit security linter
+        run: |
+          pip install bandit
+          bandit -r src/ -ll -f json -o bandit-report.json
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Audit npm dependencies
+        working-directory: ./src/web
+        run: npm audit --audit-level=high
+
+      - name: Check for secrets in code
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+
+  # Build Lambda Packages
+  build-backend:
+    name: Build Backend Packages
+    runs-on: ubuntu-latest
+    needs: [test, security-scan]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt -t ./package
+
+      - name: Copy source code
+        run: |
+          cp -r src/ ./package/
+
+      - name: Create Lambda deployment package
+        run: |
+          cd package
+          zip -r ../lambda-package.zip .
+
+      - name: Upload Lambda package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lambda-package-prod
+          path: lambda-package.zip
+          retention-days: 30
+
+  # Build Frontend
+  build-frontend:
+    name: Build Frontend
+    runs-on: ubuntu-latest
+    needs: [test, security-scan]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        working-directory: ./src/web
+        run: npm ci
+
+      - name: Build production bundle
+        working-directory: ./src/web
+        run: npm run build
+        env:
+          REACT_APP_API_URL: ${{ secrets.PROD_API_URL }}
+          REACT_APP_ENV: production
+          NODE_ENV: production
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build-prod
+          path: src/web/build
+          retention-days: 30
+
+  # Manual Approval Gate
+  approve-deployment:
+    name: Approve Production Deployment
+    runs-on: ubuntu-latest
+    needs: [build-backend, build-frontend]
+    environment:
+      name: production
+      url: https://nba-cap-optimizer.com
+    steps:
+      - name: Manual approval checkpoint
+        run: |
+          echo "Production deployment approved by ${{ github.actor }}"
+          echo "Proceeding with deployment to production..."
+
+  # Deploy Infrastructure
+  deploy-infrastructure:
+    name: Deploy Infrastructure (Terraform)
+    runs-on: ubuntu-latest
+    needs: approve-deployment
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.PROD_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.PROD_AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
+
+      - name: Terraform Init
+        working-directory: ./infrastructure/terraform
+        run: terraform init
+
+      - name: Terraform Workspace
+        working-directory: ./infrastructure/terraform
+        run: |
+          terraform workspace select prod || terraform workspace new prod
+
+      - name: Terraform Plan
+        working-directory: ./infrastructure/terraform
+        run: terraform plan -out=tfplan
+        env:
+          TF_VAR_environment: production
+          TF_VAR_db_password: ${{ secrets.PROD_DB_PASSWORD }}
+
+      - name: Terraform Apply
+        working-directory: ./infrastructure/terraform
+        run: terraform apply -auto-approve tfplan
+
+      - name: Output infrastructure values
+        working-directory: ./infrastructure/terraform
+        run: |
+          terraform output -json > outputs.json
+          echo "API_ENDPOINT=$(terraform output -raw api_endpoint)" >> $GITHUB_OUTPUT
+        id: tf-output
+
+      - name: Upload Terraform outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-outputs-prod
+          path: infrastructure/terraform/outputs.json
+          retention-days: 30
+
+  # Deploy Backend Code
+  deploy-backend:
+    name: Deploy Backend Code
+    runs-on: ubuntu-latest
+    needs: deploy-infrastructure
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.PROD_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.PROD_AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Download Lambda package
+        uses: actions/download-artifact@v4
+        with:
+          name: lambda-package-prod
+
+      - name: Deploy Lambda functions
+        run: |
+          for function in $(aws lambda list-functions --query 'Functions[?starts_with(FunctionName, `nba-cap-`) && contains(FunctionName, `prod`)].FunctionName' --output text); do
+            echo "Updating $function..."
+            aws lambda update-function-code \
+              --function-name $function \
+              --zip-file fileb://lambda-package.zip
+
+            # Wait for update to complete
+            aws lambda wait function-updated --function-name $function
+
+            # Publish new version
+            VERSION=$(aws lambda publish-version --function-name $function --query 'Version' --output text)
+            echo "Published version $VERSION for $function"
+          done
+
+      - name: Wait for Lambda updates to stabilize
+        run: sleep 30
+
+  # Deploy Frontend
+  deploy-frontend:
+    name: Deploy Frontend
+    runs-on: ubuntu-latest
+    needs: deploy-infrastructure
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.PROD_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.PROD_AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Download frontend build
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-build-prod
+          path: build
+
+      - name: Deploy to S3
+        run: |
+          aws s3 sync build/ s3://nba-cap-frontend-prod --delete
+
+      - name: Invalidate CloudFront cache
+        run: |
+          DISTRIBUTION_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?contains(Comment, 'nba-cap-prod')].Id" --output text)
+          if [ ! -z "$DISTRIBUTION_ID" ]; then
+            aws cloudfront create-invalidation --distribution-id $DISTRIBUTION_ID --paths "/*"
+          fi
+
+  # Smoke Tests
+  smoke-tests:
+    name: Run Smoke Tests
+    runs-on: ubuntu-latest
+    needs: [deploy-backend, deploy-frontend]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install test dependencies
+        run: |
+          pip install requests pytest
+
+      - name: Run smoke tests
+        run: |
+          python scripts/smoke_tests.py --env prod --api-url ${{ secrets.PROD_API_URL }}
+        env:
+          API_KEY: ${{ secrets.PROD_API_KEY }}
+
+      - name: Health check
+        run: |
+          curl -f ${{ secrets.PROD_API_URL }}/health || exit 1
+
+      - name: Check response times
+        run: |
+          response_time=$(curl -o /dev/null -s -w '%{time_total}\n' ${{ secrets.PROD_API_URL }}/health)
+          echo "Response time: ${response_time}s"
+          if (( $(echo "$response_time > 2.0" | bc -l) )); then
+            echo "Warning: Response time is slow"
+          fi
+
+  # Rollback on Failure
+  rollback:
+    name: Rollback on Failure
+    runs-on: ubuntu-latest
+    needs: smoke-tests
+    if: failure()
+    steps:
+      - name: Notify of failure
+        run: |
+          echo "Deployment failed! Smoke tests did not pass."
+          echo "Manual rollback may be required."
+
+      - name: Create rollback issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: 'Production Deployment Failed - Rollback Required',
+              body: `Production deployment failed for commit ${context.sha}.\n\nSmoke tests did not pass. Manual rollback may be required.\n\nTriggered by: ${context.actor}`,
+              labels: ['deployment', 'critical']
+            })
+
+  # Deployment Summary
+  deployment-summary:
+    name: Deployment Summary
+    runs-on: ubuntu-latest
+    needs: smoke-tests
+    if: success()
+    steps:
+      - name: Create success summary
+        run: |
+          echo "## Production Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** Production" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Status:** ✅ Successful" >> $GITHUB_STEP_SUMMARY
+          echo "**Deployed by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Timestamp:** $(date -u)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Services Deployed" >> $GITHUB_STEP_SUMMARY
+          echo "- Backend (Lambda functions)" >> $GITHUB_STEP_SUMMARY
+          echo "- Frontend (S3 + CloudFront)" >> $GITHUB_STEP_SUMMARY
+          echo "- Infrastructure (Terraform)" >> $GITHUB_STEP_SUMMARY
+
+      - name: Tag successful deployment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const tagName = `deploy-prod-${new Date().toISOString().split('T')[0]}-${context.sha.substring(0, 7)}`;
+            github.rest.git.createRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: `refs/tags/${tagName}`,
+              sha: context.sha
+            });
