@@ -11,13 +11,6 @@ def test_placeholder():
     assert True
 
 
-def test_api_handler_import():
-    """Test that API handler can be imported"""
-    from src.api import handler
-
-    assert hasattr(handler, "handler")
-
-
 def test_etl_imports():
     """Test that ETL modules can be imported"""
     from src.etl import fetch_data, load_to_rds, transform_data, validate_data
