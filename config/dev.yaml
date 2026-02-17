@@ -1,0 +1,96 @@
+# Development environment configuration
+environment: development
+
+aws:
+  account_id: ${AWS_ACCOUNT_ID_DEV}
+  profile: nba-cap-dev
+
+  services:
+    lambda:
+      memory_size: 512  # Smaller for dev to save costs
+      reserved_concurrency: 5
+
+    sagemaker:
+      instance_type: ml.t3.medium  # Cheaper instance for dev
+
+    rds:
+      instance_class: db.t3.micro  # Smallest instance for dev
+      allocated_storage: 20
+      backup_retention_period: 1  # Keep backups for 1 day only
+      multi_az: false
+      deletion_protection: false
+
+database:
+  host: ${DB_HOST_DEV}
+  name: nba_cap_dev
+  username: ${DB_USERNAME_DEV}
+  password: ${DB_PASSWORD_DEV}
+  echo_sql: true  # Show SQL queries in logs
+
+s3:
+  raw_data_bucket: nba-cap-raw-data-dev
+  processed_data_bucket: nba-cap-processed-data-dev
+  model_artifacts_bucket: nba-cap-model-artifacts-dev
+  lifecycle_rules:
+    raw_data_expiration_days: 30
+    processed_data_expiration_days: 60
+
+api:
+  base_url: https://api-dev.nba-cap-optimizer.com
+  rate_limit: 1000  # Requests per hour
+  cors_origins:
+    - http://localhost:3000
+    - http://localhost:5173
+    - https://dev.nba-cap-optimizer.com
+  throttling:
+    burst_limit: 100
+    rate_limit: 50
+
+frontend:
+  url: https://dev.nba-cap-optimizer.com
+  amplify_app_id: ${AMPLIFY_APP_ID_DEV}
+
+sagemaker:
+  experiment_name: nba-fmv-prediction-dev
+  model_package_group: nba-cap-models-dev
+  processing_job_prefix: nba-cap-processing-dev
+  training_job_prefix: nba-cap-training-dev
+  endpoint_name: nba-cap-endpoint-dev
+  use_spot_instances: true
+  max_wait_time: 3600
+
+model:
+  training:
+    max_epochs: 50  # Faster training for dev
+    early_stopping_patience: 5
+  prediction:
+    cache_enabled: true
+    cache_ttl: 1800  # 30 minutes
+
+logging:
+  level: DEBUG  # Verbose logging for development
+  cloudwatch:
+    log_group: /aws/nba-cap-optimizer/dev
+    retention_days: 7  # Keep logs for 1 week
+    stream_prefix: dev
+
+monitoring:
+  xray_enabled: true
+  xray_sampling_rate: 1.0  # Trace 100% of requests in dev
+  metrics_namespace: NBACapOptimizer/Dev
+  alarms_enabled: false  # No alarms in dev
+  cloudwatch_dashboard: nba-cap-optimizer-dev
+
+stepfunctions:
+  state_machine_name: nba-cap-data-pipeline-dev
+  execution_timeout: 3600
+
+eventbridge:
+  rule_name: nba-cap-daily-update-dev
+  schedule: "cron(0 6 * * ? *)"  # 6 AM UTC daily
+
+cost_tags:
+  Environment: development
+  Project: nba-cap-optimizer
+  ManagedBy: terraform
+  CostCenter: dev

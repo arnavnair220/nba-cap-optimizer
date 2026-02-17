@@ -1,0 +1,127 @@
+# Production environment configuration
+environment: production
+
+aws:
+  account_id: ${AWS_ACCOUNT_ID_PROD}
+  profile: nba-cap-prod
+
+  services:
+    lambda:
+      memory_size: 2048  # More memory for better performance
+      reserved_concurrency: 100
+
+    sagemaker:
+      instance_type: ml.m5.2xlarge  # Production-grade instance
+
+    rds:
+      instance_class: db.r5.large  # Production instance with more resources
+      allocated_storage: 100
+      max_allocated_storage: 500  # Auto-scaling storage
+      backup_retention_period: 30  # Keep backups for 30 days
+      backup_window: "03:00-04:00"
+      maintenance_window: "sun:04:00-sun:05:00"
+      multi_az: true  # High availability
+      deletion_protection: true
+      performance_insights_enabled: true
+
+database:
+  host: ${DB_HOST_PROD}
+  name: nba_cap_prod
+  username: ${DB_USERNAME_PROD}
+  password: ${DB_PASSWORD_PROD}
+  echo_sql: false  # No SQL logging in prod
+  ssl_mode: require
+
+s3:
+  raw_data_bucket: nba-cap-raw-data-prod
+  processed_data_bucket: nba-cap-processed-data-prod
+  model_artifacts_bucket: nba-cap-model-artifacts-prod
+  versioning_enabled: true
+  encryption: AES256
+  lifecycle_rules:
+    raw_data_expiration_days: 365
+    processed_data_expiration_days: 730
+    glacier_transition_days: 180
+
+api:
+  base_url: https://api.nba-cap-optimizer.com
+  rate_limit: 10000  # Requests per hour
+  cors_origins:
+    - https://nba-cap-optimizer.com
+    - https://www.nba-cap-optimizer.com
+  throttling:
+    burst_limit: 5000
+    rate_limit: 2000
+  waf_enabled: true
+
+frontend:
+  url: https://nba-cap-optimizer.com
+  amplify_app_id: ${AMPLIFY_APP_ID_PROD}
+  cdn_enabled: true
+
+sagemaker:
+  experiment_name: nba-fmv-prediction-prod
+  model_package_group: nba-cap-models-prod
+  processing_job_prefix: nba-cap-processing-prod
+  training_job_prefix: nba-cap-training-prod
+  endpoint_name: nba-cap-endpoint-prod
+  use_spot_instances: true
+  max_wait_time: 7200
+
+model:
+  training:
+    max_epochs: 200
+    early_stopping_patience: 20
+  prediction:
+    cache_enabled: true
+    cache_ttl: 3600  # 1 hour
+  deployment:
+    min_instances: 2
+    max_instances: 10
+    auto_scaling_enabled: true
+
+logging:
+  level: INFO  # Less verbose for production
+  cloudwatch:
+    log_group: /aws/nba-cap-optimizer/prod
+    retention_days: 90  # Keep logs for 3 months
+    stream_prefix: prod
+    kms_key_id: ${KMS_KEY_ID_PROD}
+
+monitoring:
+  xray_enabled: true
+  xray_sampling_rate: 0.05  # Trace 5% of requests to reduce costs
+  metrics_namespace: NBACapOptimizer/Prod
+  alarms_enabled: true
+  cloudwatch_dashboard: nba-cap-optimizer-prod
+  sns_topic_arn: ${SNS_ALARM_TOPIC_ARN_PROD}
+
+  alarms:
+    api_error_rate_threshold: 5  # Percent
+    lambda_duration_threshold: 250000  # milliseconds
+    db_cpu_threshold: 80  # Percent
+    db_connections_threshold: 80  # Percent of max
+
+stepfunctions:
+  state_machine_name: nba-cap-data-pipeline-prod
+  execution_timeout: 7200
+
+eventbridge:
+  rule_name: nba-cap-daily-update-prod
+  schedule: "cron(0 6 * * ? *)"  # 6 AM UTC daily
+  dlq_enabled: true
+
+security:
+  secrets_manager_enabled: true
+  kms_key_id: ${KMS_KEY_ID_PROD}
+  vpc_enabled: true
+  vpc_id: ${VPC_ID_PROD}
+  private_subnet_ids: ${PRIVATE_SUBNET_IDS_PROD}
+  security_group_ids: ${SECURITY_GROUP_IDS_PROD}
+
+cost_tags:
+  Environment: production
+  Project: nba-cap-optimizer
+  ManagedBy: terraform
+  CostCenter: prod
+  Compliance: required

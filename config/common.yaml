@@ -1,0 +1,70 @@
+# Common configuration shared across all environments
+# Environment-specific files (dev.yaml, prod.yaml) will override these values
+
+project:
+  name: nba-cap-optimizer
+  version: 0.1.0
+
+aws:
+  region: us-east-1
+  services:
+    lambda:
+      runtime: python3.11
+      timeout: 300
+      memory_size: 1024
+    sagemaker:
+      instance_type: ml.m5.xlarge
+    rds:
+      engine: postgres
+      engine_version: "15.3"
+      port: 5432
+
+database:
+  pool_size: 10
+  pool_recycle: 3600
+  echo_sql: false
+
+api:
+  version: v1
+  timeout: 30
+  max_retries: 3
+  retry_delay: 1
+
+data_sources:
+  nba_api:
+    base_url: https://stats.nba.com/stats
+    timeout: 30
+    headers:
+      User-Agent: Mozilla/5.0
+  basketball_reference:
+    base_url: https://www.basketball-reference.com
+    timeout: 30
+  spotrac:
+    base_url: https://www.hoopshype.com/salaries
+    timeout: 30
+
+model:
+  algorithms:
+    - xgboost
+    - lightgbm
+  features:
+    min_games_played: 10
+    rolling_window_games: 10
+  evaluation:
+    cv_folds: 5
+    test_size: 0.2
+
+data_pipeline:
+  schedule: "0 6 * * *"  # Daily at 6 AM UTC
+  batch_size: 100
+  max_retries: 3
+
+logging:
+  format: json
+  handlers:
+    - console
+    - cloudwatch
+
+monitoring:
+  metrics_interval: 60
+  health_check_interval: 300
