@@ -496,18 +496,44 @@ resource "aws_sfn_state_machine" "etl_pipeline" {
 # EVENTBRIDGE (Schedule for ETL)
 # ============================================================================
 
+# Daily schedule for player stats only
 resource "aws_cloudwatch_event_rule" "daily_etl" {
   name                = "${local.name_prefix}-daily-etl"
-  description         = "Trigger daily ETL pipeline at 6 AM UTC"
+  description         = "Trigger daily ETL pipeline for stats at 6 AM UTC"
   schedule_expression = "cron(0 6 * * ? *)"
   tags                = local.common_tags
 }
 
-resource "aws_cloudwatch_event_target" "etl_pipeline" {
+resource "aws_cloudwatch_event_target" "daily_etl_pipeline" {
   rule      = aws_cloudwatch_event_rule.daily_etl.name
-  target_id = "ETLStateMachine"
+  target_id = "DailyETLStateMachine"
   arn       = aws_sfn_state_machine.etl_pipeline.arn
   role_arn  = aws_iam_role.eventbridge_step_functions.arn
+
+  input = jsonencode({
+    fetch_type = "stats_only"
+    season     = "2025-26"
+  })
+}
+
+# Monthly schedule for players and salaries (1st of month at 6 AM UTC)
+resource "aws_cloudwatch_event_rule" "monthly_etl" {
+  name                = "${local.name_prefix}-monthly-etl"
+  description         = "Trigger monthly ETL pipeline for players/salaries on 1st of month at 6 AM UTC"
+  schedule_expression = "cron(0 6 1 * ? *)"
+  tags                = local.common_tags
+}
+
+resource "aws_cloudwatch_event_target" "monthly_etl_pipeline" {
+  rule      = aws_cloudwatch_event_rule.monthly_etl.name
+  target_id = "MonthlyETLStateMachine"
+  arn       = aws_sfn_state_machine.etl_pipeline.arn
+  role_arn  = aws_iam_role.eventbridge_step_functions.arn
+
+  input = jsonencode({
+    fetch_type = "monthly"
+    season     = "2025-26"
+  })
 }
 
 # EventBridge role to trigger Step Functions

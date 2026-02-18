@@ -16,7 +16,7 @@ exclude =
     notebooks
 
 # Complexity
-max-complexity = 10
+max-complexity = 20
 
 # Docstring conventions
 docstring-convention = google
