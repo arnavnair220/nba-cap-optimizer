@@ -170,14 +170,19 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Build Lambda Layer (dependencies)
+      - name: Setup AWS SAM CLI
+        uses: aws-actions/setup-sam@v2
+
+      - name: Build Lambda Layer with SAM
         run: |
-          # Use Docker with Amazon Linux 2 to ensure GLIBC compatibility
-          docker run --rm \
-            --entrypoint bash \
-            -v "$PWD":/var/task \
-            public.ecr.aws/lambda/python:3.11 \
-            -c "pip install -r requirements.txt -t python/ && zip -r lambda-layer.zip python/"
+          # SAM handles Docker build with Amazon Linux 2 for GLIBC compatibility
+          sam build --use-container
+
+      - name: Package Lambda Layer
+        run: |
+          # Extract built layer from SAM output
+          cd .aws-sam/build/PythonDependenciesLayer
+          zip -r $GITHUB_WORKSPACE/lambda-layer.zip .
 
       - name: Build Lambda Code Package
         run: |

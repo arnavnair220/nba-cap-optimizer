@@ -1,0 +1,26 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Description: >
+  SAM template for building Lambda dependencies only.
+  Infrastructure deployment is managed by Terraform.
+
+Globals:
+  Function:
+    Timeout: 120
+    MemorySize: 512
+
+Resources:
+  # Lambda Layer for Python dependencies
+  # Built with SAM, deployed with Terraform
+  PythonDependenciesLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: nba-cap-optimizer-dependencies
+      Description: Python dependencies for NBA Cap Optimizer Lambda functions
+      ContentUri: .
+      CompatibleRuntimes:
+        - python3.11
+      RetentionPolicy: Retain
+    Metadata:
+      BuildMethod: python3.11
