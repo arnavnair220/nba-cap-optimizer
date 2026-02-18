@@ -298,27 +298,11 @@ resource "aws_secretsmanager_secret_version" "db_credentials" {
 }
 
 # ============================================================================
-# LAMBDA LAYER (Dependencies)
-# ============================================================================
-
-resource "aws_lambda_layer_version" "dependencies" {
-  layer_name          = "${local.name_prefix}-dependencies"
-  s3_bucket           = aws_s3_bucket.data.bucket
-  s3_key              = "layers/dependencies-layer.zip"
-  compatible_runtimes = [var.lambda_runtime]
-
-  description = "Python dependencies for ETL Lambda functions (pandas, numpy, psycopg2, etc.)"
-
-  lifecycle {
-    ignore_changes = [
-      s3_object_version
-    ]
-  }
-}
-
-# ============================================================================
 # LAMBDA FUNCTIONS (ETL Pipeline Only)
 # ============================================================================
+#
+# Note: Lambda layers are managed by CI/CD (not Terraform) for faster deployments.
+# The deploy-backend job publishes layer versions and attaches them to functions.
 
 # Fetch data Lambda
 resource "aws_lambda_function" "fetch_data" {
@@ -328,7 +312,6 @@ resource "aws_lambda_function" "fetch_data" {
   runtime       = var.lambda_runtime
   timeout       = var.lambda_timeout
   memory_size   = var.lambda_memory_size
-  layers        = [aws_lambda_layer_version.dependencies.arn]
 
   filename         = "placeholder.zip"
   source_code_hash = filebase64sha256("placeholder.zip")
@@ -346,7 +329,8 @@ resource "aws_lambda_function" "fetch_data" {
   lifecycle {
     ignore_changes = [
       filename,
-      source_code_hash
+      source_code_hash,
+      layers  # Managed by CI/CD
     ]
   }
 }
@@ -359,7 +343,6 @@ resource "aws_lambda_function" "validate_data" {
   runtime       = var.lambda_runtime
   timeout       = var.lambda_timeout
   memory_size   = var.lambda_memory_size
-  layers        = [aws_lambda_layer_version.dependencies.arn]
 
   filename         = "placeholder.zip"
   source_code_hash = filebase64sha256("placeholder.zip")
@@ -376,7 +359,8 @@ resource "aws_lambda_function" "validate_data" {
   lifecycle {
     ignore_changes = [
       filename,
-      source_code_hash
+      source_code_hash,
+      layers  # Managed by CI/CD
     ]
   }
 }
@@ -389,7 +373,6 @@ resource "aws_lambda_function" "transform_data" {
   runtime       = var.lambda_runtime
   timeout       = var.lambda_timeout
   memory_size   = var.lambda_memory_size
-  layers        = [aws_lambda_layer_version.dependencies.arn]
 
   filename         = "placeholder.zip"
   source_code_hash = filebase64sha256("placeholder.zip")
@@ -406,7 +389,8 @@ resource "aws_lambda_function" "transform_data" {
   lifecycle {
     ignore_changes = [
       filename,
-      source_code_hash
+      source_code_hash,
+      layers  # Managed by CI/CD
     ]
   }
 }
@@ -419,7 +403,6 @@ resource "aws_lambda_function" "load_to_rds" {
   runtime       = var.lambda_runtime
   timeout       = var.lambda_timeout
   memory_size   = var.lambda_memory_size
-  layers        = [aws_lambda_layer_version.dependencies.arn]
 
   filename         = "placeholder.zip"
   source_code_hash = filebase64sha256("placeholder.zip")
@@ -442,7 +425,8 @@ resource "aws_lambda_function" "load_to_rds" {
   lifecycle {
     ignore_changes = [
       filename,
-      source_code_hash
+      source_code_hash,
+      layers  # Managed by CI/CD
     ]
   }
 }
