@@ -1,6 +1,5 @@
-# Runtime dependencies for local development and CI/CD testing
-# Includes all packages needed to run the application
-# For Lambda layer (without NumPy/Pandas), see requirements-layer.txt
+# Runtime dependencies for local development, CI/CD testing, and Lambda deployment
+# Lambda layer built with Docker (Amazon Linux 2) to ensure GLIBC compatibility
 
 # Core dependencies
 boto3>=1.28.0
