@@ -64,18 +64,10 @@ jobs:
         run: |
           pytest tests/ \
             --cov=src \
-            --cov-report=xml \
             --cov-report=term \
             --cov-fail-under=0
         env:
           ENV: test
-
-      - name: Upload coverage reports
-        uses: codecov/codecov-action@v4
-        with:
-          file: ./coverage.xml
-          flags: backend
-          fail_ci_if_error: false
 
   # Security Scanning
   security-scan:
@@ -103,6 +95,11 @@ jobs:
         run: |
           pip install bandit
           bandit -r src/ -f json -o bandit-report.json || true
+
+      - name: Check for secrets in code
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
 
   # Build Lambda Packages
   build-backend:
