@@ -176,16 +176,12 @@ jobs:
         run: |
           terraform workspace select dev || terraform workspace new dev
 
-      - name: Terraform Plan
+      - name: Terraform Apply
         working-directory: ./infrastructure/terraform
-        run: terraform plan -out=tfplan
+        run: terraform apply -auto-approve
         env:
           TF_VAR_environment: development
           TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
-
-      - name: Terraform Apply
-        working-directory: ./infrastructure/terraform
-        run: terraform apply -auto-approve tfplan
 
       - name: Output infrastructure values
         working-directory: ./infrastructure/terraform
@@ -231,12 +227,40 @@ jobs:
 
       - name: Upload Lambda layer to S3
         run: |
-          aws s3 cp lambda-layer.zip s3://nba-cap-${{ env.ENV }}-data/layers/dependencies-layer.zip
+          LAYER_KEY="layers/dependencies-${{ github.sha }}.zip"
+          aws s3 cp lambda-layer.zip s3://nba-cap-${{ env.ENV }}-data/${LAYER_KEY}
+          echo "LAYER_S3_KEY=${LAYER_KEY}" >> $GITHUB_ENV
 
-      - name: Deploy Lambda code
+      - name: Publish Lambda Layer Version
+        id: publish-layer
+        run: |
+          LAYER_ARN=$(aws lambda publish-layer-version \
+            --layer-name nba-cap-${{ env.ENV }}-dependencies \
+            --content S3Bucket=nba-cap-${{ env.ENV }}-data,S3Key=${{ env.LAYER_S3_KEY }} \
+            --compatible-runtimes python3.11 \
+            --description "Dependencies for commit ${{ github.sha }}" \
+            --query LayerVersionArn \
+            --output text)
+          echo "layer_arn=${LAYER_ARN}" >> $GITHUB_OUTPUT
+          echo "Published layer version: ${LAYER_ARN}"
+
+      - name: Update Lambda Function Layers
+        run: |
+          LAYER_ARN="${{ steps.publish-layer.outputs.layer_arn }}"
+          for function in $(aws lambda list-functions --query 'Functions[?starts_with(FunctionName, `nba-cap-`) && contains(FunctionName, `${{ env.ENV }}`)].FunctionName' --output text); do
+            echo "Attaching layer to $function..."
+            aws lambda update-function-configuration \
+              --function-name $function \
+              --layers ${LAYER_ARN}
+
+            # Wait for config update to complete
+            aws lambda wait function-updated-v2 --function-name $function || true
+          done
+
+      - name: Deploy Lambda Code
         run: |
           for function in $(aws lambda list-functions --query 'Functions[?starts_with(FunctionName, `nba-cap-`) && contains(FunctionName, `${{ env.ENV }}`)].FunctionName' --output text); do
-            echo "Updating $function..."
+            echo "Updating code for $function..."
             aws lambda update-function-code \
               --function-name $function \
               --zip-file fileb://lambda-code.zip
