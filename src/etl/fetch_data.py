@@ -5,25 +5,19 @@ from the NBA Stats API and stores raw data in S3.
 """
 
 import json
-import os
-from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional
 import logging
+import os
 import time
 import unicodedata
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 import boto3
 import requests
-from bs4 import BeautifulSoup
-from nba_api.stats.static import players, teams
-from nba_api.stats.endpoints import (
-    playergamelog,
-    playerindex,
-    leaguedashplayerstats,
-    commonplayerinfo,
-    playercareerstats,
-)
 from botocore.exceptions import ClientError
+from bs4 import BeautifulSoup
+from nba_api.stats.endpoints import leaguedashplayerstats, playergamelog
+from nba_api.stats.static import players, teams
 
 # Configure logging
 logger = logging.getLogger()
@@ -156,9 +150,8 @@ def fetch_player_stats(season: str = "2025-26") -> Optional[Dict[str, Any]]:
             "players": stats.get_dict(),
         }
 
-        logger.info(
-            f"Successfully fetched stats for {len(data['players']['resultSets'][0]['rowSet'])} players"
-        )
+        player_count = len(data["players"]["resultSets"][0]["rowSet"])
+        logger.info(f"Successfully fetched stats for {player_count} players")
         return data
 
     except Exception as e:
@@ -223,7 +216,11 @@ def fetch_espn_salaries(season: str = "2025-26") -> List[Dict[str, Any]]:
     base_url = "https://www.espn.com/nba/salaries"
 
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/91.0.4472.124 Safari/537.36"
+        )
     }
 
     logger.info(f"Fetching ESPN salaries from {base_url}")
