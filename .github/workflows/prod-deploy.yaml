@@ -175,9 +175,10 @@ jobs:
           # Use Docker with Amazon Linux 2 to ensure GLIBC compatibility
           # NumPy/Pandas provided by AWS pre-built layer
           docker run --rm \
+            --entrypoint bash \
             -v "$PWD":/var/task \
             public.ecr.aws/lambda/python:3.11 \
-            bash -c "pip install -r requirements-layer.txt -t python/ && zip -r lambda-layer.zip python/"
+            -c "pip install -r requirements-layer.txt -t python/ && zip -r lambda-layer.zip python/"
 
       - name: Build Lambda Code Package
         run: |
