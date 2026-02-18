@@ -2,12 +2,27 @@
 boto3>=1.28.0
 requests>=2.31.0
 
+# NBA Data API
+nba_api>=1.4.1
+
+# Web Scraping
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
+
 # Database
 psycopg2-binary>=2.9.9
+sqlalchemy>=2.0.0
 
-# Data processing (for future use)
+# Data processing
 pandas>=2.1.0
 numpy>=1.24.0
 
+# Data validation
+jsonschema>=4.19.0
+
 # AWS SDK
 botocore>=1.31.0
+
+# Utilities
+python-dateutil>=2.8.2
+pytz>=2023.3
