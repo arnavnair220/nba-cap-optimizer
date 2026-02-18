@@ -1,0 +1,75 @@
+# Development environment configuration
+# Phase 1 (MVP): ETL Pipeline Only
+environment: development
+
+aws:
+  account_id: ${AWS_ACCOUNT_ID}
+  region: ${AWS_REGION}
+  profile: default
+
+  services:
+    lambda:
+      memory_size: 512  # Smaller for dev to save costs
+      timeout: 300
+      reserved_concurrency: 5
+
+    rds:
+      instance_class: db.t3.micro  # Smallest instance for dev
+      allocated_storage: 20
+      backup_retention_period: 1  # Keep backups for 1 day only
+      multi_az: false
+      deletion_protection: false
+
+database:
+  host: ${DB_HOST}
+  port: ${DB_PORT}
+  name: ${DB_NAME}
+  username: ${DB_USERNAME}
+  password: ${DB_PASSWORD}
+  pool_size: 10
+  pool_recycle: 3600
+  echo_sql: true  # Show SQL queries in logs
+
+s3:
+  data_bucket: ${DATA_BUCKET}  # Single bucket for all data (raw/processed)
+  lifecycle_rules:
+    raw_data_expiration_days: 30
+    processed_data_expiration_days: 90
+
+stepfunctions:
+  state_machine_arn: ${ETL_PIPELINE_ARN}
+  execution_timeout: 3600
+
+eventbridge:
+  schedule: "cron(0 6 * * ? *)"  # 6 AM UTC daily
+
+data_pipeline:
+  batch_size: 100
+  max_retries: 3
+  retry_delay: 2
+
+logging:
+  level: DEBUG  # Verbose logging for development
+  format: json
+  cloudwatch:
+    log_group: /aws/lambda/nba-cap-development
+    retention_days: 7  # Keep logs for 1 week
+
+monitoring:
+  xray_enabled: true
+  xray_sampling_rate: 1.0  # Trace 100% of requests in dev
+  metrics_namespace: NBACapOptimizer/Dev
+  alarms_enabled: true
+  cloudwatch_dashboard: nba-cap-optimizer-dev
+
+cost_tags:
+  Environment: development
+  Project: nba-cap-optimizer
+  ManagedBy: terraform
+  CostCenter: dev
+  AutoShutdown: "true"
+
+# Notes:
+# - Phase 2 will add: SageMaker configuration
+# - Phase 3 will add: API Gateway configuration
+# - Phase 4 will add: Frontend configuration
