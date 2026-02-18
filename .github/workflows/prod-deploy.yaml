@@ -170,11 +170,19 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Build Lambda Layer (dependencies)
+      - name: Setup AWS SAM CLI
+        uses: aws-actions/setup-sam@v2
+
+      - name: Build Lambda Layer with SAM
         run: |
-          mkdir -p python
-          pip install -r requirements.txt -t python/
-          zip -r lambda-layer.zip python/
+          # SAM handles Docker build with Amazon Linux 2 for GLIBC compatibility
+          sam build --use-container
+
+      - name: Package Lambda Layer
+        run: |
+          # Extract built layer from SAM output
+          cd .aws-sam/build/PythonDependenciesLayer
+          zip -r $GITHUB_WORKSPACE/lambda-layer.zip .
 
       - name: Build Lambda Code Package
         run: |
@@ -314,8 +322,11 @@ jobs:
       - name: Update Lambda Function Layers
         run: |
           LAYER_ARN="${{ steps.publish-layer.outputs.layer_arn }}"
+
           for function in $(aws lambda list-functions --query 'Functions[?starts_with(FunctionName, `nba-cap-`) && contains(FunctionName, `${{ env.ENV }}`)].FunctionName' --output text); do
             echo "Attaching layer to $function..."
+            echo "  - Layer: ${LAYER_ARN}"
+
             aws lambda update-function-configuration \
               --function-name $function \
               --layers ${LAYER_ARN}
