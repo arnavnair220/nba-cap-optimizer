@@ -21,7 +21,7 @@ from nba_api.stats.endpoints import (
     playerindex,
     leaguedashplayerstats,
     commonplayerinfo,
-    playercareerstats
+    playercareerstats,
 )
 from botocore.exceptions import ClientError
 
@@ -30,11 +30,11 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 # Initialize S3 client
-s3_client = boto3.client('s3')
+s3_client = boto3.client("s3")
 
 # Environment variables
-S3_BUCKET = os.environ.get('DATA_BUCKET_NAME', 'dev-nba-cap-optimizer-data')
-ENVIRONMENT = os.environ.get('ENVIRONMENT', 'development')
+S3_BUCKET = os.environ.get("DATA_BUCKET_NAME", "dev-nba-cap-optimizer-data")
+ENVIRONMENT = os.environ.get("ENVIRONMENT", "development")
 
 
 def get_date_partition(date: datetime) -> str:
@@ -61,11 +61,11 @@ def normalize_to_ascii(text: str) -> str:
         return text
 
     # Normalize to NFD (decomposed form) - separates base letters from accents
-    nfd = unicodedata.normalize('NFD', text)
+    nfd = unicodedata.normalize("NFD", text)
 
     # Filter out combining characters (the accent marks)
     # Category 'Mn' is "Mark, Nonspacing" (accents, diacritics, etc.)
-    ascii_text = ''.join(char for char in nfd if unicodedata.category(char) != 'Mn')
+    ascii_text = "".join(char for char in nfd if unicodedata.category(char) != "Mn")
 
     return ascii_text
 
@@ -89,8 +89,8 @@ def save_to_s3(data: Dict[str, Any], s3_key: str) -> bool:
         s3_client.put_object(
             Bucket=S3_BUCKET,
             Key=s3_key,
-            Body=json_str.encode('utf-8'),  # Explicitly encode to UTF-8
-            ContentType='application/json; charset=utf-8'  # Specify UTF-8 charset
+            Body=json_str.encode("utf-8"),  # Explicitly encode to UTF-8
+            ContentType="application/json; charset=utf-8",  # Specify UTF-8 charset
         )
         logger.info(f"Successfully saved data to s3://{S3_BUCKET}/{s3_key}")
         return True
@@ -114,12 +114,12 @@ def fetch_active_players() -> List[Dict[str, Any]]:
 
         # Normalize all name fields to ASCII
         for player in all_players:
-            if 'full_name' in player:
-                player['full_name'] = normalize_to_ascii(player['full_name'])
-            if 'first_name' in player:
-                player['first_name'] = normalize_to_ascii(player['first_name'])
-            if 'last_name' in player:
-                player['last_name'] = normalize_to_ascii(player['last_name'])
+            if "full_name" in player:
+                player["full_name"] = normalize_to_ascii(player["full_name"])
+            if "first_name" in player:
+                player["first_name"] = normalize_to_ascii(player["first_name"])
+            if "last_name" in player:
+                player["last_name"] = normalize_to_ascii(player["last_name"])
 
         logger.info(f"Found {len(all_players)} active players")
         return all_players
@@ -146,19 +146,19 @@ def fetch_player_stats(season: str = "2025-26") -> Optional[Dict[str, Any]]:
 
         # Fetch league-wide player stats
         stats = leaguedashplayerstats.LeagueDashPlayerStats(
-            season=season,
-            season_type_all_star='Regular Season',
-            per_mode_detailed='PerGame'
+            season=season, season_type_all_star="Regular Season", per_mode_detailed="PerGame"
         )
 
         # Get the data as dictionaries
         data = {
-            'season': season,
-            'fetch_timestamp': datetime.utcnow().isoformat(),
-            'players': stats.get_dict()
+            "season": season,
+            "fetch_timestamp": datetime.utcnow().isoformat(),
+            "players": stats.get_dict(),
         }
 
-        logger.info(f"Successfully fetched stats for {len(data['players']['resultSets'][0]['rowSet'])} players")
+        logger.info(
+            f"Successfully fetched stats for {len(data['players']['resultSets'][0]['rowSet'])} players"
+        )
         return data
 
     except Exception as e:
@@ -182,9 +182,7 @@ def fetch_player_game_logs(player_id: str, season: str = "2025-26") -> Optional[
         time.sleep(1)
 
         gamelog = playergamelog.PlayerGameLog(
-            player_id=player_id,
-            season=season,
-            season_type_all_star='Regular Season'
+            player_id=player_id, season=season, season_type_all_star="Regular Season"
         )
 
         return gamelog.get_dict()
@@ -225,7 +223,7 @@ def fetch_espn_salaries(season: str = "2025-26") -> List[Dict[str, Any]]:
     base_url = "https://www.espn.com/nba/salaries"
 
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
     }
 
     logger.info(f"Fetching ESPN salaries from {base_url}")
@@ -249,15 +247,15 @@ def fetch_espn_salaries(season: str = "2025-26") -> List[Dict[str, Any]]:
                 logger.warning(f"Page {page} returned status {response.status_code}")
                 break
 
-            soup = BeautifulSoup(response.content, 'html.parser')
+            soup = BeautifulSoup(response.content, "html.parser")
 
             # Find the salary table
-            table = soup.find('table')
+            table = soup.find("table")
             if not table:
                 logger.info(f"No table found on page {page}, stopping")
                 break
 
-            rows = table.find_all('tr')[1:]  # Skip header
+            rows = table.find_all("tr")[1:]  # Skip header
 
             if not rows or len(rows) == 0:
                 logger.info(f"No more data on page {page}")
@@ -266,7 +264,7 @@ def fetch_espn_salaries(season: str = "2025-26") -> List[Dict[str, Any]]:
             page_salaries = 0
 
             for row in rows:
-                cells = row.find_all('td')
+                cells = row.find_all("td")
 
                 if len(cells) >= 4:
                     # Structure: [RK, NAME, TEAM, SALARY]
@@ -279,22 +277,24 @@ def fetch_espn_salaries(season: str = "2025-26") -> List[Dict[str, Any]]:
                     # Get player name (may have position after comma)
                     player_text = name_cell.get_text(strip=True)
                     # Remove position (e.g., "Stephen Curry, G" -> "Stephen Curry")
-                    player_name = player_text.split(',')[0].strip()
+                    player_name = player_text.split(",")[0].strip()
 
                     # Get salary
                     salary_text = salary_cell.get_text(strip=True)
-                    salary_clean = salary_text.replace('$', '').replace(',', '').strip()
+                    salary_clean = salary_text.replace("$", "").replace(",", "").strip()
 
                     try:
                         salary = int(salary_clean)
 
                         if player_name and salary > 0:
-                            all_salaries.append({
-                                'player_name': player_name,
-                                'annual_salary': salary,
-                                'season': season,
-                                'source': 'espn'
-                            })
+                            all_salaries.append(
+                                {
+                                    "player_name": player_name,
+                                    "annual_salary": salary,
+                                    "season": season,
+                                    "source": "espn",
+                                }
+                            )
                             page_salaries += 1
                     except ValueError:
                         logger.warning(f"Could not parse salary: {salary_text}")
@@ -316,8 +316,9 @@ def fetch_espn_salaries(season: str = "2025-26") -> List[Dict[str, Any]]:
     return all_salaries
 
 
-def match_salaries_with_players(salaries: List[Dict[str, Any]],
-                                  active_players: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def match_salaries_with_players(
+    salaries: List[Dict[str, Any]], active_players: List[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
     """
     Match salary data with NBA API player IDs.
 
@@ -333,21 +334,21 @@ def match_salaries_with_players(salaries: List[Dict[str, Any]],
     # Create lookup - names are already normalized (accents removed)
     player_lookup = {}
     for player in active_players:
-        normalized_key = ' '.join(player['full_name'].lower().split())
-        player_lookup[normalized_key] = player['id']
+        normalized_key = " ".join(player["full_name"].lower().split())
+        player_lookup[normalized_key] = player["id"]
 
     # Match using normalized names
     matched = 0
 
     for salary in salaries:
         # Normalize ESPN name
-        normalized = ' '.join(salary['player_name'].lower().split())
+        normalized = " ".join(salary["player_name"].lower().split())
 
         if normalized in player_lookup:
-            salary['player_id'] = player_lookup[normalized]
+            salary["player_id"] = player_lookup[normalized]
             matched += 1
         else:
-            salary['player_id'] = None
+            salary["player_id"] = None
 
     match_rate = (matched / len(salaries) * 100) if salaries else 0
     logger.info(f"Matched: {matched}/{len(salaries)} ({match_rate:.1f}%)")
@@ -355,8 +356,9 @@ def match_salaries_with_players(salaries: List[Dict[str, Any]],
     return salaries
 
 
-def fetch_salary_data(season: str = "2025-26",
-                      active_players: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+def fetch_salary_data(
+    season: str = "2025-26", active_players: Optional[List[Dict[str, Any]]] = None
+) -> Dict[str, Any]:
     """
     Fetch player salary data from ESPN and match with player IDs.
 
@@ -376,11 +378,11 @@ def fetch_salary_data(season: str = "2025-26",
         if not espn_salaries:
             logger.warning("No salary data fetched from ESPN")
             return {
-                'fetch_timestamp': datetime.utcnow().isoformat(),
-                'season': season,
-                'source': 'espn',
-                'total_players': 0,
-                'salaries': []
+                "fetch_timestamp": datetime.utcnow().isoformat(),
+                "season": season,
+                "source": "espn",
+                "total_players": 0,
+                "salaries": [],
             }
 
         # Match with player IDs if active_players provided
@@ -388,29 +390,29 @@ def fetch_salary_data(season: str = "2025-26",
             espn_salaries = match_salaries_with_players(espn_salaries, active_players)
 
         # Calculate statistics
-        salaries_list = [s['annual_salary'] for s in espn_salaries]
+        salaries_list = [s["annual_salary"] for s in espn_salaries]
         avg_salary = sum(salaries_list) / len(salaries_list) if salaries_list else 0
-        matched_count = sum(1 for s in espn_salaries if s.get('player_id') is not None)
+        matched_count = sum(1 for s in espn_salaries if s.get("player_id") is not None)
 
         return {
-            'fetch_timestamp': datetime.utcnow().isoformat(),
-            'season': season,
-            'source': 'espn',
-            'total_players': len(espn_salaries),
-            'matched_players': matched_count,
-            'avg_salary': avg_salary,
-            'salaries': espn_salaries
+            "fetch_timestamp": datetime.utcnow().isoformat(),
+            "season": season,
+            "source": "espn",
+            "total_players": len(espn_salaries),
+            "matched_players": matched_count,
+            "avg_salary": avg_salary,
+            "salaries": espn_salaries,
         }
 
     except Exception as e:
         logger.error(f"Error fetching salary data: {e}")
         return {
-            'fetch_timestamp': datetime.utcnow().isoformat(),
-            'season': season,
-            'source': 'espn',
-            'error': str(e),
-            'total_players': 0,
-            'salaries': []
+            "fetch_timestamp": datetime.utcnow().isoformat(),
+            "season": season,
+            "source": "espn",
+            "error": str(e),
+            "total_players": 0,
+            "salaries": [],
         }
 
 
@@ -434,28 +436,24 @@ def handler(event, context):
     date_partition = get_date_partition(current_date)
 
     # Determine what to fetch based on event
-    fetch_type = event.get('fetch_type', 'stats_only')  # stats_only, monthly, or full
-    season = event.get('season', '2025-26')
+    fetch_type = event.get("fetch_type", "stats_only")  # stats_only, monthly, or full
+    season = event.get("season", "2025-26")
 
-    results = {
-        'statusCode': 200,
-        'fetched': [],
-        'errors': []
-    }
+    results = {"statusCode": 200, "fetched": [], "errors": []}
 
     players_data = None
 
     try:
         # 1. Fetch and store active players (monthly or full only)
-        if fetch_type in ['monthly', 'full']:
+        if fetch_type in ["monthly", "full"]:
             logger.info("Fetching active players...")
             players_data = fetch_active_players()
             if players_data:
                 s3_key = f"raw/players/{date_partition}/active_players.json"
-                if save_to_s3({'players': players_data}, s3_key):
-                    results['fetched'].append('active_players')
+                if save_to_s3({"players": players_data}, s3_key):
+                    results["fetched"].append("active_players")
             else:
-                results['errors'].append('Failed to fetch active players')
+                results["errors"].append("Failed to fetch active players")
 
         # 2. Fetch and store player stats (always)
         logger.info("Fetching player stats...")
@@ -463,23 +461,23 @@ def handler(event, context):
         if stats_data:
             s3_key = f"raw/stats/{date_partition}/league_player_stats.json"
             if save_to_s3(stats_data, s3_key):
-                results['fetched'].append('player_stats')
+                results["fetched"].append("player_stats")
         else:
-            results['errors'].append('Failed to fetch player stats')
+            results["errors"].append("Failed to fetch player stats")
 
         # 3. Fetch and store team data (monthly or full only)
-        if fetch_type in ['monthly', 'full']:
+        if fetch_type in ["monthly", "full"]:
             logger.info("Fetching team data...")
             teams_data = fetch_team_data()
             if teams_data:
                 s3_key = f"raw/teams/{date_partition}/nba_teams.json"
-                if save_to_s3({'teams': teams_data}, s3_key):
-                    results['fetched'].append('teams')
+                if save_to_s3({"teams": teams_data}, s3_key):
+                    results["fetched"].append("teams")
             else:
-                results['errors'].append('Failed to fetch teams')
+                results["errors"].append("Failed to fetch teams")
 
         # 4. Fetch and store salary data from ESPN (monthly or full only)
-        if fetch_type in ['monthly', 'full']:
+        if fetch_type in ["monthly", "full"]:
             logger.info("Fetching salary data...")
             # If we didn't fetch players above, load from most recent S3 for matching
             if not players_data:
@@ -490,15 +488,15 @@ def handler(event, context):
             salary_data = fetch_salary_data(season, players_data if players_data else None)
             s3_key = f"raw/salaries/{date_partition}/player_salaries.json"
             if save_to_s3(salary_data, s3_key):
-                results['fetched'].append('salaries')
+                results["fetched"].append("salaries")
             else:
-                results['errors'].append('Failed to save salary data')
+                results["errors"].append("Failed to save salary data")
 
         # 5. Fetch detailed game logs for top players (optional, for full fetch)
-        if fetch_type == 'full' and stats_data:
+        if fetch_type == "full" and stats_data:
             logger.info("Fetching detailed game logs for top players...")
             # Get top 50 players by minutes played
-            player_stats = stats_data['players']['resultSets'][0]['rowSet']
+            player_stats = stats_data["players"]["resultSets"][0]["rowSet"]
             top_players = sorted(player_stats, key=lambda x: x[9] if x[9] else 0, reverse=True)[:50]
 
             game_logs = []
@@ -509,57 +507,46 @@ def handler(event, context):
 
                 logs = fetch_player_game_logs(player_id, season)
                 if logs:
-                    game_logs.append({
-                        'player_id': player_id,
-                        'player_name': player_name,
-                        'logs': logs
-                    })
+                    game_logs.append(
+                        {"player_id": player_id, "player_name": player_name, "logs": logs}
+                    )
 
             if game_logs:
                 s3_key = f"raw/game_logs/{date_partition}/top_players_game_logs.json"
-                if save_to_s3({'game_logs': game_logs}, s3_key):
-                    results['fetched'].append('game_logs')
+                if save_to_s3({"game_logs": game_logs}, s3_key):
+                    results["fetched"].append("game_logs")
 
         # Generate summary
-        results['summary'] = {
-            'timestamp': current_date.isoformat(),
-            'environment': ENVIRONMENT,
-            'season': season,
-            'fetch_type': fetch_type,
-            'successful_fetches': len(results['fetched']),
-            'errors_count': len(results['errors'])
+        results["summary"] = {
+            "timestamp": current_date.isoformat(),
+            "environment": ENVIRONMENT,
+            "season": season,
+            "fetch_type": fetch_type,
+            "successful_fetches": len(results["fetched"]),
+            "errors_count": len(results["errors"]),
         }
 
         logger.info(f"Data fetch completed: {results['summary']}")
 
         # Return results for Step Functions
         return {
-            'statusCode': 200,
-            'body': json.dumps(results),
-            'data_location': {
-                'bucket': S3_BUCKET,
-                'partition': date_partition
-            }
+            "statusCode": 200,
+            "body": json.dumps(results),
+            "data_location": {"bucket": S3_BUCKET, "partition": date_partition},
         }
 
     except Exception as e:
         logger.error(f"Unexpected error in data fetch: {e}")
         return {
-            'statusCode': 500,
-            'body': json.dumps({
-                'error': str(e),
-                'message': 'Data fetch failed'
-            })
+            "statusCode": 500,
+            "body": json.dumps({"error": str(e), "message": "Data fetch failed"}),
         }
 
 
 # For local testing
 if __name__ == "__main__":
     # Test event
-    test_event = {
-        'fetch_type': 'monthly',  # or 'stats_only', 'full'
-        'season': '2025-26'
-    }
+    test_event = {"fetch_type": "monthly", "season": "2025-26"}  # or 'stats_only', 'full'
 
     # Mock context
     class Context:
