@@ -1,12 +1,12 @@
-# Runtime dependencies for local development and CI/CD testing
-# Includes all packages needed to run the application
-# For Lambda layer (without NumPy/Pandas), see requirements-layer.txt
+# Lambda layer dependencies built with Docker (Amazon Linux 2)
+# Excludes NumPy/Pandas - provided by AWS pre-built layer
+# Used only in CI/CD for Lambda deployment, not for local development
 
 # Core dependencies
 boto3>=1.28.0
 requests>=2.31.0
 
-# NBA Data API
+# NBA Data API (will install without pandas/numpy since they're in separate layer)
 nba_api>=1.4.1
 
 # Web Scraping
@@ -16,10 +16,6 @@ lxml>=4.9.0
 # Database
 psycopg2-binary>=2.9.9
 sqlalchemy>=2.0.0
-
-# Data processing
-pandas>=2.1.0
-numpy>=1.24.0
 
 # Data validation
 jsonschema>=4.19.0

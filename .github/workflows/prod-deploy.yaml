@@ -172,9 +172,12 @@ jobs:
 
       - name: Build Lambda Layer (dependencies)
         run: |
-          mkdir -p python
-          pip install -r requirements.txt -t python/
-          zip -r lambda-layer.zip python/
+          # Use Docker with Amazon Linux 2 to ensure GLIBC compatibility
+          # NumPy/Pandas provided by AWS pre-built layer
+          docker run --rm \
+            -v "$PWD":/var/task \
+            public.ecr.aws/lambda/python:3.11 \
+            bash -c "pip install -r requirements-layer.txt -t python/ && zip -r lambda-layer.zip python/"
 
       - name: Build Lambda Code Package
         run: |
@@ -313,12 +316,18 @@ jobs:
 
       - name: Update Lambda Function Layers
         run: |
-          LAYER_ARN="${{ steps.publish-layer.outputs.layer_arn }}"
+          CUSTOM_LAYER="${{ steps.publish-layer.outputs.layer_arn }}"
+          # AWS pre-built layer for NumPy/Pandas (Python 3.11)
+          PANDAS_LAYER="arn:aws:lambda:us-east-1:770693421928:layer:Klayers-p311-pandas:17"
+
           for function in $(aws lambda list-functions --query 'Functions[?starts_with(FunctionName, `nba-cap-`) && contains(FunctionName, `${{ env.ENV }}`)].FunctionName' --output text); do
-            echo "Attaching layer to $function..."
+            echo "Attaching layers to $function..."
+            echo "  - Pandas layer: ${PANDAS_LAYER}"
+            echo "  - Custom layer: ${CUSTOM_LAYER}"
+
             aws lambda update-function-configuration \
               --function-name $function \
-              --layers ${LAYER_ARN}
+              --layers ${PANDAS_LAYER} ${CUSTOM_LAYER}
 
             # Wait for config update to complete
             aws lambda wait function-updated-v2 --function-name $function || true

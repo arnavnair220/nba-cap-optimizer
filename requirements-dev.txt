@@ -1,3 +1,7 @@
+# Development tools for local development and CI/CD
+# Includes testing, linting, formatting, and security scanning tools
+# Not deployed to Lambda
+
 # Testing
 pytest>=7.4.0
 pytest-cov>=4.1.0
