@@ -144,7 +144,7 @@ resource "aws_db_instance" "main" {
 
   instance_class    = var.db_instance_class
   allocated_storage = var.db_allocated_storage
-  storage_encrypted = true
+  storage_encrypted = false  # Disabled for AWS free tier compatibility
 
   db_name  = "nba_cap_optimizer"
   username = var.db_username
@@ -153,14 +153,15 @@ resource "aws_db_instance" "main" {
   db_subnet_group_name   = aws_db_subnet_group.main.name
   vpc_security_group_ids = [aws_security_group.rds.id]
 
-  backup_retention_period = var.environment == "production" ? 7 : 1
+  backup_retention_period = 1  # Limited to 1 day for AWS free tier
   backup_window          = "03:00-04:00"
   maintenance_window     = "sun:04:00-sun:05:00"
 
   skip_final_snapshot       = var.environment != "production"
   final_snapshot_identifier = var.environment == "production" ? "${local.name_prefix}-final-snapshot-${formatdate("YYYY-MM-DD-hhmm", timestamp())}" : null
 
-  enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]
+  # CloudWatch logs exports disabled for AWS free tier
+  # enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]
 
   tags = local.common_tags
 }
