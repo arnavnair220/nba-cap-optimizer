@@ -127,24 +127,28 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install dependencies
+      - name: Build Lambda Layer (dependencies)
         run: |
-          pip install -r requirements.txt -t ./package
+          mkdir -p python
+          pip install -r requirements.txt -t python/
+          zip -r lambda-layer.zip python/
 
-      - name: Copy source code
+      - name: Build Lambda Code Package
         run: |
-          cp -r src/ ./package/
+          zip -r lambda-code.zip src/
 
-      - name: Create Lambda deployment package
-        run: |
-          cd package
-          zip -r ../lambda-package.zip .
-
-      - name: Upload Lambda package artifact
+      - name: Upload Lambda layer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: lambda-package-prod
-          path: lambda-package.zip
+          name: lambda-layer-prod
+          path: lambda-layer.zip
+          retention-days: 30
+
+      - name: Upload Lambda code artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lambda-code-prod
+          path: lambda-code.zip
           retention-days: 30
 
   # Manual Approval Gate
@@ -238,18 +242,27 @@ jobs:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ vars.AWS_DEPLOY_ROLE_NAME || 'nba-cap-github-actions-role' }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Download Lambda package
+      - name: Download Lambda layer
         uses: actions/download-artifact@v4
         with:
-          name: lambda-package-prod
+          name: lambda-layer-prod
 
-      - name: Deploy Lambda functions
+      - name: Download Lambda code
+        uses: actions/download-artifact@v4
+        with:
+          name: lambda-code-prod
+
+      - name: Upload Lambda layer to S3
         run: |
-          for function in $(aws lambda list-functions --query 'Functions[?starts_with(FunctionName, `nba-cap-`) && contains(FunctionName, `prod`)].FunctionName' --output text); do
+          aws s3 cp lambda-layer.zip s3://nba-cap-${{ env.ENV }}-data/layers/dependencies-layer.zip
+
+      - name: Deploy Lambda code
+        run: |
+          for function in $(aws lambda list-functions --query 'Functions[?starts_with(FunctionName, `nba-cap-`) && contains(FunctionName, `${{ env.ENV }}`)].FunctionName' --output text); do
             echo "Updating $function..."
             aws lambda update-function-code \
               --function-name $function \
-              --zip-file fileb://lambda-package.zip
+              --zip-file fileb://lambda-code.zip
 
             # Wait for update to complete
             aws lambda wait function-updated --function-name $function
