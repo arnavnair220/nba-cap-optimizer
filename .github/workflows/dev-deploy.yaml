@@ -30,7 +30,7 @@ jobs:
 
       - name: Install Python linting tools
         run: |
-          pip install black flake8 isort mypy
+          pip install -r requirements-dev.txt
 
       - name: Run black (format check)
         run: black --check .
