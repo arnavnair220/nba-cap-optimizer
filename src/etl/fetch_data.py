@@ -26,14 +26,9 @@ logger.setLevel(logging.INFO)
 # Initialize S3 client
 s3_client = boto3.client("s3")
 
-# Environment variables (REQUIRED - no defaults for critical infrastructure config)
+# Environment variables (validated in handler to allow module imports for testing)
 S3_BUCKET = os.environ.get("DATA_BUCKET")
 ENVIRONMENT = os.environ.get("ENVIRONMENT")
-
-if not S3_BUCKET:
-    raise ValueError("DATA_BUCKET environment variable is required")
-if not ENVIRONMENT:
-    raise ValueError("ENVIRONMENT environment variable is required")
 
 
 def get_date_partition(date: datetime) -> str:
@@ -432,6 +427,20 @@ def handler(event, context):
     """
     logger.info("Starting NBA data fetch Lambda")
     logger.info(f"Event: {json.dumps(event)}")
+
+    # Validate required environment variables
+    if not S3_BUCKET:
+        logger.error("DATA_BUCKET environment variable is not set")
+        return {
+            "statusCode": 500,
+            "body": json.dumps({"error": "DATA_BUCKET environment variable is required"}),
+        }
+    if not ENVIRONMENT:
+        logger.error("ENVIRONMENT environment variable is not set")
+        return {
+            "statusCode": 500,
+            "body": json.dumps({"error": "ENVIRONMENT environment variable is required"}),
+        }
 
     # Get execution parameters
     current_date = datetime.utcnow()
