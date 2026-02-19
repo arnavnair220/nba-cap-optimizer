@@ -10,7 +10,7 @@ import os
 import time
 import unicodedata
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import boto3
 import requests
@@ -116,7 +116,7 @@ def fetch_active_players() -> List[Dict[str, Any]]:
                 player["last_name"] = normalize_to_ascii(player["last_name"])
 
         logger.info(f"Found {len(all_players)} active players")
-        return all_players
+        return cast(List[Dict[str, Any]], all_players)
     except Exception as e:
         logger.error(f"Failed to fetch players: {e}")
         return []
@@ -178,7 +178,7 @@ def fetch_player_game_logs(player_id: str, season: str = "2025-26") -> Optional[
             player_id=player_id, season=season, season_type_all_star="Regular Season"
         )
 
-        return gamelog.get_dict()
+        return cast(Dict[str, Any], gamelog.get_dict())
 
     except Exception as e:
         logger.error(f"Failed to fetch game logs for player {player_id}: {e}")
@@ -197,7 +197,7 @@ def fetch_team_data() -> List[Dict[str, Any]]:
     try:
         all_teams = teams.get_teams()
         logger.info(f"Found {len(all_teams)} teams")
-        return all_teams
+        return cast(List[Dict[str, Any]], all_teams)
     except Exception as e:
         logger.error(f"Failed to fetch teams: {e}")
         return []
