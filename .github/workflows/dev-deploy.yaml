@@ -41,6 +41,9 @@ jobs:
       - name: Run flake8 (linting)
         run: flake8 src/ --max-line-length=100 --extend-ignore=E203,W503
 
+      - name: Run mypy (type checking)
+        run: mypy src/ --ignore-missing-imports
+
   # Unit Tests
   test:
     name: Run Tests
