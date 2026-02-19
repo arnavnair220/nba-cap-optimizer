@@ -1,4 +1,4 @@
-name: Dev Deployment
+name: Dev CI/CD
 
 on:
   push:
@@ -30,7 +30,7 @@ jobs:
 
       - name: Install Python linting tools
         run: |
-          pip install black flake8 isort mypy
+          pip install -r requirements-dev.txt
 
       - name: Run black (format check)
         run: black --check .
@@ -40,6 +40,9 @@ jobs:
 
       - name: Run flake8 (linting)
         run: flake8 src/ --max-line-length=100 --extend-ignore=E203,W503
+
+      - name: Run mypy (type checking)
+        run: mypy src/ --ignore-missing-imports
 
   # Unit Tests
   test:
@@ -115,11 +118,19 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Build Lambda Layer (dependencies)
+      - name: Setup AWS SAM CLI
+        uses: aws-actions/setup-sam@v2
+
+      - name: Build Lambda Layer with SAM
         run: |
-          mkdir -p python
-          pip install -r requirements.txt -t python/
-          zip -r lambda-layer.zip python/
+          # SAM handles Docker build with Amazon Linux 2 for GLIBC compatibility
+          sam build --use-container
+
+      - name: Package Lambda Layer
+        run: |
+          # Extract built layer from SAM output
+          cd .aws-sam/build/PythonDependenciesLayer
+          zip -r $GITHUB_WORKSPACE/lambda-layer.zip .
 
       - name: Build Lambda Code Package
         run: |
@@ -139,7 +150,7 @@ jobs:
           path: lambda-code.zip
           retention-days: 7
 
-  # Deploy Infrastructure
+  # Deploy Infrastructure (only on push, not PRs)
   deploy-infrastructure:
     name: Deploy Infrastructure (Terraform)
     runs-on: ubuntu-latest
@@ -244,8 +255,11 @@ jobs:
       - name: Update Lambda Function Layers
         run: |
           LAYER_ARN="${{ steps.publish-layer.outputs.layer_arn }}"
+
           for function in $(aws lambda list-functions --query 'Functions[?starts_with(FunctionName, `nba-cap-`) && contains(FunctionName, `${{ env.ENV }}`)].FunctionName' --output text); do
             echo "Attaching layer to $function..."
+            echo "  - Layer: ${LAYER_ARN}"
+
             aws lambda update-function-configuration \
               --function-name $function \
               --layers ${LAYER_ARN}
@@ -271,7 +285,7 @@ jobs:
     name: Deployment Summary
     runs-on: ubuntu-latest
     needs: deploy-backend
-    if: always()
+    if: always() && github.event_name == 'push'
     steps:
       - name: Create summary
         run: |
@@ -281,3 +295,58 @@ jobs:
           echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
           echo "**Status:** ${{ needs.deploy-backend.result }}" >> $GITHUB_STEP_SUMMARY
           echo "**Deployed by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+
+  # Auto-Revert on Deployment Failure
+  auto-revert:
+    name: Auto-Revert on Failure
+    runs-on: ubuntu-latest
+    needs: [deploy-infrastructure, deploy-backend]
+    if: failure() && github.event_name == 'push'
+    permissions:
+      contents: write
+      issues: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Revert merge commit
+        run: |
+          echo "Deployment failed. Reverting merge commit..."
+
+          FAILED_COMMIT="${{ github.sha }}"
+          echo "Failed commit: $FAILED_COMMIT"
+
+          # Check if this is a merge commit
+          PARENT_COUNT=$(git rev-list --parents -n 1 $FAILED_COMMIT | wc -w)
+
+          if [ $PARENT_COUNT -gt 2 ]; then
+            echo "This is a merge commit. Reverting..."
+            git revert -m 1 --no-edit $FAILED_COMMIT
+            git push origin develop
+            echo "Successfully reverted merge commit $FAILED_COMMIT"
+          else
+            echo "This is a regular commit. Reverting..."
+            git revert --no-edit $FAILED_COMMIT
+            git push origin develop
+            echo "Successfully reverted commit $FAILED_COMMIT"
+          fi
+
+      - name: Create incident issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `[AUTO-REVERT] Dev Deployment Failed - ${context.sha.substring(0, 7)}`,
+              body: `## Automatic Revert Executed\n\nThe development deployment failed and the merge has been automatically reverted.\n\n**Failed Commit:** ${context.sha}\n**Branch:** develop\n**Triggered by:** ${context.actor}\n**Workflow:** ${context.workflow}\n\n### What happened?\nThe deployment workflow failed after the code was merged into \`develop\`. To maintain stability, the merge commit has been automatically reverted.\n\n### Next Steps:\n1. Review the failed workflow run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n2. Fix the issue in your feature branch\n3. Create a new PR to \`develop\` once fixed\n\n### Need help?\nCheck the workflow logs for details on what failed.`,
+              labels: ['deployment-failure', 'auto-revert', 'development']
+            })

@@ -1,3 +1,7 @@
+# Development tools for local development and CI/CD
+# Includes testing, linting, formatting, and security scanning tools
+# Not deployed to Lambda
+
 # Testing
 pytest>=7.4.0
 pytest-cov>=4.1.0
@@ -8,6 +12,7 @@ black>=23.7.0
 flake8>=6.1.0
 isort>=5.12.0
 mypy>=1.5.0
+types-requests>=2.31.0
 
 # Security
 bandit>=1.7.5

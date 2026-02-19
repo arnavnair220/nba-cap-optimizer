@@ -1,7 +1,10 @@
-name: Production Deployment
+name: Production CI/CD
 
 on:
   push:
+    branches:
+      - main
+  pull_request:
     branches:
       - main
   release:
@@ -14,6 +17,56 @@ env:
   NODE_VERSION: "18"
 
 jobs:
+  # Branch Rule Enforcement (only runs on PRs)
+  validate-source-branch:
+    name: Validate Source Branch
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Check if source branch is develop
+        run: |
+          SOURCE_BRANCH="${{ github.head_ref }}"
+          TARGET_BRANCH="${{ github.base_ref }}"
+
+          echo "Source branch: $SOURCE_BRANCH"
+          echo "Target branch: $TARGET_BRANCH"
+
+          # Allow both 'dev' and 'develop' to merge into main
+          if [ "$TARGET_BRANCH" = "main" ] && [ "$SOURCE_BRANCH" != "dev" ] && [ "$SOURCE_BRANCH" != "develop" ]; then
+            echo "=========================================="
+            echo "ERROR: Branch Rule Violation"
+            echo "=========================================="
+            echo ""
+            echo "Only the 'develop' branch can merge into 'main'."
+            echo ""
+            echo "Current source branch: $SOURCE_BRANCH"
+            echo "Target branch: $TARGET_BRANCH"
+            echo ""
+            echo "To fix this:"
+            echo "1. Merge your changes into 'develop' first"
+            echo "2. Then create a PR from 'develop' to 'main'"
+            echo ""
+            echo "This ensures all changes go through the development"
+            echo "environment before reaching production."
+            echo "=========================================="
+            exit 1
+          fi
+
+          echo "Branch validation passed!"
+          echo "Source branch '$SOURCE_BRANCH' is allowed to merge into '$TARGET_BRANCH'."
+
+      - name: Comment on PR if validation fails
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## Branch Rule Violation\n\n**Only the \`develop\` branch can be merged into \`main\`.**\n\nYour current source branch: \`${{ github.head_ref }}\`\nTarget branch: \`${{ github.base_ref }}\`\n\n---\n\n### How to fix this:\n\n1. **Merge your changes into \`develop\` first:**\n   \`\`\`bash\n   git checkout develop\n   git merge ${{ github.head_ref }}\n   git push origin develop\n   \`\`\`\n\n2. **Then create a PR from \`develop\` to \`main\`**\n\n---\n\n### Why this rule exists:\n\nThis ensures:\n- All changes are tested in the development environment first\n- Production deployments are controlled and predictable\n- The \`develop\` branch serves as a staging area before production\n\n**This PR will be blocked until it originates from the \`develop\` branch.**`
+            })
+
   # Code Quality Checks (Stricter for Production)
   lint-and-format:
     name: Lint & Format Check
@@ -29,7 +82,7 @@ jobs:
 
       - name: Install Python linting tools
         run: |
-          pip install black flake8 isort mypy
+          pip install -r requirements-dev.txt
 
       - name: Run black (format check)
         run: black --check .
@@ -103,7 +156,7 @@ jobs:
         with:
           path: ./
 
-  # Build Lambda Packages
+  # Build Lambda Packages (runs on both PR and push for validation)
   build-backend:
     name: Build Backend Packages
     runs-on: ubuntu-latest
@@ -117,11 +170,19 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Build Lambda Layer (dependencies)
+      - name: Setup AWS SAM CLI
+        uses: aws-actions/setup-sam@v2
+
+      - name: Build Lambda Layer with SAM
         run: |
-          mkdir -p python
-          pip install -r requirements.txt -t python/
-          zip -r lambda-layer.zip python/
+          # SAM handles Docker build with Amazon Linux 2 for GLIBC compatibility
+          sam build --use-container
+
+      - name: Package Lambda Layer
+        run: |
+          # Extract built layer from SAM output
+          cd .aws-sam/build/PythonDependenciesLayer
+          zip -r $GITHUB_WORKSPACE/lambda-layer.zip .
 
       - name: Build Lambda Code Package
         run: |
@@ -141,11 +202,12 @@ jobs:
           path: lambda-code.zip
           retention-days: 30
 
-  # Manual Approval Gate
+  # Manual Approval Gate (only on push, not PRs)
   approve-deployment:
     name: Approve Production Deployment
     runs-on: ubuntu-latest
     needs: [build-backend]
+    if: github.event_name == 'push' || github.event_name == 'release'
     environment:
       name: production
       url: https://nba-cap-optimizer.com
@@ -260,8 +322,11 @@ jobs:
       - name: Update Lambda Function Layers
         run: |
           LAYER_ARN="${{ steps.publish-layer.outputs.layer_arn }}"
+
           for function in $(aws lambda list-functions --query 'Functions[?starts_with(FunctionName, `nba-cap-`) && contains(FunctionName, `${{ env.ENV }}`)].FunctionName' --output text); do
             echo "Attaching layer to $function..."
+            echo "  - Layer: ${LAYER_ARN}"
+
             aws lambda update-function-configuration \
               --function-name $function \
               --layers ${LAYER_ARN}
@@ -289,31 +354,59 @@ jobs:
       - name: Wait for Lambda updates to stabilize
         run: sleep 30
 
-  # Rollback on Failure
-  rollback:
-    name: Rollback on Failure
+  # Auto-Revert on Deployment Failure
+  auto-revert:
+    name: Auto-Revert on Failure
     runs-on: ubuntu-latest
-    needs: deploy-backend
-    if: failure()
+    needs: [deploy-infrastructure, deploy-backend]
+    if: failure() && (github.event_name == 'push' || github.event_name == 'release')
     permissions:
+      contents: write
       issues: write
-      contents: read
     steps:
-      - name: Notify of failure
-        run: |
-          echo "Deployment failed! Smoke tests did not pass."
-          echo "Manual rollback may be required."
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create rollback issue
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Revert merge commit
+        run: |
+          echo "CRITICAL: Production deployment failed. Reverting merge commit..."
+
+          FAILED_COMMIT="${{ github.sha }}"
+          echo "Failed commit: $FAILED_COMMIT"
+
+          # Check if this is a merge commit
+          PARENT_COUNT=$(git rev-list --parents -n 1 $FAILED_COMMIT | wc -w)
+
+          if [ $PARENT_COUNT -gt 2 ]; then
+            echo "This is a merge commit. Reverting..."
+            git revert -m 1 --no-edit $FAILED_COMMIT
+            git push origin main
+            echo "Successfully reverted merge commit $FAILED_COMMIT"
+          else
+            echo "This is a regular commit. Reverting..."
+            git revert --no-edit $FAILED_COMMIT
+            git push origin main
+            echo "Successfully reverted commit $FAILED_COMMIT"
+          fi
+
+      - name: Create critical incident issue
         uses: actions/github-script@v7
         with:
           script: |
             github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: 'Production Deployment Failed - Rollback Required',
-              body: `Production deployment failed for commit ${context.sha}.\n\nDeployment did not complete successfully. Manual rollback may be required.\n\nTriggered by: ${context.actor}`,
-              labels: ['deployment', 'critical']
+              title: `[CRITICAL] Production Deployment Failed - AUTO-REVERTED ${context.sha.substring(0, 7)}`,
+              body: `## CRITICAL: Automatic Revert Executed on Production\n\nThe production deployment failed and the merge has been automatically reverted.\n\n**Failed Commit:** ${context.sha}\n**Branch:** main\n**Triggered by:** ${context.actor}\n**Workflow:** ${context.workflow}\n\n### What happened?\nThe production deployment workflow failed after code was merged into \`main\`. To protect production, the merge commit has been automatically reverted.\n\n### Immediate Actions Required:\n1. Review the failed workflow run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n2. Investigate the root cause\n3. Verify production environment stability\n4. Fix the issue in \`dev\` branch\n5. Test thoroughly before attempting another production deployment\n\n### Need help?\nCheck the workflow logs for details on what failed. Contact the on-call engineer if production is impacted.`,
+              labels: ['production', 'critical', 'auto-revert', 'deployment-failure']
             })
 
   # Deployment Summary
@@ -321,7 +414,7 @@ jobs:
     name: Deployment Summary
     runs-on: ubuntu-latest
     needs: deploy-backend
-    if: success()
+    if: success() && (github.event_name == 'push' || github.event_name == 'release')
     permissions:
       contents: write
     steps:

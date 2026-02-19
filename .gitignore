@@ -11,6 +11,7 @@ build/
 
 # Jupyter
 .ipynb_checkpoints
+notebooks/
 
 # IDE
 .vscode/
@@ -55,6 +56,7 @@ Thumbs.db
 # Data & Models
 data/raw/
 data/processed/
+local_data/
 models/*.pkl
 models/*.joblib
 mlruns/
@@ -63,3 +65,7 @@ mlruns/
 .coverage
 .pytest_cache/
 htmlcov/
+
+# Claude
+.claude/
+CLAUDE.md
