@@ -26,9 +26,14 @@ logger.setLevel(logging.INFO)
 # Initialize S3 client
 s3_client = boto3.client("s3")
 
-# Environment variables
-S3_BUCKET = os.environ.get("DATA_BUCKET_NAME", "dev-nba-cap-optimizer-data")
-ENVIRONMENT = os.environ.get("ENVIRONMENT", "development")
+# Environment variables (REQUIRED - no defaults for critical infrastructure config)
+S3_BUCKET = os.environ.get("DATA_BUCKET")
+ENVIRONMENT = os.environ.get("ENVIRONMENT")
+
+if not S3_BUCKET:
+    raise ValueError("DATA_BUCKET environment variable is required")
+if not ENVIRONMENT:
+    raise ValueError("ENVIRONMENT environment variable is required")
 
 
 def get_date_partition(date: datetime) -> str:
