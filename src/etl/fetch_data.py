@@ -313,58 +313,15 @@ def fetch_espn_salaries(season: str = "2025-26") -> List[Dict[str, Any]]:
     return all_salaries
 
 
-def match_salaries_with_players(
-    salaries: List[Dict[str, Any]], active_players: List[Dict[str, Any]]
-) -> List[Dict[str, Any]]:
+def fetch_salary_data(season: str = "2025-26") -> Dict[str, Any]:
     """
-    Match salary data with NBA API player IDs.
-
-    Args:
-        salaries: List of salary dictionaries
-        active_players: List of active player dictionaries from NBA API
-
-    Returns:
-        List of salary dictionaries with matched player_id
-    """
-    logger.info("Matching salaries with player IDs...")
-
-    # Create lookup - names are already normalized (accents removed)
-    player_lookup = {}
-    for player in active_players:
-        normalized_key = " ".join(player["full_name"].lower().split())
-        player_lookup[normalized_key] = player["id"]
-
-    # Match using normalized names
-    matched = 0
-
-    for salary in salaries:
-        # Normalize ESPN name
-        normalized = " ".join(salary["player_name"].lower().split())
-
-        if normalized in player_lookup:
-            salary["player_id"] = player_lookup[normalized]
-            matched += 1
-        else:
-            salary["player_id"] = None
-
-    match_rate = (matched / len(salaries) * 100) if salaries else 0
-    logger.info(f"Matched: {matched}/{len(salaries)} ({match_rate:.1f}%)")
-
-    return salaries
-
-
-def fetch_salary_data(
-    season: str = "2025-26", active_players: Optional[List[Dict[str, Any]]] = None
-) -> Dict[str, Any]:
-    """
-    Fetch player salary data from ESPN and match with player IDs.
+    Fetch player salary data from ESPN.
 
     Args:
         season: NBA season (e.g., "2025-26")
-        active_players: List of active players for matching (optional)
 
     Returns:
-        Salary data dictionary with matched player IDs
+        Raw salary data dictionary (player names and salaries only)
     """
     logger.info("Fetching salary data...")
 
@@ -376,28 +333,13 @@ def fetch_salary_data(
             logger.warning("No salary data fetched from ESPN")
             return {
                 "fetch_timestamp": datetime.utcnow().isoformat(),
-                "season": season,
                 "source": "espn",
-                "total_players": 0,
                 "salaries": [],
             }
 
-        # Match with player IDs if active_players provided
-        if active_players:
-            espn_salaries = match_salaries_with_players(espn_salaries, active_players)
-
-        # Calculate statistics
-        salaries_list = [s["annual_salary"] for s in espn_salaries]
-        avg_salary = sum(salaries_list) / len(salaries_list) if salaries_list else 0
-        matched_count = sum(1 for s in espn_salaries if s.get("player_id") is not None)
-
         return {
             "fetch_timestamp": datetime.utcnow().isoformat(),
-            "season": season,
             "source": "espn",
-            "total_players": len(espn_salaries),
-            "matched_players": matched_count,
-            "avg_salary": avg_salary,
             "salaries": espn_salaries,
         }
 
@@ -405,10 +347,8 @@ def fetch_salary_data(
         logger.error(f"Error fetching salary data: {e}")
         return {
             "fetch_timestamp": datetime.utcnow().isoformat(),
-            "season": season,
             "source": "espn",
             "error": str(e),
-            "total_players": 0,
             "salaries": [],
         }
 
@@ -490,13 +430,7 @@ def handler(event, context):
         # 4. Fetch and store salary data from ESPN (monthly or full only)
         if fetch_type in ["monthly", "full"]:
             logger.info("Fetching salary data...")
-            # If we didn't fetch players above, load from most recent S3 for matching
-            if not players_data:
-                logger.info("Loading recent player data from S3 for salary matching...")
-                # For stats_only runs, we skip salary matching
-
-            # Pass active players for matching if available
-            salary_data = fetch_salary_data(season, players_data if players_data else None)
+            salary_data = fetch_salary_data(season)
             s3_key = f"raw/salaries/{date_partition}/player_salaries.json"
             if save_to_s3(salary_data, s3_key):
                 results["fetched"].append("salaries")
