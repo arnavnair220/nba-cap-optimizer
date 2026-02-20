@@ -16,7 +16,6 @@ from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 from src.etl import transform_data, validate_data
-from tests.integration.conftest import create_basketball_reference_player_stats, create_basketball_reference_advanced_stats
 
 
 class TestValidateTransformEventContract:
@@ -273,7 +272,9 @@ class TestDataEnrichmentThroughPipeline:
         assert len(enriched_stats["player_stats"]) == 4
 
         # Find LeBron in the stats
-        lebron = next(p for p in enriched_stats["player_stats"] if p["player_name"] == "LeBron James")
+        lebron = next(
+            p for p in enriched_stats["player_stats"] if p["player_name"] == "LeBron James"
+        )
 
         # Verify per-game stats are present
         assert lebron["points"] == 25.0
@@ -365,7 +366,9 @@ class TestDataEnrichmentThroughPipeline:
         assert len(enriched_salaries["salaries"]) == 4
         assert all(s.get("player_id") is not None for s in enriched_salaries["salaries"])
 
-        lebron_salary = next(s for s in enriched_salaries["salaries"] if s["player_name"] == "LeBron James")
+        lebron_salary = next(
+            s for s in enriched_salaries["salaries"] if s["player_name"] == "LeBron James"
+        )
         assert lebron_salary["player_id"] == 2544
 
         # Verify enriched_stats merges per-game + advanced
@@ -373,7 +376,9 @@ class TestDataEnrichmentThroughPipeline:
         enriched_stats = saved_data[stats_key]
         assert len(enriched_stats["player_stats"]) == 4
 
-        lebron = next(p for p in enriched_stats["player_stats"] if p["player_name"] == "LeBron James")
+        lebron = next(
+            p for p in enriched_stats["player_stats"] if p["player_name"] == "LeBron James"
+        )
         assert lebron["points"] == 25.0  # per-game
         assert lebron["per"] == 24.5  # advanced
 
@@ -529,7 +534,7 @@ class TestDataConsistencyAcrossStages:
         )
 
         # Execute transform
-        transform_result = transform_data.handler(
+        transform_data.handler(
             {
                 "validation_passed": validate_result["validation_passed"],
                 "data_location": validate_result["data_location"],
@@ -612,10 +617,10 @@ class TestDataConsistencyAcrossStages:
             MagicMock(),
         )
 
-        # Verify salary totals are tracked
+        # Verify salary totals are tracked and match expected total
         transform_body = json.loads(transform_result["body"])
         assert "total_salary_cap" in transform_body["statistics"]
-        assert transform_body["statistics"]["total_salary_cap"] > 0  # Should have some salary data
+        assert transform_body["statistics"]["total_salary_cap"] == total_salary
 
         # Verify team payroll structure exists
         teams_key = [k for k in saved_data.keys() if "enriched_teams" in k][0]

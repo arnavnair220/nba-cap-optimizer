@@ -3,7 +3,7 @@ Shared fixtures and helpers for integration tests.
 """
 
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 import pytest
 
@@ -67,7 +67,7 @@ def create_basketball_reference_advanced_stats(
     team: str = "LAL",
     games: int = 50,
     per: float = 24.5,
-    vorp: float = 4.0
+    vorp: float = 4.0,
 ) -> Dict[str, Any]:
     """
     Create a complete Basketball Reference advanced stat dictionary.
@@ -305,10 +305,30 @@ def mock_realistic_monthly_data():
         "fetch_timestamp": datetime.utcnow().isoformat(),
         "source": "espn",
         "salaries": [
-            {"player_name": "LeBron James", "annual_salary": 48000000, "season": "2025-26", "source": "espn"},
-            {"player_name": "Anthony Davis", "annual_salary": 55000000, "season": "2025-26", "source": "espn"},
-            {"player_name": "Nikola Jokic", "annual_salary": 51000000, "season": "2025-26", "source": "espn"},
-            {"player_name": "Luka Doncic", "annual_salary": 43000000, "season": "2025-26", "source": "espn"},
+            {
+                "player_name": "LeBron James",
+                "annual_salary": 48000000,
+                "season": "2025-26",
+                "source": "espn",
+            },
+            {
+                "player_name": "Anthony Davis",
+                "annual_salary": 55000000,
+                "season": "2025-26",
+                "source": "espn",
+            },
+            {
+                "player_name": "Nikola Jokic",
+                "annual_salary": 51000000,
+                "season": "2025-26",
+                "source": "espn",
+            },
+            {
+                "player_name": "Luka Doncic",
+                "annual_salary": 43000000,
+                "season": "2025-26",
+                "source": "espn",
+            },
         ],
     }
 
