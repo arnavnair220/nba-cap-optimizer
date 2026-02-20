@@ -295,7 +295,7 @@ def _check_missing_data(
         return True
 
     # Key columns to check for missing data (common across per_game and advanced stats)
-    key_columns = ["Player", "Pos", "Age", "Tm", "G", "MP"]
+    key_columns = ["Player", "Pos", "Age", "Team", "G", "MP"]
 
     missing_stats = 0
     for player_stat in stats:
@@ -473,7 +473,7 @@ def validate_stats_data(data: Dict[str, Any]) -> Dict[str, Any]:
                 "Player",
                 "Pos",
                 "Age",
-                "Tm",
+                "Team",
                 "G",
                 "MP",
                 "PTS",
@@ -488,7 +488,7 @@ def validate_stats_data(data: Dict[str, Any]) -> Dict[str, Any]:
                 results["valid"] = False
 
         if advanced_stats and advanced_columns:
-            expected_advanced_cols = ["Player", "Pos", "Age", "Tm", "G", "MP", "PER"]
+            expected_advanced_cols = ["Player", "Pos", "Age", "Team", "G", "MP", "PER"]
             missing_advanced_cols = [
                 col for col in expected_advanced_cols if col not in advanced_columns
             ]

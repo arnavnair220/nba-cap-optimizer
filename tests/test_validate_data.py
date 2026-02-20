@@ -192,14 +192,14 @@ class TestEmptyDataArrays:
                         "Player",
                         "Pos",
                         "Age",
-                        "Tm",
+                        "Team",
                         "G",
                         "MP",
                         "PTS",
                         "TRB",
                         "AST",
                     ],
-                    "advanced_columns": ["Player", "Pos", "Age", "Tm", "G", "MP", "PER"],
+                    "advanced_columns": ["Player", "Pos", "Age", "Team", "G", "MP", "PER"],
                 }
             elif "players" in s3_key:
                 return {"players": [{"id": 1, "full_name": "Test Player"}]}
@@ -264,7 +264,7 @@ class TestBasketballReferenceValidation:
                         "Player": f"Player {i}",
                         "Pos": "PG",
                         "Age": 25,
-                        "Tm": "LAL",
+                        "Team": "LAL",
                         "G": 70,
                         "MP": 30.0,
                         "PTS": 15.0,
@@ -281,7 +281,7 @@ class TestBasketballReferenceValidation:
                         "Player": f"Player {i}",
                         "Pos": "PG",
                         "Age": 25,
-                        "Tm": "LAL",
+                        "Team": "LAL",
                         "G": 70,
                         "MP": 30.0,
                         "PER": 15.0,
@@ -298,7 +298,7 @@ class TestBasketballReferenceValidation:
                         "Player",
                         "Pos",
                         "Age",
-                        "Tm",
+                        "Team",
                         "G",
                         "MP",
                         "PTS",
@@ -308,7 +308,7 @@ class TestBasketballReferenceValidation:
                         "3P%",
                         "FT%",
                     ],
-                    "advanced_columns": ["Player", "Pos", "Age", "Tm", "G", "MP", "PER"],
+                    "advanced_columns": ["Player", "Pos", "Age", "Team", "G", "MP", "PER"],
                 }
             return None
 
@@ -349,14 +349,14 @@ class TestBasketballReferenceValidation:
                         "Player",
                         "Pos",
                         "Age",
-                        "Tm",
+                        "Team",
                         "G",
                         "MP",
                         "PTS",
                         "TRB",
                         "AST",
                     ],
-                    "advanced_columns": ["Player", "Pos", "Age", "Tm", "G", "MP", "PER"],
+                    "advanced_columns": ["Player", "Pos", "Age", "Team", "G", "MP", "PER"],
                 }
             return None
 
@@ -396,14 +396,14 @@ class TestBasketballReferenceValidation:
                         "Player",
                         "Pos",
                         "Age",
-                        "Tm",
+                        "Team",
                         "G",
                         "MP",
                         "PTS",
                         "TRB",
                         "AST",
                     ],
-                    "advanced_columns": ["Player", "Pos", "Age", "Tm", "G", "MP", "PER"],
+                    "advanced_columns": ["Player", "Pos", "Age", "Team", "G", "MP", "PER"],
                 }
             return None
 
@@ -474,7 +474,7 @@ class TestBasketballReferenceValidation:
                         "Player": "Test Player 1",
                         "Pos": "PG",
                         "Age": 25,
-                        "Tm": "LAL",
+                        "Team": "LAL",
                         "G": 70,
                         "MP": 30.0,
                         "PTS": 150.0,  # Unrealistic - over 80
@@ -490,7 +490,7 @@ class TestBasketballReferenceValidation:
                             "Player": f"Player {i}",
                             "Pos": "PG",
                             "Age": 25,
-                            "Tm": "LAL",
+                            "Team": "LAL",
                             "G": 70,
                             "MP": 30.0,
                             "PTS": 15.0,
@@ -507,7 +507,7 @@ class TestBasketballReferenceValidation:
                         "Player": "Test Player 1",
                         "Pos": "PG",
                         "Age": 25,
-                        "Tm": "LAL",
+                        "Team": "LAL",
                         "G": 70,
                         "MP": 30.0,
                         "PER": 15.0,
@@ -519,7 +519,7 @@ class TestBasketballReferenceValidation:
                             "Player": f"Player {i}",
                             "Pos": "PG",
                             "Age": 25,
-                            "Tm": "LAL",
+                            "Team": "LAL",
                             "G": 70,
                             "MP": 30.0,
                             "PER": 15.0,
@@ -537,7 +537,7 @@ class TestBasketballReferenceValidation:
                         "Player",
                         "Pos",
                         "Age",
-                        "Tm",
+                        "Team",
                         "G",
                         "MP",
                         "PTS",
@@ -545,7 +545,7 @@ class TestBasketballReferenceValidation:
                         "AST",
                         "FG%",
                     ],
-                    "advanced_columns": ["Player", "Pos", "Age", "Tm", "G", "MP", "PER"],
+                    "advanced_columns": ["Player", "Pos", "Age", "Team", "G", "MP", "PER"],
                 }
             return None
 
@@ -585,14 +585,14 @@ class TestBasketballReferenceValidation:
                         "Player",
                         "Pos",
                         "Age",
-                        "Tm",
+                        "Team",
                         "G",
                         "MP",
                         "PTS",
                         "TRB",
                         "AST",
                     ],
-                    "advanced_columns": ["Player", "Pos", "Age", "Tm", "G", "MP", "PER"],
+                    "advanced_columns": ["Player", "Pos", "Age", "Team", "G", "MP", "PER"],
                 }
             return None
 
