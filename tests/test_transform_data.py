@@ -66,6 +66,35 @@ class TestMatchSalariesWithPlayers:
 class TestEnrichPlayerStats:
     """Test player stats enrichment with Basketball Reference data."""
 
+    def test_filters_out_league_average_summary_row(self):
+        """Test that 'League Average' summary row is filtered out."""
+        stats_data = {
+            "season": "2025-26",
+            "source": "basketball_reference",
+            "per_game_stats": [
+                {
+                    "Player": "LeBron James",
+                    "Team": "LAL",
+                    "PTS": 25.8,
+                    "TRB": 7.7,
+                    "AST": 8.2,
+                },
+                {
+                    "Player": "League Average",
+                    "Team": None,
+                    "PTS": float("nan"),
+                    "TRB": float("nan"),
+                    "AST": float("nan"),
+                },
+            ],
+            "advanced_stats": [],
+        }
+
+        result = transform_data.enrich_player_stats(stats_data)
+
+        assert len(result) == 1
+        assert result[0]["player_name"] == "LeBron James"
+
     def test_enrichment_merges_per_game_and_advanced_stats(self):
         """Test enrichment merges per-game and advanced stats."""
         stats_data = {
@@ -244,6 +273,51 @@ class TestHandlerValidationCheck:
         result = transform_data.handler(event, MagicMock())
 
         assert result["statusCode"] == 400
+
+
+class TestHandlerNaNValidation:
+    """Test handler NaN validation logic."""
+
+    @patch("src.etl.transform_data.ENVIRONMENT", "test")
+    @patch("src.etl.transform_data.S3_BUCKET", "test-bucket")
+    @patch("src.etl.transform_data.enrich_player_stats")
+    @patch("src.etl.transform_data.load_from_s3")
+    def test_handler_returns_400_when_nan_in_statistics(self, mock_load, mock_enrich_player_stats):
+        """Test handler returns 400 when NaN values detected in output statistics."""
+
+        # Mock enrichment to return stats with NaN that would cause NaN in aggregates
+        mock_enrich_player_stats.return_value = [
+            {
+                "player_name": "Player 1",
+                "points": float("nan"),
+                "rebounds": 5.0,
+                "assists": 3.0,
+            }
+        ]
+
+        def mock_load_side_effect(s3_key):
+            if "stats" in s3_key:
+                return {
+                    "season": "2025-26",
+                    "source": "basketball_reference",
+                    "per_game_stats": [{"Player": "Test"}],
+                    "advanced_stats": [],
+                }
+            return None
+
+        mock_load.side_effect = mock_load_side_effect
+
+        event = {
+            "validation_passed": True,
+            "data_location": {"bucket": "test", "partition": "year=2024/month=02/day=17"},
+        }
+
+        result = transform_data.handler(event, MagicMock())
+
+        assert result["statusCode"] == 400
+        body = json.loads(result["body"])
+        assert body["error"] == "Invalid statistics"
+        assert "NaN values detected" in body["message"]
 
 
 class TestHandlerTransformation:

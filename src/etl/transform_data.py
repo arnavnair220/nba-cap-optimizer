@@ -6,6 +6,7 @@ and prepares data for analysis.
 
 import json
 import logging
+import math
 import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional, cast
@@ -174,6 +175,11 @@ def enrich_player_stats(stats_data: Dict[str, Any]) -> List[Dict[str, Any]]:
 
             player_name = pg_stat.get("Player", "")
             if not player_name:
+                continue
+
+            # Skip summary rows (League Average, etc.)
+            if player_name in ["League Average"]:
+                logger.debug(f"Skipping summary row: {player_name}")
                 continue
 
             # Create enriched player record
@@ -593,6 +599,30 @@ def handler(event, context):
         }
 
         logger.info(f"Data transformation completed: {results['summary']}")
+
+        # Validate that no NaN values exist in statistics
+        def contains_nan(obj):
+            """Recursively check if object contains NaN values."""
+            if isinstance(obj, dict):
+                return any(contains_nan(v) for v in obj.values())
+            elif isinstance(obj, list):
+                return any(contains_nan(item) for item in obj)
+            elif isinstance(obj, float):
+                return math.isnan(obj)
+            return False
+
+        if contains_nan(results["statistics"]):
+            logger.error("NaN values detected in statistics output")
+            return {
+                "statusCode": 400,
+                "body": json.dumps(
+                    {
+                        "error": "Invalid statistics",
+                        "message": "NaN values detected in transformation output",
+                        "statistics": results["statistics"],
+                    }
+                ),
+            }
 
         # Return results for Step Functions
         return {
