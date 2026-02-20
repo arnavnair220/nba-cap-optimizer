@@ -324,6 +324,125 @@ def _check_missing_data(
     return True
 
 
+def _is_value_zero_or_null(value: Any) -> bool:
+    """
+    Check if a value is null, empty, or zero.
+
+    Args:
+        value: Value to check
+
+    Returns:
+        True if value is null, empty, or zero
+    """
+    if value is None or value == "":
+        return True
+    try:
+        return float(value) == 0
+    except (ValueError, TypeError):
+        return False
+
+
+def _validate_percentage_null_logic(
+    stats: List[Dict[str, Any]], errors: List[str], statistics: Dict[str, Any]
+) -> None:
+    """
+    Validate that percentage columns are null only when corresponding attempt columns are zero.
+
+    For example, 3P% can only be null if 3PA (3-point attempts) is 0 or null.
+
+    Args:
+        stats: List of player stat dictionaries
+        errors: List to append errors to
+        statistics: Statistics dict to update
+    """
+    if not stats:
+        return
+
+    # Define percentage -> attempt column mappings
+    # Percentage columns can ONLY be null if their attempt/dependency column(s)
+    # are 0, null, or empty. Format: {percentage_column: (dependency_columns, logic)}
+    # logic: "any" means any dependency can be non-zero to require percentage
+    #        "all" means all dependencies must be zero to allow null
+    percentage_dependencies = {
+        # Per-game stats
+        "FG%": (["FGA"], "any"),  # Field goal % requires field goal attempts
+        "3P%": (["3PA"], "any"),  # 3-point % requires 3-point attempts
+        "2P%": (["2PA"], "any"),  # 2-point % requires 2-point attempts
+        "FT%": (["FTA"], "any"),  # Free throw % requires free throw attempts
+        "eFG%": (["FGA"], "any"),  # Effective FG% requires field goal attempts
+        # Advanced stats
+        "TS%": (
+            ["FGA", "FTA"],
+            "all",
+        ),  # True shooting % requires any shooting attempts (FGA or FTA)
+        "3PAr": (["FGA"], "any"),  # 3-point attempt rate requires FGA
+        "FTr": (["FGA"], "any"),  # Free throw rate requires FGA
+    }
+
+    invalid_nulls = []
+    for player_idx, player_stat in enumerate(stats):
+        player_name = player_stat.get("Player", f"Player {player_idx}")
+
+        for pct_col, (dep_cols, logic) in percentage_dependencies.items():
+            # Only check if percentage column exists in the data
+            if pct_col not in player_stat:
+                continue
+
+            pct_value = player_stat.get(pct_col)
+            pct_is_null = pct_value is None or pct_value == ""
+
+            # If percentage is not null, no need to check dependencies
+            if not pct_is_null:
+                continue
+
+            # Check dependency columns
+            dep_values = []
+            all_deps_exist = True
+            for dep_col in dep_cols:
+                if dep_col not in player_stat:
+                    all_deps_exist = False
+                    break
+                dep_values.append(player_stat.get(dep_col))
+
+            # Skip if not all dependency columns exist
+            if not all_deps_exist:
+                continue
+
+            # Check if dependencies allow null based on logic
+            dep_is_zero_or_null = [_is_value_zero_or_null(v) for v in dep_values]
+
+            if logic == "any":
+                # If ANY dependency is non-zero, percentage cannot be null
+                if not all(dep_is_zero_or_null):
+                    non_zero_deps = [
+                        f"{dep_cols[i]}={dep_values[i]}"
+                        for i in range(len(dep_cols))
+                        if not dep_is_zero_or_null[i]
+                    ]
+                    invalid_nulls.append(
+                        f"{player_name}: {pct_col} is null but {', '.join(non_zero_deps)}"
+                    )
+            elif logic == "all":
+                # If ALL dependencies are zero/null, percentage can be null
+                # If ANY dependency is non-zero, percentage cannot be null
+                if not all(dep_is_zero_or_null):
+                    non_zero_deps = [
+                        f"{dep_cols[i]}={dep_values[i]}"
+                        for i in range(len(dep_cols))
+                        if not dep_is_zero_or_null[i]
+                    ]
+                    invalid_nulls.append(
+                        f"{player_name}: {pct_col} is null but {', '.join(non_zero_deps)}"
+                    )
+
+    if invalid_nulls:
+        errors.append(
+            f"Found {len(invalid_nulls)} players with invalid null percentages "
+            f"(first few: {', '.join(invalid_nulls[:5])})"
+        )
+        statistics["invalid_null_percentages"] = len(invalid_nulls)
+
+
 def _validate_stat_ranges(
     stats: List[Dict[str, Any]], warnings: List[str], statistics: Dict[str, Any]
 ) -> None:
@@ -459,6 +578,18 @@ def validate_stats_data(data: Dict[str, Any]) -> Dict[str, Any]:
             ):
                 results["valid"] = False
 
+        # Validate percentage-attempt null logic (per-game stats)
+        if per_game_stats:
+            errors_before = len(cast(List[str], results["errors"]))
+            _validate_percentage_null_logic(
+                per_game_stats,
+                cast(List[str], results["errors"]),
+                cast(Dict[str, Any], results["statistics"]),
+            )
+            # Mark as invalid if percentage null errors were found
+            if len(cast(List[str], results["errors"])) > errors_before:
+                results["valid"] = False
+
         # Validate statistical ranges (per-game stats)
         if per_game_stats:
             _validate_stat_ranges(
@@ -466,6 +597,18 @@ def validate_stats_data(data: Dict[str, Any]) -> Dict[str, Any]:
                 cast(List[str], results["warnings"]),
                 cast(Dict[str, Any], results["statistics"]),
             )
+
+        # Validate percentage-attempt null logic (advanced stats)
+        if advanced_stats:
+            errors_before = len(cast(List[str], results["errors"]))
+            _validate_percentage_null_logic(
+                advanced_stats,
+                cast(List[str], results["errors"]),
+                cast(Dict[str, Any], results["statistics"]),
+            )
+            # Mark as invalid if percentage null errors were found
+            if len(cast(List[str], results["errors"])) > errors_before:
+                results["valid"] = False
 
         # Validate that we have the expected columns (only if we have data)
         if per_game_stats and per_game_columns:

@@ -643,3 +643,363 @@ class TestBasketballReferenceValidation:
         assert result["validation_passed"] is False
         body = json.loads(result["body"])
         assert body["valid"] is False
+
+    @patch("src.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.etl.validate_data.save_validation_report")
+    @patch("src.etl.validate_data.load_from_s3")
+    def test_valid_null_percentages_when_attempts_zero(self, mock_load, mock_save):
+        """Test that null percentages are valid when corresponding attempts are zero."""
+
+        def mock_load_side_effect(s3_key):
+            if "stats" in s3_key:
+                # Create players with 0 attempts and null percentages - should be valid
+                per_game = [
+                    {
+                        "Player": f"Player {i}",
+                        "Pos": "C",
+                        "Age": 25,
+                        "Team": "LAL",
+                        "G": 10,
+                        "MP": 15.0,
+                        "PTS": 5.0,
+                        "TRB": 3.0,
+                        "AST": 1.0,
+                        "FGA": 0,  # Zero attempts
+                        "FG%": None,  # Null percentage - should be valid
+                        "3PA": 0,  # Zero 3-point attempts
+                        "3P%": None,  # Null percentage - should be valid
+                        "FTA": 0,  # Zero free throw attempts
+                        "FT%": None,  # Null percentage - should be valid
+                        "2PA": 0,
+                        "2P%": None,
+                    }
+                    for i in range(350)
+                ]
+                advanced = [
+                    {
+                        "Player": f"Player {i}",
+                        "Pos": "C",
+                        "Age": 25,
+                        "Team": "LAL",
+                        "G": 10,
+                        "MP": 15.0,
+                        "PER": 10.0,
+                        "FGA": 0,
+                        "FTA": 0,
+                        "TS%": None,  # Null when no shooting attempts
+                        "3PAr": None,  # Null when no FGA
+                        "FTr": None,  # Null when no FGA
+                    }
+                    for i in range(350)
+                ]
+                return {
+                    "season": "2025-26",
+                    "fetch_timestamp": datetime.utcnow().isoformat(),
+                    "source": "basketball_reference",
+                    "per_game_stats": per_game,
+                    "advanced_stats": advanced,
+                    "per_game_columns": [
+                        "Player",
+                        "Pos",
+                        "Age",
+                        "Team",
+                        "G",
+                        "MP",
+                        "PTS",
+                        "TRB",
+                        "AST",
+                        "FGA",
+                        "FG%",
+                        "3PA",
+                        "3P%",
+                        "FTA",
+                        "FT%",
+                        "2PA",
+                        "2P%",
+                    ],
+                    "advanced_columns": [
+                        "Player",
+                        "Pos",
+                        "Age",
+                        "Team",
+                        "G",
+                        "MP",
+                        "PER",
+                        "FGA",
+                        "FTA",
+                        "TS%",
+                        "3PAr",
+                        "FTr",
+                    ],
+                }
+            return None
+
+        mock_load.side_effect = mock_load_side_effect
+
+        event = {
+            "data_location": {"partition": "year=2026/month=02/day=19"},
+            "fetch_type": "stats_only",
+        }
+
+        result = validate_data.handler(event, MagicMock())
+
+        assert result["statusCode"] == 200
+        assert result["validation_passed"] is True
+        body = json.loads(result["body"])
+        assert body["valid"] is True
+        assert body["error_count"] == 0
+
+    @patch("src.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.etl.validate_data.save_validation_report")
+    @patch("src.etl.validate_data.load_from_s3")
+    def test_invalid_null_percentages_when_attempts_nonzero(self, mock_load, mock_save):
+        """Test that null percentages are invalid when corresponding attempts are non-zero."""
+
+        def mock_load_side_effect(s3_key):
+            if "stats" in s3_key:
+                # Create players with non-zero attempts but null percentages - should be invalid
+                per_game = [
+                    {
+                        "Player": "Bad Player 1",
+                        "Pos": "PG",
+                        "Age": 25,
+                        "Team": "LAL",
+                        "G": 70,
+                        "MP": 30.0,
+                        "PTS": 15.0,
+                        "TRB": 5.0,
+                        "AST": 5.0,
+                        "FGA": 10.5,  # Non-zero attempts
+                        "FG%": None,  # Null percentage - INVALID
+                        "3PA": 5.0,  # Non-zero 3-point attempts
+                        "3P%": None,  # Null percentage - INVALID
+                        "FTA": 4.0,  # Non-zero free throw attempts
+                        "FT%": None,  # Null percentage - INVALID
+                        "2PA": 5.5,
+                        "2P%": None,
+                    }
+                ]
+                # Add enough normal players to reach 350
+                per_game.extend(
+                    [
+                        {
+                            "Player": f"Player {i}",
+                            "Pos": "PG",
+                            "Age": 25,
+                            "Team": "LAL",
+                            "G": 70,
+                            "MP": 30.0,
+                            "PTS": 15.0,
+                            "TRB": 5.0,
+                            "AST": 5.0,
+                            "FGA": 10.0,
+                            "FG%": 0.45,
+                            "3PA": 5.0,
+                            "3P%": 0.35,
+                            "FTA": 4.0,
+                            "FT%": 0.80,
+                            "2PA": 5.0,
+                            "2P%": 0.50,
+                        }
+                        for i in range(349)
+                    ]
+                )
+                advanced = [
+                    {
+                        "Player": "Bad Player 1",
+                        "Pos": "PG",
+                        "Age": 25,
+                        "Team": "LAL",
+                        "G": 70,
+                        "MP": 30.0,
+                        "PER": 15.0,
+                        "FGA": 10.5,
+                        "FTA": 4.0,
+                        "TS%": None,  # INVALID - has attempts
+                        "3PAr": None,  # INVALID - has FGA
+                        "FTr": None,  # INVALID - has FGA
+                    }
+                ]
+                advanced.extend(
+                    [
+                        {
+                            "Player": f"Player {i}",
+                            "Pos": "PG",
+                            "Age": 25,
+                            "Team": "LAL",
+                            "G": 70,
+                            "MP": 30.0,
+                            "PER": 15.0,
+                            "FGA": 10.0,
+                            "FTA": 4.0,
+                            "TS%": 0.55,
+                            "3PAr": 0.30,
+                            "FTr": 0.25,
+                        }
+                        for i in range(349)
+                    ]
+                )
+                return {
+                    "season": "2025-26",
+                    "fetch_timestamp": datetime.utcnow().isoformat(),
+                    "source": "basketball_reference",
+                    "per_game_stats": per_game,
+                    "advanced_stats": advanced,
+                    "per_game_columns": [
+                        "Player",
+                        "Pos",
+                        "Age",
+                        "Team",
+                        "G",
+                        "MP",
+                        "PTS",
+                        "TRB",
+                        "AST",
+                        "FGA",
+                        "FG%",
+                        "3PA",
+                        "3P%",
+                        "FTA",
+                        "FT%",
+                        "2PA",
+                        "2P%",
+                    ],
+                    "advanced_columns": [
+                        "Player",
+                        "Pos",
+                        "Age",
+                        "Team",
+                        "G",
+                        "MP",
+                        "PER",
+                        "FGA",
+                        "FTA",
+                        "TS%",
+                        "3PAr",
+                        "FTr",
+                    ],
+                }
+            return None
+
+        mock_load.side_effect = mock_load_side_effect
+
+        event = {
+            "data_location": {"partition": "year=2026/month=02/day=19"},
+            "fetch_type": "stats_only",
+        }
+
+        result = validate_data.handler(event, MagicMock())
+
+        assert result["statusCode"] == 422
+        assert result["validation_passed"] is False
+        body = json.loads(result["body"])
+        assert body["valid"] is False
+        assert body["error_count"] > 0
+
+    @patch("src.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.etl.validate_data.save_validation_report")
+    @patch("src.etl.validate_data.load_from_s3")
+    def test_mixed_null_and_zero_attempts(self, mock_load, mock_save):
+        """Test players with some zero attempts (null %) and some non-zero attempts (valid %)."""
+
+        def mock_load_side_effect(s3_key):
+            if "stats" in s3_key:
+                # Create players who shoot FGs but not 3Ps
+                per_game = [
+                    {
+                        "Player": f"Player {i}",
+                        "Pos": "C",
+                        "Age": 28,
+                        "Team": "LAL",
+                        "G": 60,
+                        "MP": 25.0,
+                        "PTS": 12.0,
+                        "TRB": 8.0,
+                        "AST": 2.0,
+                        "FGA": 8.0,  # Takes field goals
+                        "FG%": 0.55,  # Has FG% - required
+                        "3PA": 0,  # Doesn't take 3s
+                        "3P%": None,  # Null 3P% is valid
+                        "FTA": 3.0,  # Takes free throws
+                        "FT%": 0.70,  # Has FT% - required
+                        "2PA": 8.0,
+                        "2P%": 0.55,
+                    }
+                    for i in range(350)
+                ]
+                advanced = [
+                    {
+                        "Player": f"Player {i}",
+                        "Pos": "C",
+                        "Age": 28,
+                        "Team": "LAL",
+                        "G": 60,
+                        "MP": 25.0,
+                        "PER": 18.0,
+                        "FGA": 8.0,
+                        "FTA": 3.0,
+                        "TS%": 0.58,  # Required when has attempts
+                        "3PAr": 0.0,  # Can be 0 when has FGA
+                        "FTr": 0.375,  # Required when has FGA
+                    }
+                    for i in range(350)
+                ]
+                return {
+                    "season": "2025-26",
+                    "fetch_timestamp": datetime.utcnow().isoformat(),
+                    "source": "basketball_reference",
+                    "per_game_stats": per_game,
+                    "advanced_stats": advanced,
+                    "per_game_columns": [
+                        "Player",
+                        "Pos",
+                        "Age",
+                        "Team",
+                        "G",
+                        "MP",
+                        "PTS",
+                        "TRB",
+                        "AST",
+                        "FGA",
+                        "FG%",
+                        "3PA",
+                        "3P%",
+                        "FTA",
+                        "FT%",
+                        "2PA",
+                        "2P%",
+                    ],
+                    "advanced_columns": [
+                        "Player",
+                        "Pos",
+                        "Age",
+                        "Team",
+                        "G",
+                        "MP",
+                        "PER",
+                        "FGA",
+                        "FTA",
+                        "TS%",
+                        "3PAr",
+                        "FTr",
+                    ],
+                }
+            return None
+
+        mock_load.side_effect = mock_load_side_effect
+
+        event = {
+            "data_location": {"partition": "year=2026/month=02/day=19"},
+            "fetch_type": "stats_only",
+        }
+
+        result = validate_data.handler(event, MagicMock())
+
+        assert result["statusCode"] == 200
+        assert result["validation_passed"] is True
+        body = json.loads(result["body"])
+        assert body["valid"] is True
+        assert body["error_count"] == 0

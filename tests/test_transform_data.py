@@ -8,6 +8,36 @@ from unittest.mock import MagicMock, patch
 from src.etl import transform_data
 
 
+class TestNormalizeTeamAbbreviation:
+    """Test team abbreviation normalization."""
+
+    def test_normalizes_brk_to_bkn(self):
+        """Test Brooklyn Nets abbreviation is normalized."""
+        result = transform_data.normalize_team_abbreviation("BRK")
+        assert result == "BKN"
+
+    def test_normalizes_cho_to_cha(self):
+        """Test Charlotte Hornets abbreviation is normalized."""
+        result = transform_data.normalize_team_abbreviation("CHO")
+        assert result == "CHA"
+
+    def test_normalizes_pho_to_phx(self):
+        """Test Phoenix Suns abbreviation is normalized."""
+        result = transform_data.normalize_team_abbreviation("PHO")
+        assert result == "PHX"
+
+    def test_leaves_other_abbreviations_unchanged(self):
+        """Test other abbreviations are not modified."""
+        result = transform_data.normalize_team_abbreviation("LAL")
+        assert result == "LAL"
+
+        result = transform_data.normalize_team_abbreviation("GSW")
+        assert result == "GSW"
+
+        result = transform_data.normalize_team_abbreviation("BOS")
+        assert result == "BOS"
+
+
 class TestMatchSalariesWithPlayers:
     """Test salary matching with player IDs."""
 
@@ -46,7 +76,7 @@ class TestEnrichPlayerStats:
                     "Player": "LeBron James",
                     "Pos": "SF",
                     "Age": 39,
-                    "Tm": "LAL",
+                    "Team": "LAL",
                     "G": 50,
                     "GS": 48,
                     "MP": 35.2,
@@ -83,6 +113,42 @@ class TestEnrichPlayerStats:
         assert player["per"] == 24.5
         assert player["ts_pct"] == 0.623
         assert player["vorp"] == 4.2
+
+    def test_enrichment_normalizes_team_abbreviations(self):
+        """Test enrichment normalizes Basketball Reference team abbreviations."""
+        stats_data = {
+            "season": "2025-26",
+            "source": "basketball_reference",
+            "per_game_stats": [
+                {"Player": "Kevin Durant", "Team": "PHO", "PTS": 28.5, "TRB": 7.0, "AST": 5.5},
+                {"Player": "Mikal Bridges", "Team": "BRK", "PTS": 20.1, "TRB": 4.5, "AST": 3.7},
+                {"Player": "LaMelo Ball", "Team": "CHO", "PTS": 23.9, "TRB": 6.2, "AST": 8.4},
+            ],
+            "advanced_stats": [],
+        }
+
+        result = transform_data.enrich_player_stats(stats_data)
+
+        assert len(result) == 3
+        assert result[0]["team_abbreviation"] == "PHX"  # PHO -> PHX
+        assert result[1]["team_abbreviation"] == "BKN"  # BRK -> BKN
+        assert result[2]["team_abbreviation"] == "CHA"  # CHO -> CHA
+
+    def test_enrichment_handles_none_team_abbreviation(self):
+        """Test enrichment handles missing team abbreviation."""
+        stats_data = {
+            "season": "2025-26",
+            "source": "basketball_reference",
+            "per_game_stats": [
+                {"Player": "Free Agent", "PTS": 15.0, "TRB": 5.0, "AST": 3.0},
+            ],
+            "advanced_stats": [],
+        }
+
+        result = transform_data.enrich_player_stats(stats_data)
+
+        assert len(result) == 1
+        assert result[0]["team_abbreviation"] is None
 
     def test_enrichment_handles_empty_stats(self):
         """Test enrichment with no players."""
@@ -130,6 +196,38 @@ class TestEnrichTeamData:
         assert result[0]["total_payroll"] == 80000000
         assert result[0]["roster_count"] == 2
 
+    def test_enrichment_matches_normalized_team_abbreviations(self):
+        """Test team enrichment works with normalized abbreviations from Basketball Reference."""
+        # Phoenix Suns - NBA API uses PHX, Basketball Reference uses PHO (normalized to PHX)
+        teams = [{"id": 1, "abbreviation": "PHX", "full_name": "Phoenix Suns"}]
+        salaries = [
+            {"player_name": "Kevin Durant", "annual_salary": 47000000},
+            {"player_name": "Devin Booker", "annual_salary": 36000000},
+        ]
+        # Stats would have PHX after normalization from PHO
+        stats = [
+            {
+                "player_name": "Kevin Durant",
+                "team_abbreviation": "PHX",
+                "points": 28.5,
+                "rebounds": 7.0,
+                "assists": 5.5,
+            },
+            {
+                "player_name": "Devin Booker",
+                "team_abbreviation": "PHX",
+                "points": 27.1,
+                "rebounds": 4.5,
+                "assists": 6.9,
+            },
+        ]
+
+        result = transform_data.enrich_team_data(teams, salaries, stats)
+
+        assert result[0]["total_payroll"] == 83000000
+        assert result[0]["roster_count"] == 2
+        assert result[0]["roster_with_salary"] == 2
+
 
 class TestHandlerValidationCheck:
     """Test handler validation gate logic."""
@@ -172,7 +270,7 @@ class TestHandlerTransformation:
                     "per_game_stats": [
                         {
                             "Player": "LeBron James",
-                            "Tm": "LAL",
+                            "Team": "LAL",
                             "PTS": 25.8,
                             "TRB": 7.7,
                             "AST": 8.2,
