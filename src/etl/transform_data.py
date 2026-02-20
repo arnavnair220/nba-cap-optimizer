@@ -25,6 +25,24 @@ S3_BUCKET = os.environ.get("DATA_BUCKET")
 ENVIRONMENT = os.environ.get("ENVIRONMENT")
 
 
+def normalize_team_abbreviation(team_abbrev: str) -> str:
+    """
+    Normalize Basketball Reference team abbreviations to match NBA API.
+
+    Args:
+        team_abbrev: Team abbreviation from Basketball Reference
+
+    Returns:
+        Normalized team abbreviation matching NBA API format
+    """
+    mapping = {
+        "BRK": "BKN",  # Brooklyn Nets
+        "CHO": "CHA",  # Charlotte Hornets
+        "PHO": "PHX",  # Phoenix Suns
+    }
+    return mapping.get(team_abbrev, team_abbrev)
+
+
 def load_from_s3(s3_key: str) -> Optional[Dict[str, Any]]:
     """
     Load JSON data from S3.
@@ -159,11 +177,14 @@ def enrich_player_stats(stats_data: Dict[str, Any]) -> List[Dict[str, Any]]:
                 continue
 
             # Create enriched player record
+            team_abbrev = pg_stat.get("Team")
             player_stat = {
                 # Basic info
                 "player_name": player_name,
                 "age": pg_stat.get("Age"),
-                "team_abbreviation": pg_stat.get("Tm"),
+                "team_abbreviation": (
+                    normalize_team_abbreviation(team_abbrev) if team_abbrev else None
+                ),
                 "position": pg_stat.get("Pos"),
                 "games_played": pg_stat.get("G"),
                 "games_started": pg_stat.get("GS"),
