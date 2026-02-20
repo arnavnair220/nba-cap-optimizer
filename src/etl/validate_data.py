@@ -42,15 +42,23 @@ PLAYER_SCHEMA = {
 PLAYER_STATS_SCHEMA = {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "type": "object",
-    "required": ["season", "fetch_timestamp", "players"],
+    "required": [
+        "season",
+        "fetch_timestamp",
+        "source",
+        "per_game_stats",
+        "advanced_stats",
+        "per_game_columns",
+        "advanced_columns",
+    ],
     "properties": {
         "season": {"type": "string", "pattern": "^\\d{4}-\\d{2}$"},
         "fetch_timestamp": {"type": "string", "format": "date-time"},
-        "players": {
-            "type": "object",
-            "required": ["resultSets"],
-            "properties": {"resultSets": {"type": "array", "minItems": 1}},
-        },
+        "source": {"type": "string", "enum": ["basketball_reference"]},
+        "per_game_stats": {"type": "array"},
+        "advanced_stats": {"type": "array"},
+        "per_game_columns": {"type": "array"},
+        "advanced_columns": {"type": "array"},
     },
 }
 
@@ -266,13 +274,16 @@ def _validate_season_and_timestamp(data: Dict[str, Any], warnings: List[str]) ->
 
 
 def _check_missing_data(
-    rows: List[Any], warnings: List[str], errors: List[str], statistics: Dict[str, Any]
+    stats: List[Dict[str, Any]],
+    warnings: List[str],
+    errors: List[str],
+    statistics: Dict[str, Any],
 ) -> bool:
     """
-    Check for missing values in key columns.
+    Check for missing values in key columns (Basketball Reference format).
 
     Args:
-        rows: Data rows
+        stats: List of player stat dictionaries
         warnings: List to append warnings to
         errors: List to append errors to
         statistics: Statistics dict to update
@@ -280,25 +291,33 @@ def _check_missing_data(
     Returns:
         True if validation passes, False if critical error
     """
-    if not rows:
+    if not stats:
         return True
 
+    # Key columns to check for missing data (common across per_game and advanced stats)
+    key_columns = ["Player", "Pos", "Age", "Tm", "G", "MP"]
+
     missing_stats = 0
-    for row in rows:
-        if any(val is None for val in row[:10]):  # Check first 10 columns
+    for player_stat in stats:
+        # Check if any key column is missing or empty
+        if any(
+            player_stat.get(col) is None or player_stat.get(col) == ""
+            for col in key_columns
+            if col in player_stat
+        ):
             missing_stats += 1
 
     statistics["players_with_missing_data"] = missing_stats
 
     if missing_stats > 0:
         warnings.append(
-            f"Found {missing_stats}/{len(rows)} players with missing data in key columns"
+            f"Found {missing_stats}/{len(stats)} players with missing data in key columns"
         )
 
-    if missing_stats > len(rows) * 0.05:  # More than 5% with missing data
+    if missing_stats > len(stats) * 0.05:  # More than 5% with missing data
         errors.append(
-            f"CRITICAL: High missing data rate: {missing_stats}/{len(rows)} players "
-            f"({missing_stats/len(rows)*100:.1f}%) exceeds 5% threshold"
+            f"CRITICAL: High missing data rate: {missing_stats}/{len(stats)} players "
+            f"({missing_stats/len(stats)*100:.1f}%) exceeds 5% threshold"
         )
         return False
 
@@ -306,44 +325,52 @@ def _check_missing_data(
 
 
 def _validate_stat_ranges(
-    headers: List[Any], rows: List[Any], warnings: List[str], statistics: Dict[str, Any]
+    stats: List[Dict[str, Any]], warnings: List[str], statistics: Dict[str, Any]
 ) -> None:
     """
-    Validate statistical values are within realistic ranges.
+    Validate statistical values are within realistic ranges (Basketball Reference format).
 
     Args:
-        headers: Column headers
-        rows: Data rows
+        stats: List of player stat dictionaries
         warnings: List to append warnings to
         statistics: Statistics dict to update
     """
-    # Try to find common stat columns (case-insensitive)
-    headers_lower = [h.lower() if isinstance(h, str) else "" for h in headers]
+    if not stats:
+        return
+
+    # Basketball Reference per-game stat column checks
+    # Note: MP (minutes per game) can exceed 48 with overtime
     stat_checks = {
-        "ppg": (80, "points per game"),  # 0-80
-        "pts": (80, "points per game"),
-        "rpg": (30, "rebounds per game"),  # 0-30
-        "reb": (30, "rebounds per game"),
-        "apg": (25, "assists per game"),  # 0-25
-        "ast": (25, "assists per game"),
-        "mpg": (60, "minutes per game"),  # 0-60 (accounts for OT)
-        "min": (60, "minutes per game"),
+        "PTS": (80, "points per game"),  # 0-80
+        "TRB": (30, "total rebounds per game"),  # 0-30
+        "AST": (25, "assists per game"),  # 0-25
+        "MP": (60, "minutes per game"),  # 0-60 (accounts for OT)
+        "STL": (10, "steals per game"),  # 0-10
+        "BLK": (10, "blocks per game"),  # 0-10
+        "TOV": (15, "turnovers per game"),  # 0-15
+        "FG%": (1.0, "field goal percentage"),  # 0-1.0
+        "3P%": (1.0, "three-point percentage"),  # 0-1.0
+        "FT%": (1.0, "free throw percentage"),  # 0-1.0
     }
 
     unrealistic_values = []
-    for stat_key, (max_val, stat_name) in stat_checks.items():
-        try:
-            stat_idx = headers_lower.index(stat_key)
-            for row_idx, row in enumerate(rows):
-                if len(row) > stat_idx and row[stat_idx] is not None:
-                    value = float(row[stat_idx])
-                    if value < 0 or value > max_val:
-                        unrealistic_values.append(
-                            f"Row {row_idx}: {stat_name} = {value} (expected 0-{max_val})"
-                        )
-        except (ValueError, IndexError):
-            # Stat column not found or conversion error - skip this check
-            pass
+    for player_idx, player_stat in enumerate(stats):
+        player_name = player_stat.get("Player", f"Player {player_idx}")
+
+        for stat_key, (max_val, stat_name) in stat_checks.items():
+            if stat_key in player_stat:
+                value = player_stat.get(stat_key)
+                if value is not None and value != "":
+                    try:
+                        value_float = float(value)
+                        if value_float < 0 or value_float > max_val:
+                            unrealistic_values.append(
+                                f"{player_name}: {stat_name} = {value_float} "
+                                f"(expected 0-{max_val})"
+                            )
+                    except (ValueError, TypeError):
+                        # Can't convert to float - skip this check
+                        pass
 
     if unrealistic_values:
         warnings.append(
@@ -355,10 +382,10 @@ def _validate_stat_ranges(
 
 def validate_stats_data(data: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Validate player statistics data.
+    Validate player statistics data from Basketball Reference.
 
     Args:
-        data: Stats data
+        data: Stats data (Basketball Reference format with per_game_stats and advanced_stats)
 
     Returns:
         Validation results
@@ -377,35 +404,101 @@ def validate_stats_data(data: Dict[str, Any]) -> Dict[str, Any]:
 
     # Extract stats
     try:
-        result_sets = data["players"]["resultSets"][0]
-        headers = result_sets.get("headers", [])
-        rows = result_sets.get("rowSet", [])
+        per_game_stats = data.get("per_game_stats", [])
+        advanced_stats = data.get("advanced_stats", [])
+        per_game_columns = data.get("per_game_columns", [])
+        advanced_columns = data.get("advanced_columns", [])
 
-        results["statistics"]["total_players"] = len(rows)
-        results["statistics"]["stat_columns"] = len(headers)
+        per_game_count = len(per_game_stats)
+        advanced_count = len(advanced_stats)
 
-        # Data quality checks
-        if len(rows) < 300:
-            results["warnings"].append(f"Low player count in stats: {len(rows)}")
+        results["statistics"]["total_players_per_game"] = per_game_count
+        results["statistics"]["total_players_advanced"] = advanced_count
+        results["statistics"]["per_game_columns"] = len(per_game_columns)
+        results["statistics"]["advanced_columns"] = len(advanced_columns)
 
-        # Check for missing data
-        if not _check_missing_data(
-            rows,
-            cast(List[str], results["warnings"]),
-            cast(List[str], results["errors"]),
-            cast(Dict[str, Any], results["statistics"]),
-        ):
-            results["valid"] = False
+        # Player count validation - both stat arrays should have adequate data
+        min_expected_players = 300  # NBA typically has 450+ active players
 
-        # Validate statistical ranges
-        _validate_stat_ranges(
-            headers,
-            rows,
-            cast(List[str], results["warnings"]),
-            cast(Dict[str, Any], results["statistics"]),
-        )
+        # Check per-game stats player count
+        if per_game_count < min_expected_players:
+            results["warnings"].append(
+                f"Low player count in per-game stats: {per_game_count} "
+                f"(expected {min_expected_players}+)"
+            )
 
-    except (KeyError, IndexError) as e:
+        # Check advanced stats player count
+        if advanced_count < min_expected_players:
+            results["warnings"].append(
+                f"Low player count in advanced stats: {advanced_count} "
+                f"(expected {min_expected_players}+)"
+            )
+
+        # Check that both stat lists have similar counts (within 2.5% of each other)
+        # Both arrays should be scraped at the same time and contain the same players
+        if per_game_stats and advanced_stats:
+            count_diff = abs(per_game_count - advanced_count)
+            max_count = max(per_game_count, advanced_count)
+            count_diff_pct = count_diff / max_count if max_count > 0 else 0
+
+            if count_diff_pct > 0.025:  # More than 2.5% difference
+                results["warnings"].append(
+                    f"Player count mismatch: {per_game_count} per-game vs "
+                    f"{advanced_count} advanced ({count_diff_pct*100:.1f}% difference, "
+                    f"expected within 2.5%)"
+                )
+                results["statistics"]["player_count_diff_pct"] = round(count_diff_pct * 100, 2)
+
+        # Check for missing data in per-game stats
+        if per_game_stats:
+            if not _check_missing_data(
+                per_game_stats,
+                cast(List[str], results["warnings"]),
+                cast(List[str], results["errors"]),
+                cast(Dict[str, Any], results["statistics"]),
+            ):
+                results["valid"] = False
+
+        # Validate statistical ranges (per-game stats)
+        if per_game_stats:
+            _validate_stat_ranges(
+                per_game_stats,
+                cast(List[str], results["warnings"]),
+                cast(Dict[str, Any], results["statistics"]),
+            )
+
+        # Validate that we have the expected columns (only if we have data)
+        if per_game_stats and per_game_columns:
+            expected_per_game_cols = [
+                "Player",
+                "Pos",
+                "Age",
+                "Tm",
+                "G",
+                "MP",
+                "PTS",
+                "TRB",
+                "AST",
+            ]
+            missing_cols = [col for col in expected_per_game_cols if col not in per_game_columns]
+            if missing_cols:
+                results["errors"].append(
+                    f"Missing expected per-game columns: {', '.join(missing_cols)}"
+                )
+                results["valid"] = False
+
+        if advanced_stats and advanced_columns:
+            expected_advanced_cols = ["Player", "Pos", "Age", "Tm", "G", "MP", "PER"]
+            missing_advanced_cols = [
+                col for col in expected_advanced_cols if col not in advanced_columns
+            ]
+            if missing_advanced_cols:
+                results["errors"].append(
+                    f"Missing expected advanced columns: {', '.join(missing_advanced_cols)}"
+                )
+                results["valid"] = False
+
+    except (KeyError, TypeError) as e:
         results["valid"] = False
         results["errors"].append(f"Invalid stats structure: {e}")
 

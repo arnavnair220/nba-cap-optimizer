@@ -2,6 +2,13 @@
 Fetch NBA data from multiple APIs and sources.
 This Lambda function fetches player stats, game data, and team information
 from the NBA Stats API and stores raw data in S3.
+
+TODO: Add backfilling functionality to fetch historical data for previous seasons.
+This will require:
+- Adding optional 'season' parameters to all fetch functions (defaults to current season)
+- Modifying the handler to support backfill requests with season ranges
+- Ensuring S3 storage paths properly partition historical data
+- Example: fetch_player_stats(season="2023-24") for historical data
 """
 
 import json
@@ -13,38 +20,18 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, cast
 
 import boto3
+import pandas as pd
 import requests
 from botocore.exceptions import ClientError
 from bs4 import BeautifulSoup
-from nba_api.stats.endpoints import leaguedashplayerstats, playergamelog
 
-# Configure NBA API to handle slow responses and avoid blocking
-from nba_api.stats.library.http import NBAStatsHTTP
+# Keep nba_api imports only for static data (players, teams)
+# Stats fetching now uses Basketball-Reference.com scraping
 from nba_api.stats.static import players, teams
 
 # Configure logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-
-# Increase timeout from default 30s to 90s for slow NBA API responses
-# Note: timeout must ALSO be passed as a parameter to each endpoint (e.g., LeagueDashPlayerStats)
-# as the class-level setting may not be respected by all endpoints
-NBAStatsHTTP.timeout = 90
-
-# Add browser-like headers to avoid API throttling/blocking
-NBAStatsHTTP.headers = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/120.0.0.0 Safari/537.36"
-    ),
-    "Accept": "application/json, text/plain, */*",
-    "Accept-Language": "en-US,en;q=0.9",
-    "Accept-Encoding": "gzip, deflate, br",
-    "Referer": "https://www.nba.com/",
-    "Origin": "https://www.nba.com",
-    "Connection": "keep-alive",
-}
 
 # Initialize S3 client
 s3_client = boto3.client("s3")
@@ -147,16 +134,24 @@ def fetch_active_players() -> List[Dict[str, Any]]:
 
 def fetch_player_stats(season: str = "2025-26", max_retries: int = 3) -> Optional[Dict[str, Any]]:
     """
-    Fetch comprehensive player stats for the season with retry logic.
+    Fetch comprehensive player stats from Basketball-Reference.com with retry logic.
+
+    This function scrapes both per-game and advanced stats from Basketball-Reference
+    using pandas.read_html(), which bypasses anti-scraping measures.
 
     Args:
-        season: NBA season (e.g., "2024-25")
+        season: NBA season (e.g., "2024-25", "2025-26")
         max_retries: Maximum number of retry attempts for transient failures
 
     Returns:
-        Player stats data
+        Player stats data with both per-game and advanced metrics
     """
-    logger.info(f"Fetching player stats for season {season}...")
+    logger.info(f"Fetching player stats from Basketball-Reference for season {season}...")
+
+    # Convert season format: "2025-26" -> "2026" (use ending year for B-R URL)
+    season_year = season.split("-")[1]
+    if len(season_year) == 2:
+        season_year = "20" + season_year
 
     for attempt in range(max_retries):
         try:
@@ -170,23 +165,49 @@ def fetch_player_stats(season: str = "2025-26", max_retries: int = 3) -> Optiona
             else:
                 time.sleep(1)
 
-            # Fetch league-wide player stats with extended timeout
-            stats = leaguedashplayerstats.LeagueDashPlayerStats(
-                season=season,
-                season_type_all_star="Regular Season",
-                per_mode_detailed="PerGame",
-                timeout=90,
+            # Fetch per-game stats
+            pergame_url = (
+                f"https://www.basketball-reference.com/leagues/NBA_{season_year}_per_game.html"
             )
+            logger.info(f"Fetching per-game stats from {pergame_url}")
+            pergame_tables = pd.read_html(pergame_url)
+            df_pergame = pergame_tables[0]
 
-            # Get the data as dictionaries
+            # Remove header rows that sometimes appear in the middle of data
+            df_pergame = df_pergame[df_pergame["Player"] != "Player"]
+
+            # Add delay between requests to be respectful
+            time.sleep(1)
+
+            # Fetch advanced stats
+            advanced_url = (
+                f"https://www.basketball-reference.com/leagues/NBA_{season_year}_advanced.html"
+            )
+            logger.info(f"Fetching advanced stats from {advanced_url}")
+            advanced_tables = pd.read_html(advanced_url)
+            df_advanced = advanced_tables[0]
+
+            # Remove header rows
+            df_advanced = df_advanced[df_advanced["Player"] != "Player"]
+
+            # Convert DataFrames to list of dictionaries
+            pergame_records = df_pergame.to_dict("records")
+            advanced_records = df_advanced.to_dict("records")
+
             data = {
                 "season": season,
                 "fetch_timestamp": datetime.utcnow().isoformat(),
-                "players": stats.get_dict(),
+                "source": "basketball_reference",
+                "per_game_stats": pergame_records,
+                "advanced_stats": advanced_records,
+                "per_game_columns": list(df_pergame.columns),
+                "advanced_columns": list(df_advanced.columns),
             }
 
-            player_count = len(data["players"]["resultSets"][0]["rowSet"])
-            logger.info(f"Successfully fetched stats for {player_count} players")
+            logger.info(
+                f"Successfully fetched {len(pergame_records)} players (per-game) "
+                f"and {len(advanced_records)} players (advanced)"
+            )
             return data
 
         except Exception as e:
@@ -203,26 +224,22 @@ def fetch_player_game_logs(player_id: str, season: str = "2025-26") -> Optional[
     """
     Fetch game logs for a specific player.
 
+    NOTE: This function is currently disabled due to NBA Stats API blocking AWS IPs.
+    Game logs are optional (only used in 'full' fetch mode).
+    Future enhancement: Implement game log scraping from Basketball-Reference.
+
     Args:
         player_id: NBA player ID
         season: NBA season
 
     Returns:
-        Game log data
+        None (disabled)
     """
-    try:
-        # Add delay to respect rate limits
-        time.sleep(1)
-
-        gamelog = playergamelog.PlayerGameLog(
-            player_id=player_id, season=season, season_type_all_star="Regular Season", timeout=90
-        )
-
-        return cast(Dict[str, Any], gamelog.get_dict())
-
-    except Exception as e:
-        logger.error(f"Failed to fetch game logs for player {player_id}: {e}")
-        return None
+    logger.warning(
+        "Game logs fetching is currently disabled due to NBA API blocking. "
+        "This is an optional feature only used in 'full' fetch mode."
+    )
+    return None
 
 
 def fetch_team_data() -> List[Dict[str, Any]]:
