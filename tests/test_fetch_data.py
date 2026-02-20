@@ -4,97 +4,152 @@ Tests for fetch_data Lambda function.
 
 from unittest.mock import MagicMock, Mock, patch
 
+import pandas as pd
 import requests
 
 from src.etl import fetch_data
 
 
-class TestNBAAPIConfiguration:
-    """Test NBA API timeout and header configuration."""
+class TestFetchPlayerStatsBasketballReference:
+    """Test Basketball-Reference scraping for player stats."""
 
-    def test_nba_api_timeout_increased(self):
-        """Test that NBA API timeout is increased to 90 seconds."""
-        from nba_api.stats.library.http import NBAStatsHTTP
-
-        assert NBAStatsHTTP.timeout == 90
-
-    def test_nba_api_headers_configured(self):
-        """Test that NBA API headers are properly configured."""
-        from nba_api.stats.library.http import NBAStatsHTTP
-
-        assert "User-Agent" in NBAStatsHTTP.headers
-        assert "Chrome" in NBAStatsHTTP.headers["User-Agent"]
-        assert NBAStatsHTTP.headers["Referer"] == "https://www.nba.com/"
-        assert NBAStatsHTTP.headers["Origin"] == "https://www.nba.com"
-
-
-class TestFetchPlayerStatsRetry:
-    """Test retry logic for fetch_player_stats."""
-
-    @patch("src.etl.fetch_data.leaguedashplayerstats.LeagueDashPlayerStats")
+    @patch("src.etl.fetch_data.pd.read_html")
     @patch("src.etl.fetch_data.time.sleep")
-    def test_fetch_player_stats_success_first_attempt(self, mock_sleep, mock_stats_api):
-        """Test successful fetch on first attempt."""
-        mock_stats = Mock()
-        mock_stats.get_dict.return_value = {
-            "resultSets": [{"headers": ["ID", "NAME"], "rowSet": [[1, "Player 1"]]}]
-        }
-        mock_stats_api.return_value = mock_stats
+    def test_fetch_player_stats_success_first_attempt(self, mock_sleep, mock_read_html):
+        """Test successful fetch from Basketball-Reference on first attempt."""
+        # Mock per-game stats DataFrame
+        mock_pergame_df = pd.DataFrame(
+            {
+                "Player": ["LeBron James", "Stephen Curry"],
+                "Pos": ["SF", "PG"],
+                "Age": [40, 36],
+                "Tm": ["LAL", "GSW"],
+                "G": [50, 48],
+                "PTS": [25.0, 28.5],
+            }
+        )
+
+        # Mock advanced stats DataFrame
+        mock_advanced_df = pd.DataFrame(
+            {
+                "Player": ["LeBron James", "Stephen Curry"],
+                "Pos": ["SF", "PG"],
+                "Age": [40, 36],
+                "Tm": ["LAL", "GSW"],
+                "PER": [24.5, 28.2],
+                "TS%": [0.585, 0.625],
+            }
+        )
+
+        # read_html is called twice: once for per-game, once for advanced
+        mock_read_html.side_effect = [[mock_pergame_df], [mock_advanced_df]]
 
         result = fetch_data.fetch_player_stats("2025-26")
 
         assert result is not None
         assert result["season"] == "2025-26"
-        assert "players" in result
+        assert result["source"] == "basketball_reference"
+        assert "per_game_stats" in result
+        assert "advanced_stats" in result
         assert "fetch_timestamp" in result
-        mock_stats_api.assert_called_once()
-        mock_sleep.assert_called_once_with(1)
+        assert len(result["per_game_stats"]) == 2
+        assert len(result["advanced_stats"]) == 2
+        assert mock_read_html.call_count == 2
+        # Should sleep 1s initially, then 1s between requests
+        assert mock_sleep.call_count == 2
 
-    @patch("src.etl.fetch_data.leaguedashplayerstats.LeagueDashPlayerStats")
+    @patch("src.etl.fetch_data.pd.read_html")
     @patch("src.etl.fetch_data.time.sleep")
-    def test_fetch_player_stats_retry_on_timeout(self, mock_sleep, mock_stats_api):
-        """Test retry logic when first attempt times out."""
-        mock_stats = Mock()
-        mock_stats.get_dict.return_value = {
-            "resultSets": [{"headers": ["ID", "NAME"], "rowSet": [[1, "Player 1"]]}]
-        }
+    def test_fetch_player_stats_retry_on_error(self, mock_sleep, mock_read_html):
+        """Test retry logic when first scraping attempt fails."""
+        mock_pergame_df = pd.DataFrame({"Player": ["LeBron James"], "PTS": [25.0]})
+        mock_advanced_df = pd.DataFrame({"Player": ["LeBron James"], "PER": [24.5]})
 
-        # First call raises timeout, second succeeds
-        mock_stats_api.side_effect = [
-            requests.exceptions.ReadTimeout("Read timed out"),
-            mock_stats,
+        # First call raises error, second and third succeed
+        mock_read_html.side_effect = [
+            requests.exceptions.ConnectionError("Network error"),
+            [mock_pergame_df],
+            [mock_advanced_df],
         ]
 
         result = fetch_data.fetch_player_stats("2025-26", max_retries=3)
 
         assert result is not None
         assert result["season"] == "2025-26"
-        assert mock_stats_api.call_count == 2
-        # Should sleep 1s initially, then 2s for first retry
-        assert mock_sleep.call_count == 2
+        assert mock_read_html.call_count == 3
+        # Should sleep: 1s (initial), 2s (backoff for retry 1), 1s (between requests)
+        assert mock_sleep.call_count == 3
 
-    @patch("src.etl.fetch_data.leaguedashplayerstats.LeagueDashPlayerStats")
+    @patch("src.etl.fetch_data.pd.read_html")
     @patch("src.etl.fetch_data.time.sleep")
-    def test_fetch_player_stats_all_retries_fail(self, mock_sleep, mock_stats_api):
+    def test_fetch_player_stats_all_retries_fail(self, mock_sleep, mock_read_html):
         """Test that function returns None after all retries fail."""
-        mock_stats_api.side_effect = requests.exceptions.ReadTimeout("Read timed out")
+        mock_read_html.side_effect = requests.exceptions.ConnectionError("Network error")
 
         result = fetch_data.fetch_player_stats("2025-26", max_retries=3)
 
         assert result is None
-        assert mock_stats_api.call_count == 3
+        assert mock_read_html.call_count == 3
 
-    @patch("src.etl.fetch_data.leaguedashplayerstats.LeagueDashPlayerStats")
+    @patch("src.etl.fetch_data.pd.read_html")
     @patch("src.etl.fetch_data.time.sleep")
-    def test_fetch_player_stats_exponential_backoff(self, mock_sleep, mock_stats_api):
+    def test_fetch_player_stats_exponential_backoff(self, mock_sleep, mock_read_html):
         """Test that retry delays use exponential backoff."""
-        mock_stats_api.side_effect = requests.exceptions.ReadTimeout("Read timed out")
+        mock_read_html.side_effect = requests.exceptions.ConnectionError("Network error")
 
         fetch_data.fetch_player_stats("2025-26", max_retries=3)
 
         # Should sleep: 1s (initial), 2s (retry 1), 4s (retry 2)
         expected_calls = [((1,),), ((2,),), ((4,),)]
         assert mock_sleep.call_args_list == expected_calls
+
+    @patch("src.etl.fetch_data.pd.read_html")
+    @patch("src.etl.fetch_data.time.sleep")
+    def test_fetch_player_stats_filters_header_rows(self, mock_sleep, mock_read_html):
+        """Test that duplicate header rows are filtered out."""
+        # Mock DataFrame with header row in the middle (common in B-R tables)
+        mock_pergame_df = pd.DataFrame(
+            {
+                "Player": ["LeBron James", "Player", "Stephen Curry"],  # "Player" is header
+                "PTS": [25.0, "PTS", 28.5],
+            }
+        )
+
+        mock_advanced_df = pd.DataFrame(
+            {
+                "Player": ["LeBron James", "Player", "Stephen Curry"],
+                "PER": [24.5, "PER", 28.2],
+            }
+        )
+
+        mock_read_html.side_effect = [[mock_pergame_df], [mock_advanced_df]]
+
+        result = fetch_data.fetch_player_stats("2025-26")
+
+        # Should filter out the "Player" header row
+        assert len(result["per_game_stats"]) == 2
+        assert len(result["advanced_stats"]) == 2
+        player_names = [p["Player"] for p in result["per_game_stats"]]
+        assert "Player" not in player_names
+
+    @patch("src.etl.fetch_data.pd.read_html")
+    @patch("src.etl.fetch_data.time.sleep")
+    def test_fetch_player_stats_season_format_conversion(self, mock_sleep, mock_read_html):
+        """Test that season format is correctly converted for B-R URLs."""
+        mock_pergame_df = pd.DataFrame({"Player": ["Test Player"], "PTS": [20.0]})
+        mock_advanced_df = pd.DataFrame({"Player": ["Test Player"], "PER": [20.0]})
+
+        mock_read_html.side_effect = [[mock_pergame_df], [mock_advanced_df]]
+
+        # Test with "2024-25" format (should convert to "2025")
+        result = fetch_data.fetch_player_stats("2024-25")
+
+        assert result is not None
+        # Check that the URLs called were for 2025
+        assert mock_read_html.call_count == 2
+        calls = mock_read_html.call_args_list
+        assert "2025" in calls[0][0][0]  # First arg of first call
+        assert "2025" in calls[1][0][0]  # First arg of second call
 
 
 class TestFetchESPNSalariesHeaderFiltering:
