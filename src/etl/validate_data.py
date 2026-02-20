@@ -359,8 +359,8 @@ def _validate_percentage_null_logic(
         return
 
     # Define percentage -> attempt column mappings
-    # Percentage columns can ONLY be null if their attempt/dependency column(s) are 0, null, or empty
-    # Format: {percentage_column: (dependency_columns, logic)}
+    # Percentage columns can ONLY be null if their attempt/dependency column(s)
+    # are 0, null, or empty. Format: {percentage_column: (dependency_columns, logic)}
     # logic: "any" means any dependency can be non-zero to require percentage
     #        "all" means all dependencies must be zero to allow null
     percentage_dependencies = {
