@@ -27,6 +27,8 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 # Increase timeout from default 30s to 90s for slow NBA API responses
+# Note: timeout must ALSO be passed as a parameter to each endpoint (e.g., LeagueDashPlayerStats)
+# as the class-level setting may not be respected by all endpoints
 NBAStatsHTTP.timeout = 90
 
 # Add browser-like headers to avoid API throttling/blocking
@@ -168,9 +170,12 @@ def fetch_player_stats(season: str = "2025-26", max_retries: int = 3) -> Optiona
             else:
                 time.sleep(1)
 
-            # Fetch league-wide player stats
+            # Fetch league-wide player stats with extended timeout
             stats = leaguedashplayerstats.LeagueDashPlayerStats(
-                season=season, season_type_all_star="Regular Season", per_mode_detailed="PerGame"
+                season=season,
+                season_type_all_star="Regular Season",
+                per_mode_detailed="PerGame",
+                timeout=90,
             )
 
             # Get the data as dictionaries
@@ -210,7 +215,7 @@ def fetch_player_game_logs(player_id: str, season: str = "2025-26") -> Optional[
         time.sleep(1)
 
         gamelog = playergamelog.PlayerGameLog(
-            player_id=player_id, season=season, season_type_all_star="Regular Season"
+            player_id=player_id, season=season, season_type_all_star="Regular Season", timeout=90
         )
 
         return cast(Dict[str, Any], gamelog.get_dict())
