@@ -634,33 +634,75 @@ def handler(event, context):
         return {"statusCode": 400, "body": json.dumps({"error": "Missing data_location in event"})}
 
     partition = event["data_location"]["partition"]
+    fetch_type = event.get("fetch_type", "stats_only")
 
     validation_results = {
         "timestamp": datetime.utcnow().isoformat(),
         "environment": ENVIRONMENT,
         "partition": partition,
+        "fetch_type": fetch_type,
         "validations": [],
         "overall_valid": True,
         "error_count": 0,
         "warning_count": 0,
     }
 
-    # Define files to validate
+    # Define files to validate based on fetch type
+    # stats_only (daily): Only player_stats
+    # monthly: active_players, player_stats, teams, salaries
+    # full: All of the above (game_logs validation TBD)
+    all_files = {
+        "stats": (f"raw/stats/{partition}/league_player_stats.json", validate_stats_data, True),
+        "players": (
+            f"raw/players/{partition}/active_players.json",
+            validate_players_data,
+            fetch_type in ["monthly", "full"],
+        ),
+        "teams": (
+            f"raw/teams/{partition}/nba_teams.json",
+            validate_teams_data,
+            fetch_type in ["monthly", "full"],
+        ),
+        "salaries": (
+            f"raw/salaries/{partition}/player_salaries.json",
+            validate_salary_data,
+            fetch_type in ["monthly", "full"],
+        ),
+    }
+
     files_to_validate = [
-        (f"raw/players/{partition}/active_players.json", validate_players_data),
-        (f"raw/stats/{partition}/league_player_stats.json", validate_stats_data),
-        (f"raw/teams/{partition}/nba_teams.json", validate_teams_data),
-        (f"raw/salaries/{partition}/player_salaries.json", validate_salary_data),
+        (s3_key, validator_func, is_required)
+        for s3_key, validator_func, is_required in all_files.values()
     ]
 
-    for s3_key, validator_func in files_to_validate:
-        logger.info(f"Validating {s3_key}")
+    for s3_key, validator_func, is_required in files_to_validate:
+        logger.info(f"Validating {s3_key} (required={is_required})")
 
         # Load data from S3
         data = load_from_s3(s3_key)
         if data is None:
-            # File might not exist for this run (e.g., teams only fetched weekly)
-            logger.info(f"Skipping {s3_key} - file not found or invalid")
+            data_type = s3_key.split("/")[1]  # Extract data type from path
+
+            if is_required:
+                # File is missing or invalid - this is a critical error
+                logger.error(f"CRITICAL: Required file {s3_key} not found or invalid")
+                validation_results["overall_valid"] = False
+                validation_results["error_count"] += 1
+                validation_results["validations"].append(
+                    {
+                        "data_type": data_type,
+                        "valid": False,
+                        "errors": [f"Required file not found or could not be loaded: {s3_key}"],
+                        "warnings": [],
+                        "statistics": {},
+                        "s3_key": s3_key,
+                    }
+                )
+            else:
+                # Optional file - just log and skip
+                logger.info(
+                    f"Optional file {s3_key} not found - skipping (fetch_type={fetch_type})"
+                )
             continue
 
         # Validate data

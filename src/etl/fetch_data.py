@@ -17,11 +17,32 @@ import requests
 from botocore.exceptions import ClientError
 from bs4 import BeautifulSoup
 from nba_api.stats.endpoints import leaguedashplayerstats, playergamelog
+
+# Configure NBA API to handle slow responses and avoid blocking
+from nba_api.stats.library.http import NBAStatsHTTP
 from nba_api.stats.static import players, teams
 
 # Configure logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+
+# Increase timeout from default 30s to 90s for slow NBA API responses
+NBAStatsHTTP.timeout = 90
+
+# Add browser-like headers to avoid API throttling/blocking
+NBAStatsHTTP.headers = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Safari/537.36"
+    ),
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Referer": "https://www.nba.com/",
+    "Origin": "https://www.nba.com",
+    "Connection": "keep-alive",
+}
 
 # Initialize S3 client
 s3_client = boto3.client("s3")
@@ -122,41 +143,55 @@ def fetch_active_players() -> List[Dict[str, Any]]:
         return []
 
 
-def fetch_player_stats(season: str = "2025-26") -> Optional[Dict[str, Any]]:
+def fetch_player_stats(season: str = "2025-26", max_retries: int = 3) -> Optional[Dict[str, Any]]:
     """
-    Fetch comprehensive player stats for the season.
+    Fetch comprehensive player stats for the season with retry logic.
 
     Args:
         season: NBA season (e.g., "2024-25")
+        max_retries: Maximum number of retry attempts for transient failures
 
     Returns:
         Player stats data
     """
     logger.info(f"Fetching player stats for season {season}...")
 
-    try:
-        # Add delay to respect rate limits
-        time.sleep(1)
+    for attempt in range(max_retries):
+        try:
+            # Add delay to respect rate limits (longer on retries)
+            if attempt > 0:
+                backoff_delay = 2**attempt  # Exponential backoff: 2s, 4s, 8s
+                logger.info(
+                    f"Retry attempt {attempt + 1}/{max_retries} after {backoff_delay}s delay"
+                )
+                time.sleep(backoff_delay)
+            else:
+                time.sleep(1)
 
-        # Fetch league-wide player stats
-        stats = leaguedashplayerstats.LeagueDashPlayerStats(
-            season=season, season_type_all_star="Regular Season", per_mode_detailed="PerGame"
-        )
+            # Fetch league-wide player stats
+            stats = leaguedashplayerstats.LeagueDashPlayerStats(
+                season=season, season_type_all_star="Regular Season", per_mode_detailed="PerGame"
+            )
 
-        # Get the data as dictionaries
-        data = {
-            "season": season,
-            "fetch_timestamp": datetime.utcnow().isoformat(),
-            "players": stats.get_dict(),
-        }
+            # Get the data as dictionaries
+            data = {
+                "season": season,
+                "fetch_timestamp": datetime.utcnow().isoformat(),
+                "players": stats.get_dict(),
+            }
 
-        player_count = len(data["players"]["resultSets"][0]["rowSet"])
-        logger.info(f"Successfully fetched stats for {player_count} players")
-        return data
+            player_count = len(data["players"]["resultSets"][0]["rowSet"])
+            logger.info(f"Successfully fetched stats for {player_count} players")
+            return data
 
-    except Exception as e:
-        logger.error(f"Failed to fetch player stats: {e}")
-        return None
+        except Exception as e:
+            logger.warning(f"Attempt {attempt + 1}/{max_retries} failed: {e}")
+            if attempt == max_retries - 1:
+                logger.error(f"All {max_retries} attempts failed to fetch player stats: {e}")
+                return None
+            # Continue to next retry attempt
+
+    return None
 
 
 def fetch_player_game_logs(player_id: str, season: str = "2025-26") -> Optional[Dict[str, Any]]:
@@ -278,6 +313,11 @@ def fetch_espn_salaries(season: str = "2025-26") -> List[Dict[str, Any]]:
 
                     # Get salary
                     salary_text = salary_cell.get_text(strip=True)
+
+                    # Skip header rows (where salary column contains text like "SALARY")
+                    if salary_text.upper() in ["SALARY", "SAL", ""]:
+                        continue
+
                     salary_clean = salary_text.replace("$", "").replace(",", "").strip()
 
                     try:
@@ -294,7 +334,10 @@ def fetch_espn_salaries(season: str = "2025-26") -> List[Dict[str, Any]]:
                             )
                             page_salaries += 1
                     except ValueError:
-                        logger.warning(f"Could not parse salary: {salary_text}")
+                        # Log with more detail for debugging
+                        logger.warning(
+                            f"Could not parse salary for player '{player_name}': '{salary_text}'"
+                        )
                         continue
 
             logger.info(f"Page {page}: {page_salaries} salaries")
