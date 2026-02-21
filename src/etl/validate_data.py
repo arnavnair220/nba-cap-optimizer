@@ -307,15 +307,15 @@ def _validate_all_missing_and_nan_values(
         return True
 
     # Define percentage -> attempt column mappings (conditional exemptions)
+    # Note: Only include percentages where dependencies exist in the SAME array
+    # Cross-array dependencies (e.g., TOV% in advanced_stats depends on TOV in per_game_stats)
+    # are handled via warn_only_columns instead
     percentage_dependencies = {
         "FG%": (["FGA"], "any"),
         "3P%": (["3PA"], "any"),
         "2P%": (["2PA"], "any"),
         "FT%": (["FTA"], "any"),
         "eFG%": (["FGA"], "any"),
-        "TS%": (["FGA", "FTA"], "all"),
-        "3PAr": (["FGA"], "any"),
-        "FTr": (["FGA"], "any"),
     }
 
     # Critical columns - even 1 missing = FAIL
@@ -323,6 +323,10 @@ def _validate_all_missing_and_nan_values(
 
     # Columns to completely skip during validation
     skip_columns = ["Awards"]
+
+    # Advanced percentage columns that depend on per_game stats (cross-array dependencies)
+    # These can be null without failing validation, but still generate warnings for visibility
+    warn_only_columns = ["TOV%", "TS%", "3PAr", "FTr"]
 
     missing_critical = []
     missing_non_critical = []
@@ -371,6 +375,9 @@ def _validate_all_missing_and_nan_values(
                 # Check if this is a critical column
                 if col in critical_columns:
                     missing_critical.append(f"{player_name} (column: {col})")
+                elif col in warn_only_columns:
+                    # Warn-only column: generate warning but don't count toward threshold
+                    warnings.append(f"Missing data: {player_name} has null/NaN in {col}")
                 else:
                     # Non-critical, non-percentage column
                     missing_non_critical.append(f"{player_name} (column: {col})")
@@ -767,16 +774,37 @@ def validate_salary_data(data: Dict[str, Any]) -> Dict[str, Any]:
 
             # With 30 teams, expect total between $3.5B (below floor with leniency) and
             # $7B (above second apron with leniency)
-            if total_salaries < 3_500_000_000:  # $3.5B
-                results["warnings"].append(
-                    f"Total league salaries unusually low: ${total_salaries:,.0f} "
-                    f"(expected >$3.5B for 30 teams)"
-                )
-            elif total_salaries > 7_000_000_000:  # $7B
-                results["warnings"].append(
-                    f"Total league salaries unusually high: ${total_salaries:,.0f} "
-                    f"(expected <$7B for 30 teams)"
-                )
+            # Warning: within 10% of threshold, Error: beyond 10% of threshold
+            min_expected = 3_500_000_000  # $3.5B
+            max_expected = 7_000_000_000  # $7B
+            warning_threshold = 0.10  # 10%
+
+            if total_salaries < min_expected:
+                deviation_pct = (min_expected - total_salaries) / min_expected
+                if deviation_pct > warning_threshold:
+                    results["valid"] = False
+                    results["errors"].append(
+                        f"Total league salaries critically low: ${total_salaries:,.0f} "
+                        f"({deviation_pct*100:.1f}% below minimum of $3.5B for 30 teams)"
+                    )
+                else:
+                    results["warnings"].append(
+                        f"Total league salaries unusually low: ${total_salaries:,.0f} "
+                        f"({deviation_pct*100:.1f}% below expected >$3.5B for 30 teams)"
+                    )
+            elif total_salaries > max_expected:
+                deviation_pct = (total_salaries - max_expected) / max_expected
+                if deviation_pct > warning_threshold:
+                    results["valid"] = False
+                    results["errors"].append(
+                        f"Total league salaries critically high: ${total_salaries:,.0f} "
+                        f"({deviation_pct*100:.1f}% above maximum of $7B for 30 teams)"
+                    )
+                else:
+                    results["warnings"].append(
+                        f"Total league salaries unusually high: ${total_salaries:,.0f} "
+                        f"({deviation_pct*100:.1f}% above expected <$7B for 30 teams)"
+                    )
 
     # Check for duplicate salary entries (same player name + season)
     if salaries:

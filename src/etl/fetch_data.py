@@ -241,16 +241,10 @@ def fetch_espn_salaries(season: str = "2025-26") -> List[Dict[str, Any]]:
     if len(season_year) == 2:
         season_year = "20" + season_year
 
-    # ESPN URL structure:
-    # Current season: https://www.espn.com/nba/salaries
-    # Historical: https://www.espn.com/nba/salaries/_/year/2023
-    current_year = datetime.utcnow().year
-    if int(season_year) >= current_year:
-        # Current or future season - use base URL
-        base_url = "https://www.espn.com/nba/salaries"
-    else:
-        # Historical season - include year parameter
-        base_url = f"https://www.espn.com/nba/salaries/_/year/{season_year}"
+    # ESPN URL structure (always use year parameter for consistency):
+    # https://www.espn.com/nba/salaries/_/year/{year}
+    # Pagination: https://www.espn.com/nba/salaries/_/year/{year}/page/2
+    base_url = f"https://www.espn.com/nba/salaries/_/year/{season_year}"
 
     headers = {
         "User-Agent": (
@@ -264,12 +258,12 @@ def fetch_espn_salaries(season: str = "2025-26") -> List[Dict[str, Any]]:
 
     all_salaries = []
 
-    # ESPN uses _/page/X for pagination
+    # ESPN pagination: /year/YYYY/page/N (no underscore before page)
     for page in range(1, 15):  # Try up to page 15 (should cover all ~530 players)
         if page == 1:
             url = base_url
         else:
-            url = f"{base_url}/_/page/{page}"
+            url = f"{base_url}/page/{page}"
 
         logger.info(f"Fetching page {page}...")
         time.sleep(1)  # Be respectful with rate limiting

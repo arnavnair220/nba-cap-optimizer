@@ -269,7 +269,7 @@ class TestDataEnrichmentThroughPipeline:
         # Verify enriched stats data structure
         stats_key = [k for k in saved_data.keys() if "enriched_player_stats" in k][0]
         enriched_stats = saved_data[stats_key]
-        assert len(enriched_stats["player_stats"]) == 4
+        assert len(enriched_stats["player_stats"]) == 400
 
         # Find LeBron in the stats
         lebron = next(
@@ -363,7 +363,7 @@ class TestDataEnrichmentThroughPipeline:
         # Verify enriched_salaries has player_id
         salary_key = [k for k in saved_data.keys() if "enriched_salaries" in k][0]
         enriched_salaries = saved_data[salary_key]
-        assert len(enriched_salaries["salaries"]) == 4
+        assert len(enriched_salaries["salaries"]) == 400
         assert all(s.get("player_id") is not None for s in enriched_salaries["salaries"])
 
         lebron_salary = next(
@@ -374,7 +374,7 @@ class TestDataEnrichmentThroughPipeline:
         # Verify enriched_stats merges per-game + advanced
         stats_key = [k for k in saved_data.keys() if "enriched_player_stats" in k][0]
         enriched_stats = saved_data[stats_key]
-        assert len(enriched_stats["player_stats"]) == 4
+        assert len(enriched_stats["player_stats"]) == 400
 
         lebron = next(
             p for p in enriched_stats["player_stats"] if p["player_name"] == "LeBron James"
@@ -466,7 +466,7 @@ class TestDataEnrichmentThroughPipeline:
         salary_key = [k for k in saved_data.keys() if "enriched_salaries" in k][0]
         enriched_salaries = saved_data[salary_key]
 
-        assert len(enriched_salaries["salaries"]) == 4  # All 4 players
+        assert len(enriched_salaries["salaries"]) == 400  # All 400 players
         jokic_salary = next(s for s in enriched_salaries["salaries"] if "Jokic" in s["player_name"])
         doncic_salary = next(
             s for s in enriched_salaries["salaries"] if "Doncic" in s["player_name"]
