@@ -321,7 +321,6 @@ resource "aws_lambda_function" "fetch_data" {
     variables = {
       ENVIRONMENT = var.environment
       DATA_BUCKET = aws_s3_bucket.data.bucket
-      SECRET_ARN  = aws_secretsmanager_secret.db_credentials.arn
     }
   }
 
@@ -415,9 +414,9 @@ resource "aws_lambda_function" "load_to_rds" {
 
   environment {
     variables = {
-      ENVIRONMENT = var.environment
-      DATA_BUCKET = aws_s3_bucket.data.bucket
-      SECRET_ARN  = aws_secretsmanager_secret.db_credentials.arn
+      ENVIRONMENT   = var.environment
+      DATA_BUCKET   = aws_s3_bucket.data.bucket
+      DB_SECRET_ARN = aws_secretsmanager_secret.db_credentials.arn
     }
   }
 
