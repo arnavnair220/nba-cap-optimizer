@@ -1181,6 +1181,242 @@ class TestNaNHandling:
         result = validate_data.handler(event, MagicMock())
         assert result["statusCode"] == 422
 
+    @patch("src.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.etl.validate_data.save_validation_report")
+    @patch("src.etl.validate_data.load_from_s3")
+    def test_tov_percentage_null_passes_validation(self, mock_load, mock_save):
+        """Test TOV% can be null without failing validation (warn-only column)."""
+
+        def mock_load_side_effect(s3_key):
+            if "stats" in s3_key:
+                per_game = [
+                    {
+                        "Player": "Limited Minutes Player",
+                        "Pos": "C",
+                        "Age": 25,
+                        "Team": "LAL",
+                        "G": 5,
+                        "MP": 2.0,
+                        "PTS": 0.0,
+                        "TRB": 0.0,
+                        "AST": 0.0,
+                        "FGA": 0,
+                        "FTA": 0,
+                        "TOV": 0,
+                        "FG%": float("nan"),
+                    }
+                ]
+                per_game.extend(
+                    [
+                        {
+                            "Player": f"Player {i}",
+                            "Pos": "PG",
+                            "Age": 25,
+                            "Team": "LAL",
+                            "G": 70,
+                            "MP": 30.0,
+                            "PTS": 15.0,
+                            "TRB": 5.0,
+                            "AST": 5.0,
+                            "FGA": 10.0,
+                            "FTA": 5.0,
+                            "TOV": 2.5,
+                            "FG%": 0.45,
+                        }
+                        for i in range(349)
+                    ]
+                )
+                advanced = [
+                    {
+                        "Player": "Limited Minutes Player",
+                        "Pos": "C",
+                        "Age": 25,
+                        "Team": "LAL",
+                        "G": 5,
+                        "MP": 2.0,
+                        "PER": 5.0,
+                        "TOV%": float("nan"),
+                    }
+                ]
+                advanced.extend(
+                    [
+                        {
+                            "Player": f"Player {i}",
+                            "Pos": "PG",
+                            "Age": 25,
+                            "Team": "LAL",
+                            "G": 70,
+                            "MP": 30.0,
+                            "PER": 15.0,
+                            "TOV%": 12.0,
+                        }
+                        for i in range(349)
+                    ]
+                )
+                return {
+                    "season": "2025-26",
+                    "fetch_timestamp": datetime.utcnow().isoformat(),
+                    "source": "basketball_reference",
+                    "per_game_stats": per_game,
+                    "advanced_stats": advanced,
+                    "per_game_columns": [
+                        "Player",
+                        "Pos",
+                        "Age",
+                        "Team",
+                        "G",
+                        "MP",
+                        "PTS",
+                        "TRB",
+                        "AST",
+                        "FGA",
+                        "FTA",
+                        "TOV",
+                        "FG%",
+                    ],
+                    "advanced_columns": [
+                        "Player",
+                        "Pos",
+                        "Age",
+                        "Team",
+                        "G",
+                        "MP",
+                        "PER",
+                        "TOV%",
+                    ],
+                }
+            return None
+
+        mock_load.side_effect = mock_load_side_effect
+        event = {
+            "data_location": {"partition": "year=2026/month=02/day=19"},
+            "fetch_type": "stats_only",
+        }
+        result = validate_data.handler(event, MagicMock())
+        assert result["statusCode"] == 200
+        body = json.loads(result["body"])
+        assert body["valid"] is True
+
+    @patch("src.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.etl.validate_data.save_validation_report")
+    @patch("src.etl.validate_data.load_from_s3")
+    def test_tov_percentage_null_warns_but_passes(self, mock_load, mock_save):
+        """Test TOV% null generates warning but doesn't fail validation (warn-only column)."""
+
+        def mock_load_side_effect(s3_key):
+            if "stats" in s3_key:
+                per_game = [
+                    {
+                        "Player": "Missing TOV% Player",
+                        "Pos": "PG",
+                        "Age": 25,
+                        "Team": "LAL",
+                        "G": 70,
+                        "MP": 30.0,
+                        "PTS": 15.0,
+                        "TRB": 5.0,
+                        "AST": 5.0,
+                        "FGA": 10.0,
+                        "FTA": 5.0,
+                        "TOV": 2.5,
+                        "FG%": 0.45,
+                    }
+                ]
+                per_game.extend(
+                    [
+                        {
+                            "Player": f"Player {i}",
+                            "Pos": "PG",
+                            "Age": 25,
+                            "Team": "LAL",
+                            "G": 70,
+                            "MP": 30.0,
+                            "PTS": 15.0,
+                            "TRB": 5.0,
+                            "AST": 5.0,
+                            "FGA": 10.0,
+                            "FTA": 5.0,
+                            "TOV": 2.5,
+                            "FG%": 0.45,
+                        }
+                        for i in range(349)
+                    ]
+                )
+                advanced = [
+                    {
+                        "Player": "Missing TOV% Player",
+                        "Pos": "PG",
+                        "Age": 25,
+                        "Team": "LAL",
+                        "G": 70,
+                        "MP": 30.0,
+                        "PER": 15.0,
+                        "TOV%": float("nan"),
+                    }
+                ]
+                advanced.extend(
+                    [
+                        {
+                            "Player": f"Player {i}",
+                            "Pos": "PG",
+                            "Age": 25,
+                            "Team": "LAL",
+                            "G": 70,
+                            "MP": 30.0,
+                            "PER": 15.0,
+                            "TOV%": 12.0,
+                        }
+                        for i in range(349)
+                    ]
+                )
+                return {
+                    "season": "2025-26",
+                    "fetch_timestamp": datetime.utcnow().isoformat(),
+                    "source": "basketball_reference",
+                    "per_game_stats": per_game,
+                    "advanced_stats": advanced,
+                    "per_game_columns": [
+                        "Player",
+                        "Pos",
+                        "Age",
+                        "Team",
+                        "G",
+                        "MP",
+                        "PTS",
+                        "TRB",
+                        "AST",
+                        "FGA",
+                        "FTA",
+                        "TOV",
+                        "FG%",
+                    ],
+                    "advanced_columns": [
+                        "Player",
+                        "Pos",
+                        "Age",
+                        "Team",
+                        "G",
+                        "MP",
+                        "PER",
+                        "TOV%",
+                    ],
+                }
+            return None
+
+        mock_load.side_effect = mock_load_side_effect
+        event = {
+            "data_location": {"partition": "year=2026/month=02/day=19"},
+            "fetch_type": "stats_only",
+        }
+        result = validate_data.handler(event, MagicMock())
+        assert result["statusCode"] == 200
+        body = json.loads(result["body"])
+        assert body["valid"] is True
+        # Should have warning about null TOV% (warn-only column doesn't fail validation)
+        assert body["warning_count"] > 0
+
 
 class TestLeagueAverageAndAwardsExclusion:
     """Test that League Average rows and Awards columns are excluded from validation."""
