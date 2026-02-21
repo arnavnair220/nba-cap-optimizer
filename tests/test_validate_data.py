@@ -1003,3 +1003,329 @@ class TestBasketballReferenceValidation:
         body = json.loads(result["body"])
         assert body["valid"] is True
         assert body["error_count"] == 0
+
+
+class TestNaNHandling:
+    """Test NaN value handling in validation."""
+
+    def test_is_nan_with_float_nan(self):
+        """Test _is_nan correctly identifies float('nan')."""
+        assert validate_data._is_nan(float("nan")) is True
+
+    def test_is_nan_with_regular_float(self):
+        """Test _is_nan returns False for regular float values."""
+        assert validate_data._is_nan(5.0) is False
+
+    def test_is_nan_with_none(self):
+        """Test _is_nan returns False for None."""
+        assert validate_data._is_nan(None) is False
+
+    def test_is_nan_with_string(self):
+        """Test _is_nan handles string 'NaN'."""
+        assert validate_data._is_nan("NaN") is True
+
+    def test_is_value_zero_or_null_with_nan(self):
+        """Test _is_value_zero_or_null handles NaN."""
+        assert validate_data._is_value_zero_or_null(float("nan")) is True
+
+    @patch("src.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.etl.validate_data.save_validation_report")
+    @patch("src.etl.validate_data.load_from_s3")
+    def test_nan_in_percentage_allowed_when_attempts_zero(self, mock_load, mock_save):
+        """Test NaN in percentage columns is valid when attempts are 0."""
+
+        def mock_load_side_effect(s3_key):
+            if "stats" in s3_key:
+                per_game = [
+                    {
+                        "Player": f"Player {i}",
+                        "Pos": "C",
+                        "Age": 25,
+                        "Team": "LAL",
+                        "G": 10,
+                        "MP": 15.0,
+                        "PTS": 5.0,
+                        "TRB": 3.0,
+                        "AST": 1.0,
+                        "FGA": 0,
+                        "FG%": float("nan"),
+                    }
+                    for i in range(350)
+                ]
+                advanced = [
+                    {
+                        "Player": f"Player {i}",
+                        "Pos": "C",
+                        "Age": 25,
+                        "Team": "LAL",
+                        "G": 10,
+                        "MP": 15.0,
+                        "PER": 10.0,
+                    }
+                    for i in range(350)
+                ]
+                return {
+                    "season": "2025-26",
+                    "fetch_timestamp": datetime.utcnow().isoformat(),
+                    "source": "basketball_reference",
+                    "per_game_stats": per_game,
+                    "advanced_stats": advanced,
+                    "per_game_columns": [
+                        "Player",
+                        "Pos",
+                        "Age",
+                        "Team",
+                        "G",
+                        "MP",
+                        "PTS",
+                        "TRB",
+                        "AST",
+                        "FGA",
+                        "FG%",
+                    ],
+                    "advanced_columns": ["Player", "Pos", "Age", "Team", "G", "MP", "PER"],
+                }
+            return None
+
+        mock_load.side_effect = mock_load_side_effect
+        event = {
+            "data_location": {"partition": "year=2026/month=02/day=19"},
+            "fetch_type": "stats_only",
+        }
+        result = validate_data.handler(event, MagicMock())
+        assert result["statusCode"] == 200
+
+    @patch("src.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.etl.validate_data.save_validation_report")
+    @patch("src.etl.validate_data.load_from_s3")
+    def test_nan_in_percentage_invalid_when_attempts_nonzero(self, mock_load, mock_save):
+        """Test NaN in percentage columns is invalid when attempts > 0."""
+
+        def mock_load_side_effect(s3_key):
+            if "stats" in s3_key:
+                per_game = [
+                    {
+                        "Player": "Bad Player",
+                        "Pos": "PG",
+                        "Age": 25,
+                        "Team": "LAL",
+                        "G": 70,
+                        "MP": 30.0,
+                        "PTS": 15.0,
+                        "TRB": 5.0,
+                        "AST": 5.0,
+                        "FGA": 10.5,
+                        "FG%": float("nan"),
+                    }
+                ]
+                per_game.extend(
+                    [
+                        {
+                            "Player": f"Player {i}",
+                            "Pos": "PG",
+                            "Age": 25,
+                            "Team": "LAL",
+                            "G": 70,
+                            "MP": 30.0,
+                            "PTS": 15.0,
+                            "TRB": 5.0,
+                            "AST": 5.0,
+                            "FGA": 10.0,
+                            "FG%": 0.45,
+                        }
+                        for i in range(349)
+                    ]
+                )
+                advanced = [
+                    {
+                        "Player": f"Player {i}",
+                        "Pos": "PG",
+                        "Age": 25,
+                        "Team": "LAL",
+                        "G": 70,
+                        "MP": 30.0,
+                        "PER": 15.0,
+                    }
+                    for i in range(350)
+                ]
+                return {
+                    "season": "2025-26",
+                    "fetch_timestamp": datetime.utcnow().isoformat(),
+                    "source": "basketball_reference",
+                    "per_game_stats": per_game,
+                    "advanced_stats": advanced,
+                    "per_game_columns": [
+                        "Player",
+                        "Pos",
+                        "Age",
+                        "Team",
+                        "G",
+                        "MP",
+                        "PTS",
+                        "TRB",
+                        "AST",
+                        "FGA",
+                        "FG%",
+                    ],
+                    "advanced_columns": ["Player", "Pos", "Age", "Team", "G", "MP", "PER"],
+                }
+            return None
+
+        mock_load.side_effect = mock_load_side_effect
+        event = {
+            "data_location": {"partition": "year=2026/month=02/day=19"},
+            "fetch_type": "stats_only",
+        }
+        result = validate_data.handler(event, MagicMock())
+        assert result["statusCode"] == 422
+
+    @patch("src.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.etl.validate_data.save_validation_report")
+    @patch("src.etl.validate_data.load_from_s3")
+    def test_nan_in_stat_columns_invalid(self, mock_load, mock_save):
+        """Test NaN in stat columns (PTS, TRB, etc.) exceeding 2.5% threshold fails validation."""
+
+        def mock_load_side_effect(s3_key):
+            if "stats" in s3_key:
+                # Create 10 players with NaN in PTS (10/350 = 2.86% > 2.5% threshold)
+                per_game = [
+                    {
+                        "Player": f"Bad Player {i}",
+                        "Pos": "PG",
+                        "Age": 25,
+                        "Team": "LAL",
+                        "G": 70,
+                        "MP": 30.0,
+                        "PTS": float("nan"),
+                        "TRB": 5.0,
+                        "AST": 5.0,
+                    }
+                    for i in range(10)
+                ]
+                per_game.extend(
+                    [
+                        {
+                            "Player": f"Player {i}",
+                            "Pos": "PG",
+                            "Age": 25,
+                            "Team": "LAL",
+                            "G": 70,
+                            "MP": 30.0,
+                            "PTS": 15.0,
+                            "TRB": 5.0,
+                            "AST": 5.0,
+                        }
+                        for i in range(10, 350)
+                    ]
+                )
+                advanced = [
+                    {
+                        "Player": f"Player {i}",
+                        "Pos": "PG",
+                        "Age": 25,
+                        "Team": "LAL",
+                        "G": 70,
+                        "MP": 30.0,
+                        "PER": 15.0,
+                    }
+                    for i in range(350)
+                ]
+                return {
+                    "season": "2025-26",
+                    "fetch_timestamp": datetime.utcnow().isoformat(),
+                    "source": "basketball_reference",
+                    "per_game_stats": per_game,
+                    "advanced_stats": advanced,
+                    "per_game_columns": [
+                        "Player",
+                        "Pos",
+                        "Age",
+                        "Team",
+                        "G",
+                        "MP",
+                        "PTS",
+                        "TRB",
+                        "AST",
+                    ],
+                    "advanced_columns": ["Player", "Pos", "Age", "Team", "G", "MP", "PER"],
+                }
+            return None
+
+        mock_load.side_effect = mock_load_side_effect
+        event = {
+            "data_location": {"partition": "year=2026/month=02/day=19"},
+            "fetch_type": "stats_only",
+        }
+        result = validate_data.handler(event, MagicMock())
+        assert result["statusCode"] == 422
+        body = json.loads(result["body"])
+        assert body["warning_count"] == 10  # Each instance gets a warning
+
+    @patch("src.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.etl.validate_data.save_validation_report")
+    @patch("src.etl.validate_data.load_from_s3")
+    def test_nan_in_key_columns_detected_as_missing(self, mock_load, mock_save):
+        """Test NaN in key columns is detected as missing data."""
+
+        def mock_load_side_effect(s3_key):
+            if "stats" in s3_key:
+                per_game = [
+                    {
+                        "Player": float("nan"),
+                        "Pos": "PG",
+                        "Age": float("nan"),
+                        "Team": "LAL",
+                        "G": float("nan"),
+                        "MP": float("nan"),
+                        "PTS": 15.0,
+                    }
+                    for i in range(20)
+                ]
+                per_game.extend(
+                    [
+                        {
+                            "Player": f"Player {i}",
+                            "Pos": "PG",
+                            "Age": 25,
+                            "Team": "LAL",
+                            "G": 70,
+                            "MP": 30.0,
+                            "PTS": 15.0,
+                        }
+                        for i in range(20, 350)
+                    ]
+                )
+                advanced = [
+                    {
+                        "Player": f"Player {i}",
+                        "Pos": "PG",
+                        "Age": 25,
+                        "Team": "LAL",
+                        "G": 70,
+                        "MP": 30.0,
+                        "PER": 15.0,
+                    }
+                    for i in range(350)
+                ]
+                return {
+                    "season": "2025-26",
+                    "fetch_timestamp": datetime.utcnow().isoformat(),
+                    "source": "basketball_reference",
+                    "per_game_stats": per_game,
+                    "advanced_stats": advanced,
+                    "per_game_columns": ["Player", "Pos", "Age", "Team", "G", "MP", "PTS"],
+                    "advanced_columns": ["Player", "Pos", "Age", "Team", "G", "MP", "PER"],
+                }
+            return None
+
+        mock_load.side_effect = mock_load_side_effect
+        event = {
+            "data_location": {"partition": "year=2026/month=02/day=19"},
+            "fetch_type": "stats_only",
+        }
+        result = validate_data.handler(event, MagicMock())
+        assert result["statusCode"] == 422
