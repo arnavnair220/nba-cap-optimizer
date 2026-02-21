@@ -300,6 +300,12 @@ def _validate_all_missing_and_nan_values(
     if not stats:
         return True
 
+    # Filter out "League Average" summary rows before validation
+    stats = [s for s in stats if s.get("Player") != "League Average"]
+
+    if not stats:
+        return True
+
     # Define percentage -> attempt column mappings (conditional exemptions)
     percentage_dependencies = {
         "FG%": (["FGA"], "any"),
@@ -315,6 +321,9 @@ def _validate_all_missing_and_nan_values(
     # Critical columns - even 1 missing = FAIL
     critical_columns = ["Player", "Pos", "Age", "Team"]
 
+    # Columns to completely skip during validation
+    skip_columns = ["Awards"]
+
     missing_critical = []
     missing_non_critical = []
     invalid_percentage_nulls = []
@@ -324,6 +333,9 @@ def _validate_all_missing_and_nan_values(
 
         # Check all columns
         for col, value in player_stat.items():
+            # Skip columns that should be ignored
+            if col in skip_columns:
+                continue
             is_null_or_nan = value is None or value == "" or _is_nan(value)
 
             if not is_null_or_nan:
