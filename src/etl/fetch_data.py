@@ -15,7 +15,6 @@ import json
 import logging
 import os
 import time
-import unicodedata
 from datetime import datetime
 from typing import Any, Dict, List, Optional, cast
 
@@ -44,34 +43,6 @@ ENVIRONMENT = os.environ.get("ENVIRONMENT")
 def get_date_partition(date: datetime) -> str:
     """Generate S3 partition path based on date."""
     return f"year={date.year}/month={date.month:02d}/day={date.day:02d}"
-
-
-def normalize_to_ascii(text: str) -> str:
-    """
-    Convert Unicode text to ASCII by removing diacritical marks.
-
-    Examples:
-        'Diabaté' -> 'Diabate'
-        'Jokić' -> 'Jokic'
-        'Dončić' -> 'Doncic'
-
-    Args:
-        text: Text with potential Unicode characters
-
-    Returns:
-        ASCII-only version of the text
-    """
-    if not text:
-        return text
-
-    # Normalize to NFD (decomposed form) - separates base letters from accents
-    nfd = unicodedata.normalize("NFD", text)
-
-    # Filter out combining characters (the accent marks)
-    # Category 'Mn' is "Mark, Nonspacing" (accents, diacritics, etc.)
-    ascii_text = "".join(char for char in nfd if unicodedata.category(char) != "Mn")
-
-    return ascii_text
 
 
 def save_to_s3(data: Dict[str, Any], s3_key: str) -> bool:
@@ -105,25 +76,19 @@ def save_to_s3(data: Dict[str, Any], s3_key: str) -> bool:
 
 def fetch_active_players() -> List[Dict[str, Any]]:
     """
-    Fetch all active NBA players and normalize names to ASCII.
+    Fetch all active NBA players.
+
+    Returns raw player data from NBA API with original Unicode names preserved.
+    Name normalization is handled in transform_data for matching purposes.
 
     Returns:
-        List of player dictionaries with ASCII-normalized names
+        List of player dictionaries with original Unicode names
     """
     logger.info("Fetching active players...")
 
     try:
-        # Get all players from static data
+        # Get all players from static data (preserves Unicode names)
         all_players = players.get_active_players()
-
-        # Normalize all name fields to ASCII
-        for player in all_players:
-            if "full_name" in player:
-                player["full_name"] = normalize_to_ascii(player["full_name"])
-            if "first_name" in player:
-                player["first_name"] = normalize_to_ascii(player["first_name"])
-            if "last_name" in player:
-                player["last_name"] = normalize_to_ascii(player["last_name"])
 
         logger.info(f"Found {len(all_players)} active players")
         return cast(List[Dict[str, Any]], all_players)

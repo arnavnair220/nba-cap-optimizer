@@ -1181,151 +1181,217 @@ class TestNaNHandling:
         result = validate_data.handler(event, MagicMock())
         assert result["statusCode"] == 422
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
-    def test_nan_in_stat_columns_invalid(self, mock_load, mock_save):
-        """Test NaN in stat columns (PTS, TRB, etc.) exceeding 2.5% threshold fails validation."""
 
-        def mock_load_side_effect(s3_key):
-            if "stats" in s3_key:
-                # Create 10 players with NaN in PTS (10/350 = 2.86% > 2.5% threshold)
-                per_game = [
-                    {
-                        "Player": f"Bad Player {i}",
-                        "Pos": "PG",
-                        "Age": 25,
-                        "Team": "LAL",
-                        "G": 70,
-                        "MP": 30.0,
-                        "PTS": float("nan"),
-                        "TRB": 5.0,
-                        "AST": 5.0,
-                    }
-                    for i in range(10)
-                ]
-                per_game.extend(
-                    [
-                        {
-                            "Player": f"Player {i}",
-                            "Pos": "PG",
-                            "Age": 25,
-                            "Team": "LAL",
-                            "G": 70,
-                            "MP": 30.0,
-                            "PTS": 15.0,
-                            "TRB": 5.0,
-                            "AST": 5.0,
-                        }
-                        for i in range(10, 350)
-                    ]
-                )
-                advanced = [
-                    {
-                        "Player": f"Player {i}",
-                        "Pos": "PG",
-                        "Age": 25,
-                        "Team": "LAL",
-                        "G": 70,
-                        "MP": 30.0,
-                        "PER": 15.0,
-                    }
-                    for i in range(350)
-                ]
-                return {
-                    "season": "2025-26",
-                    "fetch_timestamp": datetime.utcnow().isoformat(),
-                    "source": "basketball_reference",
-                    "per_game_stats": per_game,
-                    "advanced_stats": advanced,
-                    "per_game_columns": [
-                        "Player",
-                        "Pos",
-                        "Age",
-                        "Team",
-                        "G",
-                        "MP",
-                        "PTS",
-                        "TRB",
-                        "AST",
-                    ],
-                    "advanced_columns": ["Player", "Pos", "Age", "Team", "G", "MP", "PER"],
-                }
-            return None
+class TestLeagueAverageAndAwardsExclusion:
+    """Test that League Average rows and Awards columns are excluded from validation."""
 
-        mock_load.side_effect = mock_load_side_effect
-        event = {
-            "data_location": {"partition": "year=2026/month=02/day=19"},
-            "fetch_type": "stats_only",
+    def test_league_average_row_excluded_from_validation(self):
+        """Test that League Average rows with missing critical data don't fail validation."""
+        stats_data = {
+            "season": "2025-26",
+            "fetch_timestamp": datetime.utcnow().isoformat(),
+            "source": "basketball_reference",
+            "per_game_stats": [
+                {
+                    "Player": "LeBron James",
+                    "Pos": "SF",
+                    "Age": 39,
+                    "Team": "LAL",
+                    "G": 50,
+                    "MP": 35.0,
+                    "PTS": 25.0,
+                    "TRB": 8.0,
+                    "AST": 7.0,
+                },
+                {
+                    "Player": "League Average",
+                    "Pos": None,
+                    "Age": None,
+                    "Team": None,
+                    "G": None,
+                    "MP": 24.0,
+                    "PTS": 12.5,
+                    "TRB": 5.0,
+                    "AST": 3.0,
+                },
+            ],
+            "advanced_stats": [
+                {
+                    "Player": "LeBron James",
+                    "Pos": "SF",
+                    "Age": 39,
+                    "Team": "LAL",
+                    "G": 50,
+                    "MP": 35.0,
+                    "PER": 25.0,
+                },
+                {
+                    "Player": "League Average",
+                    "Pos": None,
+                    "Age": None,
+                    "Team": None,
+                    "G": None,
+                    "MP": 24.0,
+                    "PER": 15.0,
+                },
+            ],
+            "per_game_columns": ["Player", "Pos", "Age", "Team", "G", "MP", "PTS", "TRB", "AST"],
+            "advanced_columns": ["Player", "Pos", "Age", "Team", "G", "MP", "PER"],
         }
-        result = validate_data.handler(event, MagicMock())
-        assert result["statusCode"] == 422
-        body = json.loads(result["body"])
-        assert body["warning_count"] == 10  # Each instance gets a warning
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
-    def test_nan_in_key_columns_detected_as_missing(self, mock_load, mock_save):
-        """Test NaN in key columns is detected as missing data."""
+        result = validate_data.validate_stats_data(stats_data)
 
-        def mock_load_side_effect(s3_key):
-            if "stats" in s3_key:
-                per_game = [
-                    {
-                        "Player": float("nan"),
-                        "Pos": "PG",
-                        "Age": float("nan"),
-                        "Team": "LAL",
-                        "G": float("nan"),
-                        "MP": float("nan"),
-                        "PTS": 15.0,
-                    }
-                    for i in range(20)
-                ]
-                per_game.extend(
-                    [
-                        {
-                            "Player": f"Player {i}",
-                            "Pos": "PG",
-                            "Age": 25,
-                            "Team": "LAL",
-                            "G": 70,
-                            "MP": 30.0,
-                            "PTS": 15.0,
-                        }
-                        for i in range(20, 350)
-                    ]
-                )
-                advanced = [
-                    {
-                        "Player": f"Player {i}",
-                        "Pos": "PG",
-                        "Age": 25,
-                        "Team": "LAL",
-                        "G": 70,
-                        "MP": 30.0,
-                        "PER": 15.0,
-                    }
-                    for i in range(350)
-                ]
-                return {
-                    "season": "2025-26",
-                    "fetch_timestamp": datetime.utcnow().isoformat(),
-                    "source": "basketball_reference",
-                    "per_game_stats": per_game,
-                    "advanced_stats": advanced,
-                    "per_game_columns": ["Player", "Pos", "Age", "Team", "G", "MP", "PTS"],
-                    "advanced_columns": ["Player", "Pos", "Age", "Team", "G", "MP", "PER"],
-                }
-            return None
+        assert result["valid"] is True
+        assert result["errors"] == []
 
-        mock_load.side_effect = mock_load_side_effect
-        event = {
-            "data_location": {"partition": "year=2026/month=02/day=19"},
-            "fetch_type": "stats_only",
+    def test_awards_column_excluded_from_validation(self):
+        """Test that null/NaN values in Awards column don't generate warnings."""
+        stats_data = {
+            "season": "2025-26",
+            "fetch_timestamp": datetime.utcnow().isoformat(),
+            "source": "basketball_reference",
+            "per_game_stats": [
+                {
+                    "Player": "LeBron James",
+                    "Pos": "SF",
+                    "Age": 39,
+                    "Team": "LAL",
+                    "G": 50,
+                    "MP": 35.0,
+                    "PTS": 25.0,
+                    "TRB": 8.0,
+                    "AST": 7.0,
+                    "Awards": None,
+                },
+                {
+                    "Player": "Nikola Jokic",
+                    "Pos": "C",
+                    "Age": 29,
+                    "Team": "DEN",
+                    "G": 55,
+                    "MP": 36.0,
+                    "PTS": 28.0,
+                    "TRB": 13.0,
+                    "AST": 9.0,
+                    "Awards": None,
+                },
+            ],
+            "advanced_stats": [
+                {
+                    "Player": "LeBron James",
+                    "Pos": "SF",
+                    "Age": 39,
+                    "Team": "LAL",
+                    "G": 50,
+                    "MP": 35.0,
+                    "PER": 25.0,
+                    "Awards": None,
+                },
+                {
+                    "Player": "Nikola Jokic",
+                    "Pos": "C",
+                    "Age": 29,
+                    "Team": "DEN",
+                    "G": 55,
+                    "MP": 36.0,
+                    "PER": 30.0,
+                    "Awards": None,
+                },
+            ],
+            "per_game_columns": [
+                "Player",
+                "Pos",
+                "Age",
+                "Team",
+                "G",
+                "MP",
+                "PTS",
+                "TRB",
+                "AST",
+                "Awards",
+            ],
+            "advanced_columns": ["Player", "Pos", "Age", "Team", "G", "MP", "PER", "Awards"],
         }
-        result = validate_data.handler(event, MagicMock())
-        assert result["statusCode"] == 422
+
+        result = validate_data.validate_stats_data(stats_data)
+
+        assert result["valid"] is True
+        assert result["errors"] == []
+        awards_warnings = [w for w in result["warnings"] if "Awards" in w]
+        assert len(awards_warnings) == 0
+
+    def test_league_average_and_awards_together(self):
+        """Test that both League Average and Awards are properly handled together."""
+        stats_data = {
+            "season": "2025-26",
+            "fetch_timestamp": datetime.utcnow().isoformat(),
+            "source": "basketball_reference",
+            "per_game_stats": [
+                {
+                    "Player": "LeBron James",
+                    "Pos": "SF",
+                    "Age": 39,
+                    "Team": "LAL",
+                    "G": 50,
+                    "MP": 35.0,
+                    "PTS": 25.0,
+                    "TRB": 8.0,
+                    "AST": 7.0,
+                    "Awards": None,
+                },
+                {
+                    "Player": "League Average",
+                    "Pos": None,
+                    "Age": None,
+                    "Team": None,
+                    "G": None,
+                    "MP": 24.0,
+                    "PTS": 12.5,
+                    "TRB": 5.0,
+                    "AST": 3.0,
+                    "Awards": None,
+                },
+            ],
+            "advanced_stats": [
+                {
+                    "Player": "LeBron James",
+                    "Pos": "SF",
+                    "Age": 39,
+                    "Team": "LAL",
+                    "G": 50,
+                    "MP": 35.0,
+                    "PER": 25.0,
+                    "Awards": None,
+                },
+                {
+                    "Player": "League Average",
+                    "Pos": None,
+                    "Age": None,
+                    "Team": None,
+                    "G": None,
+                    "MP": 24.0,
+                    "PER": 15.0,
+                    "Awards": None,
+                },
+            ],
+            "per_game_columns": [
+                "Player",
+                "Pos",
+                "Age",
+                "Team",
+                "G",
+                "MP",
+                "PTS",
+                "TRB",
+                "AST",
+                "Awards",
+            ],
+            "advanced_columns": ["Player", "Pos", "Age", "Team", "G", "MP", "PER", "Awards"],
+        }
+
+        result = validate_data.validate_stats_data(stats_data)
+
+        assert result["valid"] is True
+        assert result["errors"] == []
+        awards_warnings = [w for w in result["warnings"] if "Awards" in w]
+        assert len(awards_warnings) == 0

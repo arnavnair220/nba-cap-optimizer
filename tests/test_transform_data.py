@@ -8,6 +8,45 @@ from unittest.mock import MagicMock, patch
 from src.etl import transform_data
 
 
+class TestNormalizeToAscii:
+    """Test Unicode to ASCII normalization."""
+
+    def test_removes_accent_from_jokic(self):
+        """Test normalization removes accent from Jokić."""
+        result = transform_data.normalize_to_ascii("Nikola Jokić")
+        assert result == "Nikola Jokic"
+
+    def test_removes_accent_from_doncic(self):
+        """Test normalization removes accent from Dončić."""
+        result = transform_data.normalize_to_ascii("Luka Dončić")
+        assert result == "Luka Doncic"
+
+    def test_removes_accent_from_diabate(self):
+        """Test normalization removes accent from Diabaté."""
+        result = transform_data.normalize_to_ascii("Ousmane Diabaté")
+        assert result == "Ousmane Diabate"
+
+    def test_handles_multiple_accents(self):
+        """Test normalization handles multiple accented characters."""
+        result = transform_data.normalize_to_ascii("José María Álvarez")
+        assert result == "Jose Maria Alvarez"
+
+    def test_leaves_ascii_unchanged(self):
+        """Test normalization doesn't affect ASCII text."""
+        result = transform_data.normalize_to_ascii("LeBron James")
+        assert result == "LeBron James"
+
+    def test_handles_empty_string(self):
+        """Test normalization handles empty string."""
+        result = transform_data.normalize_to_ascii("")
+        assert result == ""
+
+    def test_handles_none(self):
+        """Test normalization handles None."""
+        result = transform_data.normalize_to_ascii(None)
+        assert result is None
+
+
 class TestNormalizeTeamAbbreviation:
     """Test team abbreviation normalization."""
 
@@ -50,6 +89,24 @@ class TestMatchSalariesWithPlayers:
 
         assert result[0]["player_id"] == 2544
         assert result[0]["player_name"] == "LeBron James"
+
+    def test_unicode_name_match(self):
+        """Test matching works when player has Unicode name and salary has ASCII."""
+        # NBA API returns Unicode names, ESPN salaries have ASCII
+        salaries = [
+            {"player_name": "Nikola Jokic", "annual_salary": 51000000, "season": "2025-26"},
+            {"player_name": "Luka Doncic", "annual_salary": 43000000, "season": "2025-26"},
+        ]
+        players = [
+            {"id": 203999, "full_name": "Nikola Jokić"},  # Unicode
+            {"id": 1629029, "full_name": "Luka Dončić"},  # Unicode
+        ]
+
+        result = transform_data.match_salaries_with_players(salaries, players)
+
+        # Should match despite accent differences
+        assert result[0]["player_id"] == 203999
+        assert result[1]["player_id"] == 1629029
 
     def test_no_match_sets_none(self):
         """Test player_id is None when no match found."""
