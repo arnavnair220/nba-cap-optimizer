@@ -6,6 +6,7 @@ using JSON schemas and data quality checks.
 
 import json
 import logging
+import math
 import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple, cast
@@ -42,15 +43,23 @@ PLAYER_SCHEMA = {
 PLAYER_STATS_SCHEMA = {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "type": "object",
-    "required": ["season", "fetch_timestamp", "players"],
+    "required": [
+        "season",
+        "fetch_timestamp",
+        "source",
+        "per_game_stats",
+        "advanced_stats",
+        "per_game_columns",
+        "advanced_columns",
+    ],
     "properties": {
         "season": {"type": "string", "pattern": "^\\d{4}-\\d{2}$"},
         "fetch_timestamp": {"type": "string", "format": "date-time"},
-        "players": {
-            "type": "object",
-            "required": ["resultSets"],
-            "properties": {"resultSets": {"type": "array", "minItems": 1}},
-        },
+        "source": {"type": "string", "enum": ["basketball_reference"]},
+        "per_game_stats": {"type": "array"},
+        "advanced_stats": {"type": "array"},
+        "per_game_columns": {"type": "array"},
+        "advanced_columns": {"type": "array"},
     },
 }
 
@@ -265,14 +274,22 @@ def _validate_season_and_timestamp(data: Dict[str, Any], warnings: List[str]) ->
             pass  # Already validated by schema
 
 
-def _check_missing_data(
-    rows: List[Any], warnings: List[str], errors: List[str], statistics: Dict[str, Any]
+def _validate_all_missing_and_nan_values(
+    stats: List[Dict[str, Any]],
+    warnings: List[str],
+    errors: List[str],
+    statistics: Dict[str, Any],
 ) -> bool:
     """
-    Check for missing values in key columns.
+    Comprehensive validation for missing, null, and NaN values in all columns.
+
+    This function checks ALL columns for missing/null/NaN values with conditional exemptions:
+    - Critical columns (Player, Pos, Age, Team): Even 1 missing = validation FAILS
+    - Non-critical columns: >2.5% missing = validation FAILS, each instance = warning
+    - Percentage columns (FG%, 3P%, etc.): ONLY allowed null/NaN when attempts = 0
 
     Args:
-        rows: Data rows
+        stats: List of player stat dictionaries
         warnings: List to append warnings to
         errors: List to append errors to
         statistics: Statistics dict to update
@@ -280,70 +297,210 @@ def _check_missing_data(
     Returns:
         True if validation passes, False if critical error
     """
-    if not rows:
+    if not stats:
         return True
 
-    missing_stats = 0
-    for row in rows:
-        if any(val is None for val in row[:10]):  # Check first 10 columns
-            missing_stats += 1
+    # Filter out "League Average" summary rows before validation
+    stats = [s for s in stats if s.get("Player") != "League Average"]
 
-    statistics["players_with_missing_data"] = missing_stats
+    if not stats:
+        return True
 
-    if missing_stats > 0:
-        warnings.append(
-            f"Found {missing_stats}/{len(rows)} players with missing data in key columns"
-        )
+    # Define percentage -> attempt column mappings (conditional exemptions)
+    percentage_dependencies = {
+        "FG%": (["FGA"], "any"),
+        "3P%": (["3PA"], "any"),
+        "2P%": (["2PA"], "any"),
+        "FT%": (["FTA"], "any"),
+        "eFG%": (["FGA"], "any"),
+        "TS%": (["FGA", "FTA"], "all"),
+        "3PAr": (["FGA"], "any"),
+        "FTr": (["FGA"], "any"),
+    }
 
-    if missing_stats > len(rows) * 0.05:  # More than 5% with missing data
+    # Critical columns - even 1 missing = FAIL
+    critical_columns = ["Player", "Pos", "Age", "Team"]
+
+    # Columns to completely skip during validation
+    skip_columns = ["Awards"]
+
+    missing_critical = []
+    missing_non_critical = []
+    invalid_percentage_nulls = []
+
+    for player_idx, player_stat in enumerate(stats):
+        player_name = player_stat.get("Player", f"Player {player_idx}")
+
+        # Check all columns
+        for col, value in player_stat.items():
+            # Skip columns that should be ignored
+            if col in skip_columns:
+                continue
+            is_null_or_nan = value is None or value == "" or _is_nan(value)
+
+            if not is_null_or_nan:
+                continue  # Value is valid, skip
+
+            # Check if this is a percentage column with conditional exemption
+            if col in percentage_dependencies:
+                dep_cols, logic = percentage_dependencies[col]
+
+                # Check if all dependency columns exist
+                all_deps_exist = all(dep_col in player_stat for dep_col in dep_cols)
+                if not all_deps_exist:
+                    continue  # Can't validate without dependency columns
+
+                # Check if dependencies allow null
+                dep_values = [player_stat.get(dep_col) for dep_col in dep_cols]
+                dep_is_zero_or_null = [_is_value_zero_or_null(v) for v in dep_values]
+
+                # If all dependencies are zero/null, percentage can be null/NaN (valid)
+                if all(dep_is_zero_or_null):
+                    continue
+
+                # Otherwise, percentage cannot be null/NaN (invalid)
+                non_zero_deps = [
+                    f"{dep_cols[i]}={dep_values[i]}"
+                    for i in range(len(dep_cols))
+                    if not dep_is_zero_or_null[i]
+                ]
+                invalid_percentage_nulls.append(
+                    f"{player_name}: {col} is null but {', '.join(non_zero_deps)}"
+                )
+            else:
+                # Check if this is a critical column
+                if col in critical_columns:
+                    missing_critical.append(f"{player_name} (column: {col})")
+                else:
+                    # Non-critical, non-percentage column
+                    missing_non_critical.append(f"{player_name} (column: {col})")
+                    warnings.append(f"Missing data: {player_name} has null/NaN in {col}")
+
+    # Record statistics
+    statistics["players_with_missing_critical_data"] = len(missing_critical)
+    statistics["players_with_missing_non_critical_data"] = len(missing_non_critical)
+
+    # CRITICAL ERROR: Any missing critical column data
+    if missing_critical:
         errors.append(
-            f"CRITICAL: High missing data rate: {missing_stats}/{len(rows)} players "
-            f"({missing_stats/len(rows)*100:.1f}%) exceeds 5% threshold"
+            f"CRITICAL: Found {len(missing_critical)} instances of missing critical column data "
+            f"(Player/Pos/Age/Team). First few: {', '.join(missing_critical[:5])}"
         )
         return False
+
+    # ERROR: Invalid percentage nulls
+    if invalid_percentage_nulls:
+        errors.append(
+            f"Found {len(invalid_percentage_nulls)} players with invalid null percentages "
+            f"(first few: {', '.join(invalid_percentage_nulls[:5])})"
+        )
+        statistics["invalid_null_percentages"] = len(invalid_percentage_nulls)
+        return False
+
+    # ERROR: >2.5% non-critical columns missing
+    if missing_non_critical:
+        missing_pct = len(missing_non_critical) / len(stats)
+        if missing_pct > 0.025:  # 2.5%
+            errors.append(
+                f"CRITICAL: High missing data rate in non-critical columns: "
+                f"{len(missing_non_critical)} instances ({missing_pct*100:.1f}%) exceeds 2.5% threshold"
+            )
+            return False
 
     return True
 
 
-def _validate_stat_ranges(
-    headers: List[Any], rows: List[Any], warnings: List[str], statistics: Dict[str, Any]
-) -> None:
+def _is_nan(value: Any) -> bool:
     """
-    Validate statistical values are within realistic ranges.
+    Check if a value is NaN (Not a Number).
+
+    Handles multiple NaN representations: float('nan'), numpy.nan, pandas.NA, etc.
 
     Args:
-        headers: Column headers
-        rows: Data rows
+        value: Value to check
+
+    Returns:
+        True if value is NaN
+    """
+    try:
+        # math.isnan() works for numeric types including numpy.nan
+        return math.isnan(float(value))
+    except (ValueError, TypeError, OverflowError):
+        # Not a numeric type or can't be converted to float
+        return False
+
+
+def _is_value_zero_or_null(value: Any) -> bool:
+    """
+    Check if a value is null, empty, zero, or NaN.
+
+    Args:
+        value: Value to check
+
+    Returns:
+        True if value is null, empty, zero, or NaN
+    """
+    # Check for None or empty string
+    if value is None or value == "":
+        return True
+    # Check for NaN (must be before float conversion to catch NaN properly)
+    if _is_nan(value):
+        return True
+    # Check for zero
+    try:
+        return float(value) == 0
+    except (ValueError, TypeError):
+        return False
+
+
+def _validate_stat_ranges(
+    stats: List[Dict[str, Any]], warnings: List[str], statistics: Dict[str, Any]
+) -> None:
+    """
+    Validate statistical values are within realistic ranges (Basketball Reference format).
+
+    Args:
+        stats: List of player stat dictionaries
         warnings: List to append warnings to
         statistics: Statistics dict to update
     """
-    # Try to find common stat columns (case-insensitive)
-    headers_lower = [h.lower() if isinstance(h, str) else "" for h in headers]
+    if not stats:
+        return
+
+    # Basketball Reference per-game stat column checks
+    # Note: MP (minutes per game) can exceed 48 with overtime
     stat_checks = {
-        "ppg": (80, "points per game"),  # 0-80
-        "pts": (80, "points per game"),
-        "rpg": (30, "rebounds per game"),  # 0-30
-        "reb": (30, "rebounds per game"),
-        "apg": (25, "assists per game"),  # 0-25
-        "ast": (25, "assists per game"),
-        "mpg": (60, "minutes per game"),  # 0-60 (accounts for OT)
-        "min": (60, "minutes per game"),
+        "PTS": (80, "points per game"),  # 0-80
+        "TRB": (30, "total rebounds per game"),  # 0-30
+        "AST": (25, "assists per game"),  # 0-25
+        "MP": (60, "minutes per game"),  # 0-60 (accounts for OT)
+        "STL": (10, "steals per game"),  # 0-10
+        "BLK": (10, "blocks per game"),  # 0-10
+        "TOV": (15, "turnovers per game"),  # 0-15
+        "FG%": (1.0, "field goal percentage"),  # 0-1.0
+        "3P%": (1.0, "three-point percentage"),  # 0-1.0
+        "FT%": (1.0, "free throw percentage"),  # 0-1.0
     }
 
     unrealistic_values = []
-    for stat_key, (max_val, stat_name) in stat_checks.items():
-        try:
-            stat_idx = headers_lower.index(stat_key)
-            for row_idx, row in enumerate(rows):
-                if len(row) > stat_idx and row[stat_idx] is not None:
-                    value = float(row[stat_idx])
-                    if value < 0 or value > max_val:
-                        unrealistic_values.append(
-                            f"Row {row_idx}: {stat_name} = {value} (expected 0-{max_val})"
-                        )
-        except (ValueError, IndexError):
-            # Stat column not found or conversion error - skip this check
-            pass
+    for player_idx, player_stat in enumerate(stats):
+        player_name = player_stat.get("Player", f"Player {player_idx}")
+
+        for stat_key, (max_val, stat_name) in stat_checks.items():
+            if stat_key in player_stat:
+                value = player_stat.get(stat_key)
+                # Skip None, empty string, or NaN values
+                if value is not None and value != "" and not _is_nan(value):
+                    try:
+                        value_float = float(value)
+                        if value_float < 0 or value_float > max_val:
+                            unrealistic_values.append(
+                                f"{player_name}: {stat_name} = {value_float} "
+                                f"(expected 0-{max_val})"
+                            )
+                    except (ValueError, TypeError):
+                        # Can't convert to float - skip this check
+                        pass
 
     if unrealistic_values:
         warnings.append(
@@ -355,10 +512,10 @@ def _validate_stat_ranges(
 
 def validate_stats_data(data: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Validate player statistics data.
+    Validate player statistics data from Basketball Reference.
 
     Args:
-        data: Stats data
+        data: Stats data (Basketball Reference format with per_game_stats and advanced_stats)
 
     Returns:
         Validation results
@@ -377,35 +534,111 @@ def validate_stats_data(data: Dict[str, Any]) -> Dict[str, Any]:
 
     # Extract stats
     try:
-        result_sets = data["players"]["resultSets"][0]
-        headers = result_sets.get("headers", [])
-        rows = result_sets.get("rowSet", [])
+        per_game_stats = data.get("per_game_stats", [])
+        advanced_stats = data.get("advanced_stats", [])
+        per_game_columns = data.get("per_game_columns", [])
+        advanced_columns = data.get("advanced_columns", [])
 
-        results["statistics"]["total_players"] = len(rows)
-        results["statistics"]["stat_columns"] = len(headers)
+        per_game_count = len(per_game_stats)
+        advanced_count = len(advanced_stats)
 
-        # Data quality checks
-        if len(rows) < 300:
-            results["warnings"].append(f"Low player count in stats: {len(rows)}")
+        results["statistics"]["total_players_per_game"] = per_game_count
+        results["statistics"]["total_players_advanced"] = advanced_count
+        results["statistics"]["per_game_columns"] = len(per_game_columns)
+        results["statistics"]["advanced_columns"] = len(advanced_columns)
 
-        # Check for missing data
-        if not _check_missing_data(
-            rows,
-            cast(List[str], results["warnings"]),
-            cast(List[str], results["errors"]),
-            cast(Dict[str, Any], results["statistics"]),
-        ):
-            results["valid"] = False
+        # Player count validation - both stat arrays should have adequate data
+        min_expected_players = 300  # NBA typically has 450+ active players
 
-        # Validate statistical ranges
-        _validate_stat_ranges(
-            headers,
-            rows,
-            cast(List[str], results["warnings"]),
-            cast(Dict[str, Any], results["statistics"]),
-        )
+        # Check per-game stats player count
+        if per_game_count < min_expected_players:
+            results["warnings"].append(
+                f"Low player count in per-game stats: {per_game_count} "
+                f"(expected {min_expected_players}+)"
+            )
 
-    except (KeyError, IndexError) as e:
+        # Check advanced stats player count
+        if advanced_count < min_expected_players:
+            results["warnings"].append(
+                f"Low player count in advanced stats: {advanced_count} "
+                f"(expected {min_expected_players}+)"
+            )
+
+        # Check that both stat lists have similar counts (within 2.5% of each other)
+        # Both arrays should be scraped at the same time and contain the same players
+        if per_game_stats and advanced_stats:
+            count_diff = abs(per_game_count - advanced_count)
+            max_count = max(per_game_count, advanced_count)
+            count_diff_pct = count_diff / max_count if max_count > 0 else 0
+
+            if count_diff_pct > 0.025:  # More than 2.5% difference
+                results["warnings"].append(
+                    f"Player count mismatch: {per_game_count} per-game vs "
+                    f"{advanced_count} advanced ({count_diff_pct*100:.1f}% difference, "
+                    f"expected within 2.5%)"
+                )
+                results["statistics"]["player_count_diff_pct"] = round(count_diff_pct * 100, 2)
+
+        # Validate all missing/null/NaN values in per-game stats
+        if per_game_stats:
+            if not _validate_all_missing_and_nan_values(
+                per_game_stats,
+                cast(List[str], results["warnings"]),
+                cast(List[str], results["errors"]),
+                cast(Dict[str, Any], results["statistics"]),
+            ):
+                results["valid"] = False
+
+        # Validate statistical ranges (per-game stats)
+        if per_game_stats:
+            _validate_stat_ranges(
+                per_game_stats,
+                cast(List[str], results["warnings"]),
+                cast(Dict[str, Any], results["statistics"]),
+            )
+
+        # Validate all missing/null/NaN values in advanced stats
+        if advanced_stats:
+            if not _validate_all_missing_and_nan_values(
+                advanced_stats,
+                cast(List[str], results["warnings"]),
+                cast(List[str], results["errors"]),
+                cast(Dict[str, Any], results["statistics"]),
+            ):
+                results["valid"] = False
+
+        # Validate that we have the expected columns (only if we have data)
+        if per_game_stats and per_game_columns:
+            expected_per_game_cols = [
+                "Player",
+                "Pos",
+                "Age",
+                "Team",
+                "G",
+                "MP",
+                "PTS",
+                "TRB",
+                "AST",
+            ]
+            missing_cols = [col for col in expected_per_game_cols if col not in per_game_columns]
+            if missing_cols:
+                results["errors"].append(
+                    f"Missing expected per-game columns: {', '.join(missing_cols)}"
+                )
+                results["valid"] = False
+
+        if advanced_stats and advanced_columns:
+            expected_advanced_cols = ["Player", "Pos", "Age", "Team", "G", "MP", "PER"]
+            missing_advanced_cols = [
+                col for col in expected_advanced_cols if col not in advanced_columns
+            ]
+            if missing_advanced_cols:
+                results["errors"].append(
+                    f"Missing expected advanced columns: {', '.join(missing_advanced_cols)}"
+                )
+                results["valid"] = False
+
+    except (KeyError, TypeError) as e:
         results["valid"] = False
         results["errors"].append(f"Invalid stats structure: {e}")
 
@@ -634,33 +867,75 @@ def handler(event, context):
         return {"statusCode": 400, "body": json.dumps({"error": "Missing data_location in event"})}
 
     partition = event["data_location"]["partition"]
+    fetch_type = event.get("fetch_type", "stats_only")
 
     validation_results = {
         "timestamp": datetime.utcnow().isoformat(),
         "environment": ENVIRONMENT,
         "partition": partition,
+        "fetch_type": fetch_type,
         "validations": [],
         "overall_valid": True,
         "error_count": 0,
         "warning_count": 0,
     }
 
-    # Define files to validate
+    # Define files to validate based on fetch type
+    # stats_only (daily): Only player_stats
+    # monthly: active_players, player_stats, teams, salaries
+    # full: All of the above (game_logs validation TBD)
+    all_files = {
+        "stats": (f"raw/stats/{partition}/league_player_stats.json", validate_stats_data, True),
+        "players": (
+            f"raw/players/{partition}/active_players.json",
+            validate_players_data,
+            fetch_type in ["monthly", "full"],
+        ),
+        "teams": (
+            f"raw/teams/{partition}/nba_teams.json",
+            validate_teams_data,
+            fetch_type in ["monthly", "full"],
+        ),
+        "salaries": (
+            f"raw/salaries/{partition}/player_salaries.json",
+            validate_salary_data,
+            fetch_type in ["monthly", "full"],
+        ),
+    }
+
     files_to_validate = [
-        (f"raw/players/{partition}/active_players.json", validate_players_data),
-        (f"raw/stats/{partition}/league_player_stats.json", validate_stats_data),
-        (f"raw/teams/{partition}/nba_teams.json", validate_teams_data),
-        (f"raw/salaries/{partition}/player_salaries.json", validate_salary_data),
+        (s3_key, validator_func, is_required)
+        for s3_key, validator_func, is_required in all_files.values()
     ]
 
-    for s3_key, validator_func in files_to_validate:
-        logger.info(f"Validating {s3_key}")
+    for s3_key, validator_func, is_required in files_to_validate:
+        logger.info(f"Validating {s3_key} (required={is_required})")
 
         # Load data from S3
         data = load_from_s3(s3_key)
         if data is None:
-            # File might not exist for this run (e.g., teams only fetched weekly)
-            logger.info(f"Skipping {s3_key} - file not found or invalid")
+            data_type = s3_key.split("/")[1]  # Extract data type from path
+
+            if is_required:
+                # File is missing or invalid - this is a critical error
+                logger.error(f"CRITICAL: Required file {s3_key} not found or invalid")
+                validation_results["overall_valid"] = False
+                validation_results["error_count"] += 1
+                validation_results["validations"].append(
+                    {
+                        "data_type": data_type,
+                        "valid": False,
+                        "errors": [f"Required file not found or could not be loaded: {s3_key}"],
+                        "warnings": [],
+                        "statistics": {},
+                        "s3_key": s3_key,
+                    }
+                )
+            else:
+                # Optional file - just log and skip
+                logger.info(
+                    f"Optional file {s3_key} not found - skipping (fetch_type={fetch_type})"
+                )
             continue
 
         # Validate data
