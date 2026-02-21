@@ -429,11 +429,15 @@ def handler(event, context):
 
     # Get execution parameters
     current_date = datetime.utcnow()
-    date_partition = get_date_partition(current_date)
+    base_date_partition = get_date_partition(current_date)
 
     # Determine what to fetch based on event
     fetch_type = event.get("fetch_type", "stats_only")  # stats_only, monthly, or full
     season = event.get("season", "2025-26")
+
+    # Partition by season first for better query patterns and data organization
+    # Format: 2024-25/year=2025/month=02/day=20/
+    date_partition = f"{season}/{base_date_partition}"
 
     results = {"statusCode": 200, "fetched": [], "errors": []}
 
