@@ -980,6 +980,7 @@ def handler(event, context):
         ),
         "validation_report": {"bucket": S3_BUCKET, "key": report_key},
         "data_location": event["data_location"],  # Pass through for next step
+        "season": event.get("season", "2025-26"),  # Pass season to next step
         "validation_passed": validation_results["overall_valid"],
     }
 

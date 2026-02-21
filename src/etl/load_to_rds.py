@@ -337,13 +337,14 @@ def upsert_salaries(cursor, salaries_data: List[Dict[str, Any]]) -> int:
     return len(data)
 
 
-def upsert_player_stats(cursor, stats_data: List[Dict[str, Any]]) -> int:
+def upsert_player_stats(cursor, stats_data: List[Dict[str, Any]], season: str) -> int:
     """
     Upsert player statistics into the player_stats table.
 
     Args:
         cursor: Database cursor
         stats_data: List of player stat dictionaries from enriched_player_stats.json
+        season: NBA season (e.g., "2025-26", "2024-25")
 
     Returns:
         Number of player stats upserted
@@ -431,7 +432,7 @@ def upsert_player_stats(cursor, stats_data: List[Dict[str, Any]]) -> int:
         (
             s.get("player_id"),
             s["player_name"],
-            "2025-26",  # TODO: Get from event or stats metadata
+            season,  # Season passed as parameter
             s.get("team_abbreviation"),
             s.get("age"),
             s.get("position"),
@@ -634,6 +635,10 @@ def handler(event, context):
     partition = event["data_location"]["partition"]
     logger.info(f"Loading data from partition: {partition}")
 
+    # Extract season from event or default to current season
+    season = event.get("season", "2025-26")
+    logger.info(f"Loading data for season: {season}")
+
     conn = None
     results = {
         "statusCode": 200,
@@ -686,7 +691,9 @@ def handler(event, context):
         # 3. Upsert player stats (required)
         if stats_s3 and stats_s3.get("player_stats"):
             try:
-                count = upsert_player_stats(cursor, stats_s3["player_stats"])
+                # Use season from stats metadata if available, otherwise from event
+                stats_season = stats_s3.get("season", season)
+                count = upsert_player_stats(cursor, stats_s3["player_stats"], stats_season)
                 results["loaded"]["player_stats"] = count
             except Exception as e:
                 logger.error(f"Failed to upsert player stats: {e}")

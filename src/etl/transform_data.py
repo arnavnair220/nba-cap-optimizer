@@ -779,6 +779,7 @@ def handler(event, context):
             "statusCode": 200,
             "body": json.dumps(results),
             "data_location": event["data_location"],  # Pass through for next step
+            "season": event.get("season", "2025-26"),  # Pass season to next step
             "transformation_successful": len(results["errors"]) == 0,
             "statistics": results["statistics"],
         }

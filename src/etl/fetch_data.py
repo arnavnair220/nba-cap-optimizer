@@ -230,12 +230,27 @@ def fetch_espn_salaries(season: str = "2025-26") -> List[Dict[str, Any]]:
     Fetch player salary data from ESPN with pagination support.
 
     Args:
-        season: NBA season (e.g., "2025-26")
+        season: NBA season (e.g., "2025-26", "2023-24")
 
     Returns:
         List of salary dictionaries
     """
-    base_url = "https://www.espn.com/nba/salaries"
+    # Convert season format: "2025-26" -> "2026" (use ending year for ESPN URL)
+    # ESPN uses the ending year in URLs: /nba/salaries/_/year/2026
+    season_year = season.split("-")[1]
+    if len(season_year) == 2:
+        season_year = "20" + season_year
+
+    # ESPN URL structure:
+    # Current season: https://www.espn.com/nba/salaries
+    # Historical: https://www.espn.com/nba/salaries/_/year/2023
+    current_year = datetime.utcnow().year
+    if int(season_year) >= current_year:
+        # Current or future season - use base URL
+        base_url = "https://www.espn.com/nba/salaries"
+    else:
+        # Historical season - include year parameter
+        base_url = f"https://www.espn.com/nba/salaries/_/year/{season_year}"
 
     headers = {
         "User-Agent": (
@@ -245,7 +260,7 @@ def fetch_espn_salaries(season: str = "2025-26") -> List[Dict[str, Any]]:
         )
     }
 
-    logger.info(f"Fetching ESPN salaries from {base_url}")
+    logger.info(f"Fetching ESPN salaries for season {season} from {base_url}")
 
     all_salaries = []
 
@@ -508,6 +523,8 @@ def handler(event, context):
             "statusCode": 200,
             "body": json.dumps(results),
             "data_location": {"bucket": S3_BUCKET, "partition": date_partition},
+            "season": season,  # Pass season to next step
+            "fetch_type": fetch_type,  # Pass fetch_type to next step
         }
 
     except Exception as e:

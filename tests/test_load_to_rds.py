@@ -130,7 +130,7 @@ class TestUpsertFunctions:
             }
         ]
 
-        count = load_to_rds.upsert_player_stats(mock_cursor, stats)
+        count = load_to_rds.upsert_player_stats(mock_cursor, stats, "2025-26")
 
         assert count == 1
         mock_execute_batch.assert_called_once()
