@@ -8,6 +8,7 @@ import json
 import logging
 import math
 import os
+import unicodedata
 from datetime import datetime
 from typing import Any, Dict, List, Optional, cast
 
@@ -42,6 +43,39 @@ def normalize_team_abbreviation(team_abbrev: str) -> str:
         "PHO": "PHX",  # Phoenix Suns
     }
     return mapping.get(team_abbrev, team_abbrev)
+
+
+def normalize_to_ascii(text: str) -> str:
+    """
+    Convert Unicode text to ASCII by removing diacritical marks.
+
+    This normalization is applied during transform for name matching between:
+    - NBA API player names (may have Unicode: "Nikola Jokić")
+    - ESPN salary names (ASCII: "Nikola Jokic")
+    - Basketball-Reference stats (ASCII: "Nikola Jokic")
+
+    Examples:
+        'Diabaté' -> 'Diabate'
+        'Jokić' -> 'Jokic'
+        'Dončić' -> 'Doncic'
+
+    Args:
+        text: Text with potential Unicode characters
+
+    Returns:
+        ASCII-only version of the text
+    """
+    if not text:
+        return text
+
+    # Normalize to NFD (decomposed form) - separates base letters from accents
+    nfd = unicodedata.normalize("NFD", text)
+
+    # Filter out combining characters (the accent marks)
+    # Category 'Mn' is "Mark, Nonspacing" (accents, diacritics, etc.)
+    ascii_text = "".join(char for char in nfd if unicodedata.category(char) != "Mn")
+
+    return ascii_text
 
 
 def load_from_s3(s3_key: str) -> Optional[Dict[str, Any]]:
@@ -99,6 +133,9 @@ def match_salaries_with_players(
     """
     Match salary data with player IDs using normalized name matching.
 
+    Handles Unicode names from NBA API by normalizing to ASCII before matching.
+    Example: "Nikola Jokić" (NBA API) matches "Nikola Jokic" (ESPN)
+
     Args:
         salaries: List of salary dictionaries (from ESPN - has player_name)
         active_players: List of player dictionaries (from NBA API - has id and full_name)
@@ -115,15 +152,16 @@ def match_salaries_with_players(
         player_id = player.get("id")
 
         if full_name and player_id:
-            # Normalize: lowercase, remove extra whitespace
-            normalized_name = " ".join(full_name.lower().split())
+            # Normalize: ASCII conversion, lowercase, remove extra whitespace
+            normalized_name = " ".join(normalize_to_ascii(full_name).lower().split())
             player_lookup[normalized_name] = player_id
 
     # Match salaries
     matched = 0
     for salary in salaries:
         player_name = salary.get("player_name", "")
-        normalized = " ".join(player_name.lower().split())
+        # Normalize: ASCII conversion, lowercase, remove extra whitespace
+        normalized = " ".join(normalize_to_ascii(player_name).lower().split())
 
         if normalized in player_lookup:
             salary["player_id"] = player_lookup[normalized]
