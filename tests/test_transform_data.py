@@ -369,9 +369,12 @@ class TestHandlerNaNValidation:
 
     @patch("src.etl.transform_data.ENVIRONMENT", "test")
     @patch("src.etl.transform_data.S3_BUCKET", "test-bucket")
+    @patch("src.etl.transform_data.save_to_s3")
     @patch("src.etl.transform_data.enrich_player_stats")
     @patch("src.etl.transform_data.load_from_s3")
-    def test_handler_returns_400_when_nan_in_statistics(self, mock_load, mock_enrich_player_stats):
+    def test_handler_returns_400_when_nan_in_statistics(
+        self, mock_load, mock_enrich_player_stats, mock_save
+    ):
         """Test handler returns 400 when NaN values detected in output statistics."""
 
         # Mock enrichment to return stats with NaN that would cause NaN in aggregates
@@ -395,6 +398,7 @@ class TestHandlerNaNValidation:
             return None
 
         mock_load.side_effect = mock_load_side_effect
+        mock_save.return_value = True
 
         event = {
             "validation_passed": True,
