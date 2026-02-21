@@ -137,15 +137,59 @@ def match_salaries_with_players(
     return salaries
 
 
+def _build_stat_dict(pg_stat: Dict[str, Any], team_abbrev: Optional[str]) -> Dict[str, Any]:
+    """
+    Build a stat dictionary from a per-game stat row.
+
+    Args:
+        pg_stat: Per-game stats row
+        team_abbrev: Normalized team abbreviation (or None for aggregate rows)
+
+    Returns:
+        Dictionary of player stats
+    """
+    return {
+        "team_abbreviation": team_abbrev,
+        "games_played": pg_stat.get("G"),
+        "games_started": pg_stat.get("GS"),
+        "minutes": pg_stat.get("MP"),
+        # Scoring
+        "points": pg_stat.get("PTS"),
+        "fgm": pg_stat.get("FG"),
+        "fga": pg_stat.get("FGA"),
+        "fg_pct": pg_stat.get("FG%"),
+        "fg3m": pg_stat.get("3P"),
+        "fg3a": pg_stat.get("3PA"),
+        "fg3_pct": pg_stat.get("3P%"),
+        "fg2m": pg_stat.get("2P"),
+        "fg2a": pg_stat.get("2PA"),
+        "fg2_pct": pg_stat.get("2P%"),
+        "ftm": pg_stat.get("FT"),
+        "fta": pg_stat.get("FTA"),
+        "ft_pct": pg_stat.get("FT%"),
+        # Rebounds
+        "oreb": pg_stat.get("ORB"),
+        "dreb": pg_stat.get("DRB"),
+        "rebounds": pg_stat.get("TRB"),
+        # Other
+        "assists": pg_stat.get("AST"),
+        "steals": pg_stat.get("STL"),
+        "blocks": pg_stat.get("BLK"),
+        "turnovers": pg_stat.get("TOV"),
+        "fouls": pg_stat.get("PF"),
+    }
+
+
 def enrich_player_stats(stats_data: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
     Enrich player statistics by merging per-game and advanced stats from Basketball Reference.
+    Handles multi-team players by creating aggregate season stats and per-team breakdowns.
 
     Args:
         stats_data: Basketball Reference data with per_game_stats and advanced_stats
 
     Returns:
-        List of enriched player stat dictionaries
+        List of enriched player stat dictionaries with multi-team support
     """
     logger.info("Enriching player statistics from Basketball Reference...")
 
@@ -167,8 +211,8 @@ def enrich_player_stats(stats_data: Dict[str, Any]) -> List[Dict[str, Any]]:
                 normalized_name = " ".join(player_name.lower().split())
                 advanced_lookup[normalized_name] = adv_stat
 
-        enriched_stats = []
-
+        # Group per_game_stats by player name to handle multi-team players
+        player_groups: Dict[str, List[Dict[str, Any]]] = {}
         for pg_stat in per_game_stats:
             if not isinstance(pg_stat, dict):
                 continue
@@ -182,46 +226,104 @@ def enrich_player_stats(stats_data: Dict[str, Any]) -> List[Dict[str, Any]]:
                 logger.debug(f"Skipping summary row: {player_name}")
                 continue
 
-            # Create enriched player record
-            team_abbrev = pg_stat.get("Team")
+            if player_name not in player_groups:
+                player_groups[player_name] = []
+            player_groups[player_name].append(pg_stat)
+
+        # Multi-team indicators from Basketball Reference
+        MULTI_TEAM_INDICATORS = ["TOT", "2TM", "3TM", "4TM", "5TM"]
+
+        enriched_stats = []
+
+        for player_name, player_rows in player_groups.items():
+            # Separate aggregate row from individual team rows
+            aggregate_row = None
+            team_rows = []
+
+            for row in player_rows:
+                team = row.get("Team")
+                if team in MULTI_TEAM_INDICATORS:
+                    aggregate_row = row
+                else:
+                    team_rows.append(row)
+
+            # Determine if multi-team player
+            if aggregate_row is not None:
+                # Player was traded - use aggregate stats as main stats
+                is_multi_team = True
+                main_row = aggregate_row
+                teams_played_for_raw = [
+                    normalize_team_abbreviation(row.get("Team", ""))
+                    for row in team_rows
+                    if row.get("Team")
+                ]
+                # Filter out None values from teams_played_for
+                teams_played_for = [t for t in teams_played_for_raw if t is not None]
+            else:
+                # Single team player
+                is_multi_team = False
+                main_row = player_rows[0]
+                team_value = main_row.get("Team", "")
+                if team_value:
+                    team_abbrev = normalize_team_abbreviation(team_value)
+                    teams_played_for = [team_abbrev] if team_abbrev else []
+                else:
+                    teams_played_for = []
+                team_rows = [main_row]  # Include single row in stats_by_team
+
+            # Build main player stat record from aggregate/single row
             player_stat = {
                 # Basic info
                 "player_name": player_name,
-                "age": pg_stat.get("Age"),
-                "team_abbreviation": (
-                    normalize_team_abbreviation(team_abbrev) if team_abbrev else None
-                ),
-                "position": pg_stat.get("Pos"),
-                "games_played": pg_stat.get("G"),
-                "games_started": pg_stat.get("GS"),
-                "minutes": pg_stat.get("MP"),
+                "age": main_row.get("Age"),
+                "position": main_row.get("Pos"),
+                # Multi-team metadata
+                "is_multi_team": is_multi_team,
+                "teams_played_for": teams_played_for,
+                # Season aggregate stats
+                "games_played": main_row.get("G"),
+                "games_started": main_row.get("GS"),
+                "minutes": main_row.get("MP"),
                 # Scoring
-                "points": pg_stat.get("PTS"),
-                "fgm": pg_stat.get("FG"),
-                "fga": pg_stat.get("FGA"),
-                "fg_pct": pg_stat.get("FG%"),
-                "fg3m": pg_stat.get("3P"),
-                "fg3a": pg_stat.get("3PA"),
-                "fg3_pct": pg_stat.get("3P%"),
-                "fg2m": pg_stat.get("2P"),
-                "fg2a": pg_stat.get("2PA"),
-                "fg2_pct": pg_stat.get("2P%"),
-                "ftm": pg_stat.get("FT"),
-                "fta": pg_stat.get("FTA"),
-                "ft_pct": pg_stat.get("FT%"),
+                "points": main_row.get("PTS"),
+                "fgm": main_row.get("FG"),
+                "fga": main_row.get("FGA"),
+                "fg_pct": main_row.get("FG%"),
+                "fg3m": main_row.get("3P"),
+                "fg3a": main_row.get("3PA"),
+                "fg3_pct": main_row.get("3P%"),
+                "fg2m": main_row.get("2P"),
+                "fg2a": main_row.get("2PA"),
+                "fg2_pct": main_row.get("2P%"),
+                "ftm": main_row.get("FT"),
+                "fta": main_row.get("FTA"),
+                "ft_pct": main_row.get("FT%"),
                 # Rebounds
-                "oreb": pg_stat.get("ORB"),
-                "dreb": pg_stat.get("DRB"),
-                "rebounds": pg_stat.get("TRB"),
+                "oreb": main_row.get("ORB"),
+                "dreb": main_row.get("DRB"),
+                "rebounds": main_row.get("TRB"),
                 # Other
-                "assists": pg_stat.get("AST"),
-                "steals": pg_stat.get("STL"),
-                "blocks": pg_stat.get("BLK"),
-                "turnovers": pg_stat.get("TOV"),
-                "fouls": pg_stat.get("PF"),
+                "assists": main_row.get("AST"),
+                "steals": main_row.get("STL"),
+                "blocks": main_row.get("BLK"),
+                "turnovers": main_row.get("TOV"),
+                "fouls": main_row.get("PF"),
             }
 
-            # Match with advanced stats
+            # Build stats_by_team array (individual team breakdowns)
+            stats_by_team = []
+            for team_row in team_rows:
+                team_abbrev_raw = team_row.get("Team")
+                if team_abbrev_raw and isinstance(team_abbrev_raw, str):
+                    team_abbrev = cast(str, team_abbrev_raw)
+                    normalized_team = normalize_team_abbreviation(team_abbrev)
+                    if normalized_team:  # Skip if normalization returns None
+                        team_stat = _build_stat_dict(team_row, normalized_team)
+                        stats_by_team.append(team_stat)
+
+            player_stat["stats_by_team"] = stats_by_team
+
+            # Match with advanced stats (use aggregate row's advanced stats)
             normalized_name = " ".join(player_name.lower().split())
             if normalized_name in advanced_lookup:
                 adv_stat = advanced_lookup[normalized_name]
@@ -229,7 +331,7 @@ def enrich_player_stats(stats_data: Dict[str, Any]) -> List[Dict[str, Any]]:
                 # Add all advanced stats from Basketball Reference
                 player_stat["per"] = adv_stat.get("PER")
                 player_stat["ts_pct"] = adv_stat.get("TS%")
-                player_stat["efg_pct"] = adv_stat.get("eFG%")  # B-R has this already
+                player_stat["efg_pct"] = adv_stat.get("eFG%")
                 player_stat["usg_pct"] = adv_stat.get("USG%")
                 player_stat["ws"] = adv_stat.get("WS")
                 player_stat["ws_per_48"] = adv_stat.get("WS/48")
@@ -270,7 +372,11 @@ def enrich_player_stats(stats_data: Dict[str, Any]) -> List[Dict[str, Any]]:
 
             enriched_stats.append(player_stat)
 
-        logger.info(f"Enriched {len(enriched_stats)} player stat records")
+        multi_team_count = sum(1 for s in enriched_stats if s["is_multi_team"])
+        logger.info(
+            f"Enriched {len(enriched_stats)} player stat records "
+            f"({multi_team_count} multi-team players)"
+        )
         return enriched_stats
 
     except (KeyError, IndexError) as e:
@@ -285,11 +391,12 @@ def enrich_team_data(
 ) -> List[Dict[str, Any]]:
     """
     Enrich team data with aggregated salary and performance metrics.
+    Handles multi-team players by using stats_by_team for team-specific stats.
 
     Args:
         teams: List of team dictionaries
         enriched_salaries: List of salary dictionaries with player_id
-        enriched_stats: List of player stat dictionaries
+        enriched_stats: List of player stat dictionaries with multi-team support
 
     Returns:
         List of enriched team dictionaries
@@ -309,9 +416,9 @@ def enrich_team_data(
     for team in teams:
         team_abbrev = team.get("abbreviation")
 
-        # Find all players on this team
+        # Find all players who played for this team (check teams_played_for list)
         team_players = [
-            stat for stat in enriched_stats if stat.get("team_abbreviation") == team_abbrev
+            stat for stat in enriched_stats if team_abbrev in stat.get("teams_played_for", [])
         ]
 
         # Calculate salary metrics
@@ -322,10 +429,15 @@ def enrich_team_data(
             if normalized_name in salary_by_player:
                 team_salaries.append(salary_by_player[normalized_name])
 
-        # Find team stats (players with stats on this team)
-        team_player_stats = [
-            stat for stat in enriched_stats if stat.get("team_abbreviation") == team_abbrev
-        ]
+        # Extract team-specific stats for aggregation
+        # For each player, find their stats_by_team entry for this team
+        team_player_stats = []
+        for player in team_players:
+            stats_by_team = player.get("stats_by_team", [])
+            for team_stat in stats_by_team:
+                if team_stat.get("team_abbreviation") == team_abbrev:
+                    team_player_stats.append(team_stat)
+                    break
 
         # Calculate aggregations
         enriched_team = {
