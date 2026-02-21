@@ -66,6 +66,35 @@ class TestMatchSalariesWithPlayers:
 class TestEnrichPlayerStats:
     """Test player stats enrichment with Basketball Reference data."""
 
+    def test_filters_out_league_average_summary_row(self):
+        """Test that 'League Average' summary row is filtered out."""
+        stats_data = {
+            "season": "2025-26",
+            "source": "basketball_reference",
+            "per_game_stats": [
+                {
+                    "Player": "LeBron James",
+                    "Team": "LAL",
+                    "PTS": 25.8,
+                    "TRB": 7.7,
+                    "AST": 8.2,
+                },
+                {
+                    "Player": "League Average",
+                    "Team": None,
+                    "PTS": float("nan"),
+                    "TRB": float("nan"),
+                    "AST": float("nan"),
+                },
+            ],
+            "advanced_stats": [],
+        }
+
+        result = transform_data.enrich_player_stats(stats_data)
+
+        assert len(result) == 1
+        assert result[0]["player_name"] == "LeBron James"
+
     def test_enrichment_merges_per_game_and_advanced_stats(self):
         """Test enrichment merges per-game and advanced stats."""
         stats_data = {
@@ -106,8 +135,14 @@ class TestEnrichPlayerStats:
         # Check per-game stats
         assert player["player_name"] == "LeBron James"
         assert player["age"] == 39
-        assert player["team_abbreviation"] == "LAL"
         assert player["points"] == 25.8
+
+        # Check multi-team fields
+        assert player["is_multi_team"] is False
+        assert player["teams_played_for"] == ["LAL"]
+        assert len(player["stats_by_team"]) == 1
+        assert player["stats_by_team"][0]["team_abbreviation"] == "LAL"
+        assert player["stats_by_team"][0]["points"] == 25.8
 
         # Check advanced stats
         assert player["per"] == 24.5
@@ -130,17 +165,46 @@ class TestEnrichPlayerStats:
         result = transform_data.enrich_player_stats(stats_data)
 
         assert len(result) == 3
-        assert result[0]["team_abbreviation"] == "PHX"  # PHO -> PHX
-        assert result[1]["team_abbreviation"] == "BKN"  # BRK -> BKN
-        assert result[2]["team_abbreviation"] == "CHA"  # CHO -> CHA
+        assert result[0]["teams_played_for"] == ["PHX"]  # PHO -> PHX
+        assert result[1]["teams_played_for"] == ["BKN"]  # BRK -> BKN
+        assert result[2]["teams_played_for"] == ["CHA"]  # CHO -> CHA
 
-    def test_enrichment_handles_none_team_abbreviation(self):
-        """Test enrichment handles missing team abbreviation."""
+    def test_enrichment_handles_multi_team_players(self):
+        """Test enrichment handles multi-team players correctly."""
         stats_data = {
             "season": "2025-26",
             "source": "basketball_reference",
             "per_game_stats": [
-                {"Player": "Free Agent", "PTS": 15.0, "TRB": 5.0, "AST": 3.0},
+                {
+                    "Player": "Kevin Huerter",
+                    "Age": 27,
+                    "Pos": "SF",
+                    "Team": "2TM",
+                    "G": 48,
+                    "PTS": 10.3,
+                    "TRB": 3.7,
+                    "AST": 2.5,
+                },
+                {
+                    "Player": "Kevin Huerter",
+                    "Age": 27,
+                    "Pos": "SF",
+                    "Team": "CHI",
+                    "G": 44,
+                    "PTS": 10.9,
+                    "TRB": 3.8,
+                    "AST": 2.6,
+                },
+                {
+                    "Player": "Kevin Huerter",
+                    "Age": 27,
+                    "Pos": "SG",
+                    "Team": "DET",
+                    "G": 4,
+                    "PTS": 4.3,
+                    "TRB": 1.8,
+                    "AST": 0.8,
+                },
             ],
             "advanced_stats": [],
         }
@@ -148,7 +212,25 @@ class TestEnrichPlayerStats:
         result = transform_data.enrich_player_stats(stats_data)
 
         assert len(result) == 1
-        assert result[0]["team_abbreviation"] is None
+        player = result[0]
+
+        # Check multi-team metadata
+        assert player["is_multi_team"] is True
+        assert player["teams_played_for"] == ["CHI", "DET"]
+
+        # Check main stats use aggregate row (2TM)
+        assert player["games_played"] == 48
+        assert player["points"] == 10.3
+
+        # Check stats_by_team has individual team breakdowns
+        assert len(player["stats_by_team"]) == 2
+        chi_stats = next(s for s in player["stats_by_team"] if s["team_abbreviation"] == "CHI")
+        det_stats = next(s for s in player["stats_by_team"] if s["team_abbreviation"] == "DET")
+
+        assert chi_stats["games_played"] == 44
+        assert chi_stats["points"] == 10.9
+        assert det_stats["games_played"] == 4
+        assert det_stats["points"] == 4.3
 
     def test_enrichment_handles_empty_stats(self):
         """Test enrichment with no players."""
@@ -177,17 +259,35 @@ class TestEnrichTeamData:
         stats = [
             {
                 "player_name": "Player 1",
-                "team_abbreviation": "GSW",
+                "is_multi_team": False,
+                "teams_played_for": ["GSW"],
                 "points": 25.0,
                 "rebounds": 7.0,
                 "assists": 8.0,
+                "stats_by_team": [
+                    {
+                        "team_abbreviation": "GSW",
+                        "points": 25.0,
+                        "rebounds": 7.0,
+                        "assists": 8.0,
+                    }
+                ],
             },
             {
                 "player_name": "Player 2",
-                "team_abbreviation": "GSW",
+                "is_multi_team": False,
+                "teams_played_for": ["GSW"],
                 "points": 15.0,
                 "rebounds": 5.0,
                 "assists": 4.0,
+                "stats_by_team": [
+                    {
+                        "team_abbreviation": "GSW",
+                        "points": 15.0,
+                        "rebounds": 5.0,
+                        "assists": 4.0,
+                    }
+                ],
             },
         ]
 
@@ -208,17 +308,35 @@ class TestEnrichTeamData:
         stats = [
             {
                 "player_name": "Kevin Durant",
-                "team_abbreviation": "PHX",
+                "is_multi_team": False,
+                "teams_played_for": ["PHX"],
                 "points": 28.5,
                 "rebounds": 7.0,
                 "assists": 5.5,
+                "stats_by_team": [
+                    {
+                        "team_abbreviation": "PHX",
+                        "points": 28.5,
+                        "rebounds": 7.0,
+                        "assists": 5.5,
+                    }
+                ],
             },
             {
                 "player_name": "Devin Booker",
-                "team_abbreviation": "PHX",
+                "is_multi_team": False,
+                "teams_played_for": ["PHX"],
                 "points": 27.1,
                 "rebounds": 4.5,
                 "assists": 6.9,
+                "stats_by_team": [
+                    {
+                        "team_abbreviation": "PHX",
+                        "points": 27.1,
+                        "rebounds": 4.5,
+                        "assists": 6.9,
+                    }
+                ],
             },
         ]
 
@@ -244,6 +362,55 @@ class TestHandlerValidationCheck:
         result = transform_data.handler(event, MagicMock())
 
         assert result["statusCode"] == 400
+
+
+class TestHandlerNaNValidation:
+    """Test handler NaN validation logic."""
+
+    @patch("src.etl.transform_data.ENVIRONMENT", "test")
+    @patch("src.etl.transform_data.S3_BUCKET", "test-bucket")
+    @patch("src.etl.transform_data.save_to_s3")
+    @patch("src.etl.transform_data.enrich_player_stats")
+    @patch("src.etl.transform_data.load_from_s3")
+    def test_handler_returns_400_when_nan_in_statistics(
+        self, mock_load, mock_enrich_player_stats, mock_save
+    ):
+        """Test handler returns 400 when NaN values detected in output statistics."""
+
+        # Mock enrichment to return stats with NaN that would cause NaN in aggregates
+        mock_enrich_player_stats.return_value = [
+            {
+                "player_name": "Player 1",
+                "points": float("nan"),
+                "rebounds": 5.0,
+                "assists": 3.0,
+            }
+        ]
+
+        def mock_load_side_effect(s3_key):
+            if "stats" in s3_key:
+                return {
+                    "season": "2025-26",
+                    "source": "basketball_reference",
+                    "per_game_stats": [{"Player": "Test"}],
+                    "advanced_stats": [],
+                }
+            return None
+
+        mock_load.side_effect = mock_load_side_effect
+        mock_save.return_value = True
+
+        event = {
+            "validation_passed": True,
+            "data_location": {"bucket": "test", "partition": "year=2024/month=02/day=17"},
+        }
+
+        result = transform_data.handler(event, MagicMock())
+
+        assert result["statusCode"] == 400
+        body = json.loads(result["body"])
+        assert body["error"] == "Invalid statistics"
+        assert "NaN values detected" in body["message"]
 
 
 class TestHandlerTransformation:
