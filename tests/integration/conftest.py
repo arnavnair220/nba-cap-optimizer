@@ -238,14 +238,16 @@ def mock_nba_teams():
 
 @pytest.fixture
 def mock_salary_data():
-    """Fixture providing salary data matching ESPN format."""
+    """Fixture providing salary data matching ESPN format with realistic NBA salaries."""
+    # Generate realistic NBA salaries totaling ~$4.2B (within valid $3.5B-$7B range)
+    # Range from $1M to $20M across 400 players
     return {
         "fetch_timestamp": datetime.utcnow().isoformat(),
         "source": "espn",
         "salaries": [
             {
                 "player_name": f"Player {i}",
-                "annual_salary": 1000000 + (i * 100000),
+                "annual_salary": 1_000_000 + (i * 47_619),  # Linear scale 1M to 20M
                 "season": "2025-26",
                 "source": "espn",
             }
@@ -259,17 +261,25 @@ def mock_realistic_monthly_data():
     """
     Fixture providing realistic monthly data with star players.
     Useful for end-to-end tests with recognizable player names.
+    Includes enough players to meet salary validation thresholds ($3.5B-$7B).
     """
-    players = {
-        "players": [
-            {"id": 2544, "full_name": "LeBron James"},
-            {"id": 203076, "full_name": "Anthony Davis"},
-            {"id": 203999, "full_name": "Nikola Jokic"},
-            {"id": 1629029, "full_name": "Luka Doncic"},
-        ]
-    }
+    # Star players
+    star_players = [
+        {"id": 2544, "full_name": "LeBron James"},
+        {"id": 203076, "full_name": "Anthony Davis"},
+        {"id": 203999, "full_name": "Nikola Jokic"},
+        {"id": 1629029, "full_name": "Luka Doncic"},
+    ]
 
-    per_game_stats = [
+    # Add 396 mock players to meet validation requirements
+    mock_players = [
+        {"id": 1000000 + i, "full_name": f"Player {chr(65 + (i % 26))}{i}"} for i in range(396)
+    ]
+
+    players = {"players": star_players + mock_players}
+
+    # Star player stats
+    star_per_game = [
         create_basketball_reference_player_stats(
             "LeBron James", "SF", 40, "LAL", 50, 25.0, 7.5, 8.0
         ),
@@ -284,12 +294,28 @@ def mock_realistic_monthly_data():
         ),
     ]
 
-    advanced_stats = [
+    star_advanced = [
         create_basketball_reference_advanced_stats("LeBron James", 24.5, 4.0),
         create_basketball_reference_advanced_stats("Anthony Davis", 26.0, 5.0),
         create_basketball_reference_advanced_stats("Nikola Jokic", 31.0, 8.0),
         create_basketball_reference_advanced_stats("Luka Doncic", 28.0, 6.5),
     ]
+
+    # Mock player stats (uniform data)
+    mock_per_game = [
+        create_basketball_reference_player_stats(
+            f"Player {chr(65 + (i % 26))}{i}", "F", 25, "LAL", 50, 10.0, 5.0, 3.0
+        )
+        for i in range(396)
+    ]
+
+    mock_advanced = [
+        create_basketball_reference_advanced_stats(f"Player {chr(65 + (i % 26))}{i}", 15.0, 2.0)
+        for i in range(396)
+    ]
+
+    per_game_stats = star_per_game + mock_per_game
+    advanced_stats = star_advanced + mock_advanced
 
     stats = {
         "season": "2025-26",
@@ -301,35 +327,50 @@ def mock_realistic_monthly_data():
         "advanced_columns": list(advanced_stats[0].keys()),
     }
 
+    # Star player salaries
+    star_salaries = [
+        {
+            "player_name": "LeBron James",
+            "annual_salary": 48000000,
+            "season": "2025-26",
+            "source": "espn",
+        },
+        {
+            "player_name": "Anthony Davis",
+            "annual_salary": 55000000,
+            "season": "2025-26",
+            "source": "espn",
+        },
+        {
+            "player_name": "Nikola Jokic",
+            "annual_salary": 51000000,
+            "season": "2025-26",
+            "source": "espn",
+        },
+        {
+            "player_name": "Luka Doncic",
+            "annual_salary": 43000000,
+            "season": "2025-26",
+            "source": "espn",
+        },
+    ]
+
+    # Mock player salaries (all paid $10M each)
+    # 396 players * $10M + $197M (stars) = ~$4.16B (within $3.5B-$7B range)
+    mock_salaries = [
+        {
+            "player_name": f"Player {chr(65 + (i % 26))}{i}",
+            "annual_salary": 10_000_000,
+            "season": "2025-26",
+            "source": "espn",
+        }
+        for i in range(396)
+    ]
+
     salaries = {
         "fetch_timestamp": datetime.utcnow().isoformat(),
         "source": "espn",
-        "salaries": [
-            {
-                "player_name": "LeBron James",
-                "annual_salary": 48000000,
-                "season": "2025-26",
-                "source": "espn",
-            },
-            {
-                "player_name": "Anthony Davis",
-                "annual_salary": 55000000,
-                "season": "2025-26",
-                "source": "espn",
-            },
-            {
-                "player_name": "Nikola Jokic",
-                "annual_salary": 51000000,
-                "season": "2025-26",
-                "source": "espn",
-            },
-            {
-                "player_name": "Luka Doncic",
-                "annual_salary": 43000000,
-                "season": "2025-26",
-                "source": "espn",
-            },
-        ],
+        "salaries": star_salaries + mock_salaries,
     }
 
     teams = {

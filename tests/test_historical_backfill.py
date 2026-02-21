@@ -146,7 +146,7 @@ class TestHistoricalSeasonURLConstruction:
     @patch("src.etl.fetch_data.requests.get")
     @patch("src.etl.fetch_data.datetime")
     def test_espn_salaries_url_for_current_season(self, mock_datetime, mock_get, mock_sleep):
-        """Test that ESPN uses base URL (no /year/) for current/future seasons."""
+        """Test that ESPN uses year parameter even for current/future seasons."""
         # Mock current year as 2025
         mock_now = MagicMock()
         mock_now.year = 2025
@@ -172,13 +172,12 @@ class TestHistoricalSeasonURLConstruction:
 
         mock_get.side_effect = [mock_response, mock_response_empty]
 
-        # 2025-26 season (ending year 2026 > current year 2025)
+        # 2025-26 season (ending year 2026)
         fetch_data.fetch_espn_salaries("2025-26")
 
-        # Verify URL does NOT include /year/ for current season
+        # Verify URL includes /year/ parameter for consistency across all seasons
         first_call_url = mock_get.call_args_list[0][0][0]
-        assert "/year/" not in first_call_url
-        assert first_call_url == "https://www.espn.com/nba/salaries"
+        assert first_call_url == "https://www.espn.com/nba/salaries/_/year/2026"
 
     @patch("src.etl.fetch_data.time.sleep")
     @patch("src.etl.fetch_data.requests.get")
@@ -249,9 +248,8 @@ class TestHistoricalSeasonURLConstruction:
         # Page 1 should be base historical URL
         assert page1_url == "https://www.espn.com/nba/salaries/_/year/2023"
 
-        # Page 2 should include pagination and year
-        assert "/year/2023" in page2_url
-        assert "/_/page/2" in page2_url
+        # Page 2 should use format /year/YYYY/page/N (no underscore before page)
+        assert page2_url == "https://www.espn.com/nba/salaries/_/year/2023/page/2"
 
         # Should have fetched 2 players
         assert len(result) == 2

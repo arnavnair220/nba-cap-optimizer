@@ -309,10 +309,12 @@ class TestEndToEndDataFlow:
         mock_advanced_df = pd.DataFrame(advanced_stats)
         mock_read_html.side_effect = [[mock_pergame_df], [mock_advanced_df]]
 
+        # Generate realistic NBA salaries totaling ~$4.2B (within valid $3.5B-$7B range)
+        # Range from $1M to $20M across 400 players
         mock_fetch_salaries.return_value = [
             {
                 "player_name": f"Player {i}",
-                "annual_salary": 1000000 + i,
+                "annual_salary": 1_000_000 + (i * 47_619),  # Linear scale 1M to 20M
                 "season": "2025-26",
                 "source": "espn",
             }
@@ -635,7 +637,9 @@ class TestCompletePipelineFlow:
         mock_advanced_df = pd.DataFrame(advanced_stats)
         mock_read_html.side_effect = [[mock_pergame_df], [mock_advanced_df]]
 
-        mock_fetch_salaries.return_value = [
+        # Generate realistic salary data (need enough players to meet $3.5B-$7B validation)
+        # Include the 2 main test players plus additional mock players
+        base_salaries = [
             {
                 "player_name": "LeBron James",
                 "annual_salary": 48000000,
@@ -649,6 +653,17 @@ class TestCompletePipelineFlow:
                 "source": "espn",
             },
         ]
+        # Add more players to meet validation thresholds (~$4.2B total)
+        additional_salaries = [
+            {
+                "player_name": f"Player {i}",
+                "annual_salary": 1_000_000 + (i * 47_619),  # Linear scale 1M to 20M
+                "season": "2025-26",
+                "source": "espn",
+            }
+            for i in range(398)
+        ]
+        mock_fetch_salaries.return_value = base_salaries + additional_salaries
 
         # Simulate S3 storage
         s3_storage = {}
@@ -708,11 +723,23 @@ class TestCompletePipelineFlow:
         assert "enriched_player_stats" in transform_body["transformed"]
         assert "enriched_teams" in transform_body["transformed"]
 
-        # Verify enriched_salaries has player_id field
+        # Verify enriched_salaries has player_id field for matched players
         salary_key = [k for k in s3_storage.keys() if "enriched_salaries" in k][0]
         enriched_salaries = s3_storage[salary_key]
-        assert all(s.get("player_id") is not None for s in enriched_salaries["salaries"])
-        assert enriched_salaries["statistics"]["match_rate"] == 100.0
+        # Check that LeBron and AD (the only 2 players in the mock) have player_ids
+        lebron_sal = next(
+            s for s in enriched_salaries["salaries"] if s["player_name"] == "LeBron James"
+        )
+        ad_sal = next(
+            s for s in enriched_salaries["salaries"] if s["player_name"] == "Anthony Davis"
+        )
+        assert lebron_sal.get("player_id") is not None
+        assert ad_sal.get("player_id") is not None
+        # Verify that at least the 2 known players were matched (rest are mock players without IDs)
+        matched_count = sum(
+            1 for s in enriched_salaries["salaries"] if s.get("player_id") is not None
+        )
+        assert matched_count == 2
 
         # Verify enriched_stats merges per-game + advanced
         stats_key = [k for k in s3_storage.keys() if "enriched_player_stats" in k][0]
