@@ -59,6 +59,25 @@ variable "lambda_memory_size" {
   default     = 512
 }
 
+# Bastion variables
+variable "bastion_instance_type" {
+  description = "EC2 instance type for bastion host"
+  type        = string
+  default     = "t3.micro"
+}
+
+variable "bastion_key_name" {
+  description = "EC2 key pair name for bastion host SSH access (optional - leave empty to use SSM only)"
+  type        = string
+  default     = ""
+}
+
+variable "bastion_allowed_cidr" {
+  description = "CIDR block allowed to SSH into bastion (e.g., your IP as x.x.x.x/32). Leave empty to disable SSH and use SSM only (recommended)"
+  type        = string
+  default     = ""
+}
+
 # Tags
 variable "tags" {
   description = "Additional tags for resources"

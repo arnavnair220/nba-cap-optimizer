@@ -81,6 +81,55 @@ resource "aws_subnet" "private_b" {
   )
 }
 
+# Public subnet for bastion host
+resource "aws_subnet" "public" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = "10.0.10.0/24"
+  availability_zone       = "${var.aws_region}a"
+  map_public_ip_on_launch = true
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "${local.name_prefix}-public"
+    }
+  )
+}
+
+# Internet Gateway
+resource "aws_internet_gateway" "main" {
+  vpc_id = aws_vpc.main.id
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "${local.name_prefix}-igw"
+    }
+  )
+}
+
+# Public route table
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.main.id
+  }
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "${local.name_prefix}-public-rt"
+    }
+  )
+}
+
+resource "aws_route_table_association" "public" {
+  subnet_id      = aws_subnet.public.id
+  route_table_id = aws_route_table.public.id
+}
+
 resource "aws_db_subnet_group" "main" {
   name       = "${local.name_prefix}-db-subnet"
   subnet_ids = [aws_subnet.private_a.id, aws_subnet.private_b.id]
@@ -117,6 +166,17 @@ resource "aws_security_group" "rds" {
   tags = local.common_tags
 }
 
+# Allow RDS access from bastion
+resource "aws_security_group_rule" "rds_from_bastion" {
+  type                     = "ingress"
+  from_port                = 5432
+  to_port                  = 5432
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.bastion.id
+  security_group_id        = aws_security_group.rds.id
+  description              = "PostgreSQL from bastion host"
+}
+
 resource "aws_security_group" "lambda" {
   name        = "${local.name_prefix}-lambda-sg"
   description = "Security group for Lambda functions"
@@ -131,6 +191,36 @@ resource "aws_security_group" "lambda" {
   }
 
   tags = local.common_tags
+}
+
+# Bastion host security group
+resource "aws_security_group" "bastion" {
+  name        = "${local.name_prefix}-bastion-sg"
+  description = "Security group for bastion host"
+  vpc_id      = aws_vpc.main.id
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow all outbound"
+  }
+
+  tags = local.common_tags
+}
+
+# Optional SSH ingress rule (only if bastion_allowed_cidr is provided)
+resource "aws_security_group_rule" "bastion_ssh" {
+  count = var.bastion_allowed_cidr != "" ? 1 : 0
+
+  type              = "ingress"
+  from_port         = 22
+  to_port           = 22
+  protocol          = "tcp"
+  cidr_blocks       = [var.bastion_allowed_cidr]
+  description       = "SSH from allowed IP"
+  security_group_id = aws_security_group.bastion.id
 }
 
 # Route tables for private subnets (needed for VPC endpoints)
@@ -243,6 +333,84 @@ resource "aws_db_instance" "main" {
   # enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]
 
   tags = local.common_tags
+}
+
+# ============================================================================
+# BASTION HOST
+# ============================================================================
+
+# Get latest Amazon Linux 2023 AMI
+data "aws_ami" "amazon_linux_2023" {
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["al2023-ami-*-x86_64"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
+# IAM role for bastion host (for SSM access)
+resource "aws_iam_role" "bastion" {
+  name = "${local.name_prefix}-bastion-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = local.common_tags
+}
+
+# Attach SSM managed policy to bastion role
+resource "aws_iam_role_policy_attachment" "bastion_ssm" {
+  role       = aws_iam_role.bastion.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+# IAM instance profile for bastion
+resource "aws_iam_instance_profile" "bastion" {
+  name = "${local.name_prefix}-bastion-profile"
+  role = aws_iam_role.bastion.name
+
+  tags = local.common_tags
+}
+
+# Bastion host EC2 instance
+resource "aws_instance" "bastion" {
+  ami                    = data.aws_ami.amazon_linux_2023.id
+  instance_type          = var.bastion_instance_type
+  subnet_id              = aws_subnet.public.id
+  iam_instance_profile   = aws_iam_instance_profile.bastion.name
+
+  vpc_security_group_ids = [aws_security_group.bastion.id]
+  key_name               = var.bastion_key_name != "" ? var.bastion_key_name : null
+
+  user_data = <<-EOF
+              #!/bin/bash
+              yum update -y
+              yum install -y postgresql15
+              EOF
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "${local.name_prefix}-bastion"
+    }
+  )
 }
 
 # ============================================================================
