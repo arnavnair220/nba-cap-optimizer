@@ -757,13 +757,27 @@ def validate_salary_data(data: Dict[str, Any]) -> Dict[str, Any]:
 
             # Check for unrealistic salaries
             if results["statistics"]["max_salary"] > 80_000_000:  # $80M
+                high_salary_players = [
+                    s.get("player_name", "Unknown")
+                    for s in salaries
+                    if s.get("annual_salary") == results["statistics"]["max_salary"]
+                ]
+                player_names = ", ".join(high_salary_players)
                 results["warnings"].append(
-                    f"Unusually high salary found: ${results['statistics']['max_salary']:,.0f}"
+                    f"Unusually high salary found: ${results['statistics']['max_salary']:,.0f} "
+                    f"({player_names})"
                 )
 
             if results["statistics"]["min_salary"] < 500_000:  # $500K
+                low_salary_players = [
+                    s.get("player_name", "Unknown")
+                    for s in salaries
+                    if s.get("annual_salary") == results["statistics"]["min_salary"]
+                ]
+                player_names = ", ".join(low_salary_players)
                 results["warnings"].append(
-                    f"Below minimum salary found: ${results['statistics']['min_salary']:,.0f}"
+                    f"Below minimum salary found: ${results['statistics']['min_salary']:,.0f} "
+                    f"({player_names})"
                 )
 
             # League-wide salary sanity checks
@@ -808,17 +822,25 @@ def validate_salary_data(data: Dict[str, Any]) -> Dict[str, Any]:
 
     # Check for duplicate salary entries (same player name + season)
     if salaries:
+        from collections import Counter
+
         salary_keys = [
             (s.get("player_name"), s.get("season"))
             for s in salaries
             if s.get("player_name") is not None and s.get("season") is not None
         ]
-        unique_keys = set(salary_keys)
-        if len(salary_keys) != len(unique_keys):
-            duplicates = len(salary_keys) - len(unique_keys)
+        key_counts = Counter(salary_keys)
+        duplicates = {key: count for key, count in key_counts.items() if count > 1}
+
+        if duplicates:
             results["valid"] = False
+            duplicate_details = [
+                f"{player} ({season}): {count} entries"
+                for (player, season), count in duplicates.items()
+            ]
             results["errors"].append(
-                f"Found {duplicates} duplicate salary entries for same player/season"
+                f"Found {len(duplicates)} duplicate salary entries for same player/season: "
+                f"{', '.join(duplicate_details)}"
             )
 
         # Validate contract years (placeholder for future data sources)
