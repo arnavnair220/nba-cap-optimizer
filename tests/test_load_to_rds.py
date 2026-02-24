@@ -68,34 +68,11 @@ class TestUpsertFunctions:
     """Test individual upsert functions."""
 
     @patch("src.etl.load_to_rds.execute_batch")
-    def test_upsert_players(self, mock_execute_batch):
-        """Test upserting players."""
-        mock_cursor = Mock()
-        players = [
-            {"id": 2544, "full_name": "LeBron James"},
-            {"id": 203999, "full_name": "Nikola Jokic"},
-        ]
-
-        count = load_to_rds.upsert_players(mock_cursor, players)
-
-        assert count == 2
-        mock_execute_batch.assert_called_once()
-
-    def test_upsert_players_empty(self):
-        """Test upserting empty players list."""
-        mock_cursor = Mock()
-
-        count = load_to_rds.upsert_players(mock_cursor, [])
-
-        assert count == 0
-
-    @patch("src.etl.load_to_rds.execute_batch")
     def test_upsert_salaries(self, mock_execute_batch):
         """Test upserting salaries."""
         mock_cursor = Mock()
         salaries = [
             {
-                "player_id": 2544,
                 "player_name": "LeBron James",
                 "annual_salary": 47607350,
                 "season": "2025-26",
@@ -114,7 +91,6 @@ class TestUpsertFunctions:
         mock_cursor = Mock()
         stats = [
             {
-                "player_id": 2544,
                 "player_name": "LeBron James",
                 "team_abbreviation": "LAL",
                 "age": 39,
@@ -217,13 +193,10 @@ class TestHandlerDataLoad:
 
         # Mock S3 data loading
         def mock_load_impl(s3_key):
-            if "players" in s3_key:
-                return {"players": [{"id": 2544, "full_name": "LeBron James"}]}
-            elif "salaries" in s3_key:
+            if "salaries" in s3_key:
                 return {
                     "salaries": [
                         {
-                            "player_id": 2544,
                             "player_name": "LeBron James",
                             "annual_salary": 47607350,
                             "season": "2025-26",
@@ -235,7 +208,6 @@ class TestHandlerDataLoad:
                 return {
                     "player_stats": [
                         {
-                            "player_id": 2544,
                             "player_name": "LeBron James",
                             "team_abbreviation": "LAL",
                             "points": 25.8,
@@ -269,7 +241,6 @@ class TestHandlerDataLoad:
         # Verify success
         assert result["statusCode"] == 200
         assert result["load_successful"] is True
-        assert "players" in result["records_loaded"]
         assert "salaries" in result["records_loaded"]
         assert "player_stats" in result["records_loaded"]
         assert "teams" in result["records_loaded"]

@@ -242,7 +242,6 @@ class TestEndToEndDataFlow:
 
     @patch("src.etl.fetch_data.fetch_espn_salaries")
     @patch("src.etl.fetch_data.teams.get_teams")
-    @patch("src.etl.fetch_data.players.get_active_players")
     @patch("src.etl.fetch_data.pd.read_html")
     @patch("src.etl.fetch_data.time.sleep")
     @patch("src.etl.fetch_data.save_to_s3")
@@ -259,26 +258,14 @@ class TestEndToEndDataFlow:
         mock_save_s3,
         mock_sleep,
         mock_read_html,
-        mock_get_players,
         mock_get_teams,
         mock_fetch_salaries,
     ):
         """
-        Test monthly pipeline with all 4 data types: players, stats, teams, salaries.
+        Test monthly pipeline with 3 data types: stats, teams, salaries.
         Validates that all data types flow correctly from fetch to validate.
         """
         # Mock all data sources
-        mock_get_players.return_value = [
-            {
-                "id": i,
-                "full_name": f"Player {i}",
-                "first_name": "P",
-                "last_name": f"{i}",
-                "is_active": True,
-            }
-            for i in range(400)
-        ]
-
         mock_get_teams.return_value = [
             {
                 "id": 1610612740 + i,
@@ -333,8 +320,7 @@ class TestEndToEndDataFlow:
 
         assert fetch_result["statusCode"] == 200
         fetch_body = json.loads(fetch_result["body"])
-        # Verify all 4 data types were fetched
-        assert "active_players" in fetch_body["fetched"]
+        # Verify all 3 data types were fetched
         assert "player_stats" in fetch_body["fetched"]
         assert "teams" in fetch_body["fetched"]
         assert "salaries" in fetch_body["fetched"]
@@ -565,7 +551,6 @@ class TestCompletePipelineFlow:
 
     @patch("src.etl.fetch_data.fetch_espn_salaries")
     @patch("src.etl.fetch_data.teams.get_teams")
-    @patch("src.etl.fetch_data.players.get_active_players")
     @patch("src.etl.fetch_data.pd.read_html")
     @patch("src.etl.fetch_data.time.sleep")
     @patch("src.etl.fetch_data.save_to_s3")
@@ -588,23 +573,17 @@ class TestCompletePipelineFlow:
         mock_fetch_save,
         mock_sleep,
         mock_read_html,
-        mock_get_players,
         mock_get_teams,
         mock_fetch_salaries,
     ):
         """
         Test complete monthly pipeline end-to-end:
-        Fetch all 4 data types → Validate all → Transform all.
+        Fetch all 3 data types → Validate all → Transform all.
         Verify all 3 enriched outputs: salaries, stats, teams.
         """
         import pandas as pd
 
         # Mock all data sources for fetch
-        mock_get_players.return_value = [
-            {"id": 2544, "full_name": "LeBron James"},
-            {"id": 203076, "full_name": "Anthony Davis"},
-        ]
-
         mock_get_teams.return_value = [
             {
                 "id": 1610612747,
@@ -689,7 +668,6 @@ class TestCompletePipelineFlow:
 
         assert fetch_result["statusCode"] == 200
         fetch_body = json.loads(fetch_result["body"])
-        assert "active_players" in fetch_body["fetched"]
         assert "player_stats" in fetch_body["fetched"]
         assert "teams" in fetch_body["fetched"]
         assert "salaries" in fetch_body["fetched"]
@@ -723,28 +701,25 @@ class TestCompletePipelineFlow:
         assert "enriched_player_stats" in transform_body["transformed"]
         assert "enriched_teams" in transform_body["transformed"]
 
-        # Verify enriched_salaries has player_id field for matched players
+        # Verify enriched_salaries has salary data
         salary_key = [k for k in s3_storage.keys() if "enriched_salaries" in k][0]
         enriched_salaries = s3_storage[salary_key]
-        # Check that LeBron and AD (the only 2 players in the mock) have player_ids
+        # Check that LeBron and AD salaries are present
         lebron_sal = next(
             s for s in enriched_salaries["salaries"] if s["player_name"] == "LeBron James"
         )
         ad_sal = next(
             s for s in enriched_salaries["salaries"] if s["player_name"] == "Anthony Davis"
         )
-        assert lebron_sal.get("player_id") is not None
-        assert ad_sal.get("player_id") is not None
-        # Verify that at least the 2 known players were matched (rest are mock players without IDs)
-        matched_count = sum(
-            1 for s in enriched_salaries["salaries"] if s.get("player_id") is not None
-        )
-        assert matched_count == 2
+        assert lebron_sal["annual_salary"] == 48000000
+        assert ad_sal["annual_salary"] == 55000000
+        # Verify all salaries present (2 main + 398 mock = 400 total)
+        assert len(enriched_salaries["salaries"]) == 400
 
-        # Verify enriched_stats merges per-game + advanced
+        # Verify enriched_stats merges per-game + advanced (only 2 players have stats)
         stats_key = [k for k in s3_storage.keys() if "enriched_player_stats" in k][0]
         enriched_stats = s3_storage[stats_key]
-        assert len(enriched_stats["player_stats"]) == 2
+        assert len(enriched_stats["player_stats"]) == 2  # Only LeBron and AD have stats
         lebron = enriched_stats["player_stats"][0]
         assert lebron["points"] == 25.0
         assert lebron["per"] == 24.5

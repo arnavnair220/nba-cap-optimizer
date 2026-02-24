@@ -52,7 +52,7 @@ class TestEmptyDataValidation:
         assert result["validation_passed"] is False
         body = json.loads(result["body"])
         assert body["valid"] is False
-        assert body["error_count"] == 4  # players, stats, teams, salaries
+        assert body["error_count"] == 3  # stats, teams, salaries
 
     @patch("src.etl.validate_data.ENVIRONMENT", "test")
     @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
