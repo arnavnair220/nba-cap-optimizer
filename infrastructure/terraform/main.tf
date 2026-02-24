@@ -401,8 +401,10 @@ resource "aws_instance" "bastion" {
 
   user_data = <<-EOF
               #!/bin/bash
-              yum update -y
-              yum install -y postgresql15
+              yum install -y postgresql15 amazon-ssm-agent
+              systemctl enable amazon-ssm-agent
+              systemctl start amazon-ssm-agent
+              nohup yum update -y &
               EOF
 
   tags = merge(
