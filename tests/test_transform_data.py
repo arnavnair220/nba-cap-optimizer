@@ -126,6 +126,7 @@ class TestEnrichPlayerStats:
                     "PTS": 25.8,
                     "TRB": 7.7,
                     "AST": 8.2,
+                    "eFG%": 0.578,
                 }
             ],
             "advanced_stats": [
@@ -153,10 +154,14 @@ class TestEnrichPlayerStats:
 
         # Check multi-team fields
         assert player["is_multi_team"] is False
+        assert player["team_abbreviation"] == "LAL"
         assert player["teams_played_for"] == ["LAL"]
         assert len(player["stats_by_team"]) == 1
         assert player["stats_by_team"][0]["team_abbreviation"] == "LAL"
         assert player["stats_by_team"][0]["points"] == 25.8
+
+        # Check efg_pct from per-game stats
+        assert player["efg_pct"] == 0.578
 
         # Check advanced stats
         assert player["per"] == 24.5
@@ -179,8 +184,11 @@ class TestEnrichPlayerStats:
         result = transform_data.enrich_player_stats(stats_data)
 
         assert len(result) == 3
+        assert result[0]["team_abbreviation"] == "PHX"  # PHO -> PHX
         assert result[0]["teams_played_for"] == ["PHX"]  # PHO -> PHX
+        assert result[1]["team_abbreviation"] == "BKN"  # BRK -> BKN
         assert result[1]["teams_played_for"] == ["BKN"]  # BRK -> BKN
+        assert result[2]["team_abbreviation"] == "CHA"  # CHO -> CHA
         assert result[2]["teams_played_for"] == ["CHA"]  # CHO -> CHA
 
     def test_enrichment_handles_multi_team_players(self):
@@ -230,6 +238,7 @@ class TestEnrichPlayerStats:
 
         # Check multi-team metadata
         assert player["is_multi_team"] is True
+        assert player["team_abbreviation"] == "2TM"
         assert player["teams_played_for"] == ["CHI", "DET"]
 
         # Check main stats use aggregate row (2TM)
@@ -258,6 +267,56 @@ class TestEnrichPlayerStats:
         result = transform_data.enrich_player_stats(stats_data)
 
         assert result == []
+
+    def test_enrichment_normalizes_unicode_player_names(self):
+        """Test that Unicode player names are normalized to ASCII during enrichment."""
+        stats_data = {
+            "season": "2025-26",
+            "source": "basketball_reference",
+            "per_game_stats": [
+                {
+                    "Player": "Nikola Jokić",  # Unicode input
+                    "Pos": "C",
+                    "Age": 29,
+                    "Team": "DEN",
+                    "G": 60,
+                    "PTS": 26.0,
+                    "TRB": 12.0,
+                    "AST": 9.0,
+                },
+                {
+                    "Player": "Luka Dončić",  # Unicode input
+                    "Pos": "PG",
+                    "Age": 25,
+                    "Team": "DAL",
+                    "G": 58,
+                    "PTS": 29.0,
+                    "TRB": 9.0,
+                    "AST": 8.5,
+                },
+            ],
+            "advanced_stats": [
+                {"Player": "Nikola Jokić", "PER": 31.0, "VORP": 8.0},
+                {"Player": "Luka Dončić", "PER": 28.0, "VORP": 6.5},
+            ],
+        }
+
+        result = transform_data.enrich_player_stats(stats_data)
+
+        assert len(result) == 2
+
+        # Verify player names are normalized to ASCII
+        jokic = next(p for p in result if "Jokic" in p["player_name"])
+        doncic = next(p for p in result if "Doncic" in p["player_name"])
+
+        assert jokic["player_name"] == "Nikola Jokic"  # Normalized from Jokić
+        assert doncic["player_name"] == "Luka Doncic"  # Normalized from Dončić
+
+        # Verify advanced stats still match after normalization
+        assert jokic["per"] == 31.0
+        assert jokic["vorp"] == 8.0
+        assert doncic["per"] == 28.0
+        assert doncic["vorp"] == 6.5
 
 
 class TestEnrichTeamData:
@@ -359,6 +418,76 @@ class TestEnrichTeamData:
         assert result[0]["total_payroll"] == 83000000
         assert result[0]["roster_count"] == 2
         assert result[0]["roster_with_salary"] == 2
+
+    def test_enrichment_matches_unicode_to_ascii_names(self):
+        """
+        Test that players with Unicode names in stats are normalized to ASCII.
+        This verifies the normalize_to_ascii function is being used correctly.
+        """
+        teams = [
+            {"id": 1, "abbreviation": "DEN", "full_name": "Denver Nuggets"},
+            {"id": 2, "abbreviation": "DAL", "full_name": "Dallas Mavericks"},
+        ]
+
+        # Salary data uses ASCII names (like ESPN provides)
+        salaries = [
+            {"player_name": "Nikola Jokic", "annual_salary": 51000000},
+            {"player_name": "Luka Doncic", "annual_salary": 43000000},
+        ]
+
+        # Stats data already normalized to ASCII (normalized during enrichment)
+        stats = [
+            {
+                "player_name": "Nikola Jokic",  # Normalized to ASCII
+                "is_multi_team": False,
+                "teams_played_for": ["DEN"],
+                "points": 26.0,
+                "rebounds": 12.0,
+                "assists": 9.0,
+                "stats_by_team": [
+                    {
+                        "team_abbreviation": "DEN",
+                        "points": 26.0,
+                        "rebounds": 12.0,
+                        "assists": 9.0,
+                    }
+                ],
+            },
+            {
+                "player_name": "Luka Doncic",  # Normalized to ASCII
+                "is_multi_team": False,
+                "teams_played_for": ["DAL"],
+                "points": 29.0,
+                "rebounds": 9.0,
+                "assists": 8.5,
+                "stats_by_team": [
+                    {
+                        "team_abbreviation": "DAL",
+                        "points": 29.0,
+                        "rebounds": 9.0,
+                        "assists": 8.5,
+                    }
+                ],
+            },
+        ]
+
+        result = transform_data.enrich_team_data(teams, salaries, stats)
+
+        # Verify DEN (Nuggets) has correct salary and roster
+        den_team = next(t for t in result if t["abbreviation"] == "DEN")
+        assert den_team["total_payroll"] == 51000000
+        assert den_team["roster_count"] == 1
+        assert den_team["roster_with_salary"] == 1
+        assert den_team["top_paid_player"] == "Nikola Jokic"  # ASCII in output
+        assert den_team["top_paid_salary"] == 51000000
+
+        # Verify DAL (Mavericks) has correct salary and roster
+        dal_team = next(t for t in result if t["abbreviation"] == "DAL")
+        assert dal_team["total_payroll"] == 43000000
+        assert dal_team["roster_count"] == 1
+        assert dal_team["roster_with_salary"] == 1
+        assert dal_team["top_paid_player"] == "Luka Doncic"  # ASCII in output
+        assert dal_team["top_paid_salary"] == 43000000
 
 
 class TestHandlerValidationCheck:
