@@ -198,7 +198,7 @@ def enrich_player_stats(stats_data: Dict[str, Any]) -> List[Dict[str, Any]]:
                 continue
             player_name = adv_stat.get("Player", "")
             if player_name:
-                normalized_name = " ".join(player_name.lower().split())
+                normalized_name = " ".join(normalize_to_ascii(player_name).lower().split())
                 advanced_lookup[normalized_name] = adv_stat
 
         # Group per_game_stats by player name to handle multi-team players
@@ -262,11 +262,25 @@ def enrich_player_stats(stats_data: Dict[str, Any]) -> List[Dict[str, Any]]:
                 team_rows = [main_row]  # Include single row in stats_by_team
 
             # Build main player stat record from aggregate/single row
+            # Determine team_abbreviation for main record
+            # For multi-team: use indicator like "2TM", "3TM" (from Basketball Reference)
+            # For single-team: use actual team abbreviation
+            main_team = main_row.get("Team", "")
+            if main_team in MULTI_TEAM_INDICATORS:
+                # Multi-team player: keep the indicator (2TM, 3TM, etc.)
+                team_abbreviation = main_team
+            elif main_team:
+                # Single-team player: normalize the team abbreviation
+                team_abbreviation = normalize_team_abbreviation(main_team)
+            else:
+                team_abbreviation = None
+
             player_stat = {
                 # Basic info
-                "player_name": player_name,
+                "player_name": normalize_to_ascii(player_name),
                 "age": main_row.get("Age"),
                 "position": main_row.get("Pos"),
+                "team_abbreviation": team_abbreviation,
                 # Multi-team metadata
                 "is_multi_team": is_multi_team,
                 "teams_played_for": teams_played_for,
@@ -285,6 +299,7 @@ def enrich_player_stats(stats_data: Dict[str, Any]) -> List[Dict[str, Any]]:
                 "fg2m": main_row.get("2P"),
                 "fg2a": main_row.get("2PA"),
                 "fg2_pct": main_row.get("2P%"),
+                "efg_pct": main_row.get("eFG%"),
                 "ftm": main_row.get("FT"),
                 "fta": main_row.get("FTA"),
                 "ft_pct": main_row.get("FT%"),
@@ -314,14 +329,13 @@ def enrich_player_stats(stats_data: Dict[str, Any]) -> List[Dict[str, Any]]:
             player_stat["stats_by_team"] = stats_by_team
 
             # Match with advanced stats (use aggregate row's advanced stats)
-            normalized_name = " ".join(player_name.lower().split())
+            normalized_name = " ".join(normalize_to_ascii(player_name).lower().split())
             if normalized_name in advanced_lookup:
                 adv_stat = advanced_lookup[normalized_name]
 
                 # Add all advanced stats from Basketball Reference
                 player_stat["per"] = adv_stat.get("PER")
                 player_stat["ts_pct"] = adv_stat.get("TS%")
-                player_stat["efg_pct"] = adv_stat.get("eFG%")
                 player_stat["usg_pct"] = adv_stat.get("USG%")
                 player_stat["ws"] = adv_stat.get("WS")
                 player_stat["ws_per_48"] = adv_stat.get("WS/48")
@@ -342,7 +356,6 @@ def enrich_player_stats(stats_data: Dict[str, Any]) -> List[Dict[str, Any]]:
                 # Set to None if no advanced stats match
                 player_stat["per"] = None
                 player_stat["ts_pct"] = None
-                player_stat["efg_pct"] = None
                 player_stat["usg_pct"] = None
                 player_stat["ws"] = None
                 player_stat["ws_per_48"] = None
@@ -398,7 +411,7 @@ def enrich_team_data(
     for sal in enriched_salaries:
         player_name = sal.get("player_name")
         if player_name:
-            normalized_name = " ".join(player_name.lower().split())
+            normalized_name = " ".join(normalize_to_ascii(player_name).lower().split())
             salary_by_player[normalized_name] = sal["annual_salary"]
 
     enriched_teams = []
@@ -415,7 +428,7 @@ def enrich_team_data(
         team_salaries = []
         for player in team_players:
             player_name = player.get("player_name", "")
-            normalized_name = " ".join(player_name.lower().split())
+            normalized_name = " ".join(normalize_to_ascii(player_name).lower().split())
             if normalized_name in salary_by_player:
                 team_salaries.append(salary_by_player[normalized_name])
 
@@ -449,7 +462,7 @@ def enrich_team_data(
             # Find player name with max salary
             for player in team_players:
                 player_name = player.get("player_name", "")
-                normalized_name = " ".join(player_name.lower().split())
+                normalized_name = " ".join(normalize_to_ascii(player_name).lower().split())
                 if salary_by_player.get(normalized_name) == max_salary:
                     enriched_team["top_paid_player"] = player_name
                     enriched_team["top_paid_salary"] = max_salary
@@ -564,7 +577,15 @@ def handler(event, context):
         enriched_salaries = []
         if salary_data and salary_data.get("salaries"):
             logger.info("Processing salary data...")
-            enriched_salaries = salary_data["salaries"]
+            # Normalize player names in salary data
+            enriched_salaries = []
+            for salary in salary_data["salaries"]:
+                normalized_salary = salary.copy()
+                if "player_name" in normalized_salary:
+                    normalized_salary["player_name"] = normalize_to_ascii(
+                        normalized_salary["player_name"]
+                    )
+                enriched_salaries.append(normalized_salary)
 
             # Calculate salary statistics
             total_count = len(enriched_salaries)
