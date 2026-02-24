@@ -391,10 +391,11 @@ resource "aws_iam_instance_profile" "bastion" {
 
 # Bastion host EC2 instance
 resource "aws_instance" "bastion" {
-  ami                    = data.aws_ami.amazon_linux_2023.id
-  instance_type          = var.bastion_instance_type
-  subnet_id              = aws_subnet.public.id
-  iam_instance_profile   = aws_iam_instance_profile.bastion.name
+  ami                       = data.aws_ami.amazon_linux_2023.id
+  instance_type             = var.bastion_instance_type
+  subnet_id                 = aws_subnet.public.id
+  iam_instance_profile      = aws_iam_instance_profile.bastion.name
+  user_data_replace_on_change = true
 
   vpc_security_group_ids = [aws_security_group.bastion.id]
   key_name               = var.bastion_key_name != "" ? var.bastion_key_name : null
