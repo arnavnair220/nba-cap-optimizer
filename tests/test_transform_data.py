@@ -636,3 +636,257 @@ class TestHandlerTransformation:
         assert "enriched_salaries" in body["transformed"]
         assert "enriched_player_stats" in body["transformed"]
         assert "enriched_teams" in body["transformed"]
+
+
+class TestNormalizeSeasonFormat:
+    """Test season format normalization."""
+
+    def test_normalize_season_format_converts_short_to_long(self):
+        """Test converting 2025-26 to 2025-2026."""
+        result = transform_data._normalize_season_format("2025-26")
+        assert result == "2025-2026"
+
+    def test_normalize_season_format_handles_already_normalized(self):
+        """Test that already normalized season is unchanged."""
+        result = transform_data._normalize_season_format("2025-2026")
+        assert result == "2025-2026"
+
+    def test_normalize_season_format_handles_no_dash(self):
+        """Test handling of season without dash."""
+        result = transform_data._normalize_season_format("2025")
+        assert result == "2025"
+
+    def test_normalize_season_format_handles_different_years(self):
+        """Test various year formats."""
+        assert transform_data._normalize_season_format("2024-25") == "2024-2025"
+        assert transform_data._normalize_season_format("2023-24") == "2023-2024"
+        assert transform_data._normalize_season_format("2026-27") == "2026-2027"
+
+
+class TestTransformSalaryCapHistory:
+    """Test transformation of salary cap history data from RealGM."""
+
+    def test_transform_salary_cap_history_success(self):
+        """Test successful transformation of salary cap data."""
+        cap_data = {
+            "source": "realgm",
+            "salary_cap_history": [
+                {
+                    "Season": "2025-2026",
+                    "Salary Cap": "$154,647,000",
+                    "Luxury Tax": "$187,895,000",
+                    "1st Apron": "$178,655,000",
+                    "2nd Apron": "$189,495,000",
+                    "BAE": "$5,168,000",
+                    "Non-Taxpayer MLE": "$13,040,000",
+                    "Taxpayer MLE": "$5,685,000",
+                    "Team Room MLE": "$8,781,000",
+                },
+                {
+                    "Season": "2024-2025",
+                    "Salary Cap": "$140,588,000",
+                    "Luxury Tax": "$170,814,000",
+                    "1st Apron": "$172,346,000",
+                    "2nd Apron": "$182,794,000",
+                    "BAE": "$4,700,000",
+                    "Non-Taxpayer MLE": "$12,405,000",
+                    "Taxpayer MLE": "$5,183,000",
+                    "Team Room MLE": "$7,981,000",
+                },
+            ],
+        }
+
+        result = transform_data.transform_salary_cap_history(cap_data)
+
+        assert len(result) == 2
+        assert result[0]["season"] == "2025-2026"
+        assert result[0]["salary_cap"] == 154647000
+        assert result[0]["luxury_tax"] == 187895000
+        assert result[0]["first_apron"] == 178655000
+        assert result[0]["second_apron"] == 189495000
+        assert result[0]["bae"] == 5168000
+        assert result[0]["non_taxpayer_mle"] == 13040000
+        assert result[0]["taxpayer_mle"] == 5685000
+        assert result[0]["team_room_mle"] == 8781000
+
+    def test_transform_salary_cap_history_handles_empty_values(self):
+        """Test handling of None and empty values."""
+        cap_data = {
+            "salary_cap_history": [
+                {
+                    "Season": "2025-2026",
+                    "Salary Cap": "$154,647,000",
+                    "Luxury Tax": None,
+                    "1st Apron": "",
+                    "2nd Apron": "$189,495,000",
+                }
+            ]
+        }
+
+        result = transform_data.transform_salary_cap_history(cap_data)
+
+        assert len(result) == 1
+        assert result[0]["salary_cap"] == 154647000
+        assert result[0]["luxury_tax"] is None
+        assert result[0]["first_apron"] is None
+        assert result[0]["second_apron"] == 189495000
+
+    def test_transform_salary_cap_history_handles_empty_data(self):
+        """Test handling when no salary cap history is provided."""
+        cap_data = {"salary_cap_history": []}
+
+        result = transform_data.transform_salary_cap_history(cap_data)
+
+        assert result == []
+
+    def test_transform_salary_cap_history_skips_invalid_records(self):
+        """Test that records without a season are skipped."""
+        cap_data = {
+            "salary_cap_history": [
+                {"Season": "2025-2026", "Salary Cap": "$154,647,000"},
+                {"Salary Cap": "$140,588,000"},  # Missing Season
+                {"Season": "2023-2024", "Salary Cap": "$136,021,000"},
+            ]
+        }
+
+        result = transform_data.transform_salary_cap_history(cap_data)
+
+        assert len(result) == 2
+        assert result[0]["season"] == "2025-2026"
+        assert result[1]["season"] == "2023-2024"
+
+    def test_transform_salary_cap_history_filters_by_season(self):
+        """Test filtering by specific season."""
+        cap_data = {
+            "salary_cap_history": [
+                {"Season": "2025-2026", "Salary Cap": "$154,647,000"},
+                {"Season": "2024-2025", "Salary Cap": "$140,588,000"},
+                {"Season": "2023-2024", "Salary Cap": "$136,021,000"},
+            ]
+        }
+
+        # Filter for 2025-26 (should match 2025-2026 in data)
+        result = transform_data.transform_salary_cap_history(cap_data, season="2025-26")
+
+        assert len(result) == 1
+        assert result[0]["season"] == "2025-2026"
+        assert result[0]["salary_cap"] == 154647000
+
+    def test_transform_salary_cap_history_no_match_returns_empty(self):
+        """Test that filtering with no match returns empty list."""
+        cap_data = {
+            "salary_cap_history": [
+                {"Season": "2025-2026", "Salary Cap": "$154,647,000"},
+                {"Season": "2024-2025", "Salary Cap": "$140,588,000"},
+            ]
+        }
+
+        result = transform_data.transform_salary_cap_history(cap_data, season="2022-23")
+
+        assert result == []
+
+
+class TestTransformContractLimits:
+    """Test transformation of contract limits data from RealGM."""
+
+    def test_transform_contract_limits_success(self):
+        """Test successful transformation of contract limits."""
+        cap_data = {
+            "contract_limits": [
+                {
+                    "Season": "2025-2026",
+                    "0-6 YOS Max": "$38,661,750",
+                    "7-9 YOS Max": "$46,394,100",
+                    "10+ YOS Max": "$54,126,450",
+                    "0 YOS Min": "$1,157,153",
+                    "1 YOS Min": "$1,862,265",
+                    "2 YOS Min": "$2,296,274",
+                    "10+ YOS Min": "$3,634,153",
+                }
+            ]
+        }
+
+        result = transform_data.transform_contract_limits(cap_data)
+
+        assert len(result) == 1
+        assert result[0]["season"] == "2025-2026"
+        assert result[0]["max_0_6_yos"] == 38661750
+        assert result[0]["max_7_9_yos"] == 46394100
+        assert result[0]["max_10_plus_yos"] == 54126450
+        assert result[0]["min_0_yos"] == 1157153
+        assert result[0]["min_1_yos"] == 1862265
+        assert result[0]["min_2_yos"] == 2296274
+        assert result[0]["min_10_plus_yos"] == 3634153
+
+    def test_transform_contract_limits_handles_empty_data(self):
+        """Test handling when no contract limits are provided."""
+        cap_data = {"contract_limits": []}
+
+        result = transform_data.transform_contract_limits(cap_data)
+
+        assert result == []
+
+    def test_transform_contract_limits_handles_missing_values(self):
+        """Test handling of missing values in contract limits."""
+        cap_data = {
+            "contract_limits": [
+                {
+                    "Season": "2025-2026",
+                    "0-6 YOS Max": "$38,661,750",
+                    "7-9 YOS Max": None,
+                    "10+ YOS Max": "",
+                }
+            ]
+        }
+
+        result = transform_data.transform_contract_limits(cap_data)
+
+        assert len(result) == 1
+        assert result[0]["max_0_6_yos"] == 38661750
+        assert result[0]["max_7_9_yos"] is None
+        assert result[0]["max_10_plus_yos"] is None
+
+    def test_transform_contract_limits_filters_by_season(self):
+        """Test filtering contract limits by specific season."""
+        cap_data = {
+            "contract_limits": [
+                {
+                    "Season": "2025-2026",
+                    "0-6 YOS Max": "$38,661,750",
+                    "7-9 YOS Max": "$46,394,100",
+                    "10+ YOS Max": "$54,126,450",
+                },
+                {
+                    "Season": "2024-2025",
+                    "0-6 YOS Max": "$35,147,500",
+                    "7-9 YOS Max": "$42,177,000",
+                    "10+ YOS Max": "$49,206,500",
+                },
+            ]
+        }
+
+        # Filter for 2025-26 (should match 2025-2026 in data)
+        result = transform_data.transform_contract_limits(cap_data, season="2025-26")
+
+        assert len(result) == 1
+        assert result[0]["season"] == "2025-2026"
+        assert result[0]["max_0_6_yos"] == 38661750
+
+    def test_transform_contract_limits_no_match_returns_empty(self):
+        """Test that filtering with no match returns empty list."""
+        cap_data = {
+            "contract_limits": [
+                {
+                    "Season": "2025-2026",
+                    "0-6 YOS Max": "$38,661,750",
+                },
+                {
+                    "Season": "2024-2025",
+                    "0-6 YOS Max": "$35,147,500",
+                },
+            ]
+        }
+
+        result = transform_data.transform_contract_limits(cap_data, season="2022-23")
+
+        assert result == []

@@ -470,6 +470,119 @@ class TestESPNSalariesPagination:
         assert len(result) == 1
 
 
+class TestFetchSalaryCapHistory:
+    """Test salary cap history fetching from RealGM."""
+
+    @patch("src.etl.fetch_data.pd.read_html")
+    @patch("src.etl.fetch_data.requests.get")
+    @patch("src.etl.fetch_data.time.sleep")
+    def test_fetch_salary_cap_history_success(self, mock_sleep, mock_get, mock_read_html):
+        """Test successful fetch of salary cap history from RealGM."""
+        # Mock response
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.text = "<html>mock</html>"
+        mock_get.return_value = mock_response
+
+        # Mock salary cap history table (table 0)
+        mock_cap_df = pd.DataFrame(
+            {
+                "Season": ["2025-2026", "2024-2025"],
+                "Salary Cap": ["$154,647,000", "$140,588,000"],
+                "Luxury Tax": ["$187,895,000", "$170,814,000"],
+                "1st Apron": ["$178,655,000", "$172,346,000"],
+                "2nd Apron": ["$189,495,000", "$182,794,000"],
+                "BAE": ["$5,168,000", "$4,700,000"],
+                "Non-Taxpayer MLE": ["$13,040,000", "$12,405,000"],
+                "Taxpayer MLE": ["$5,685,000", "$5,183,000"],
+                "Team Room MLE": ["$8,781,000", "$7,981,000"],
+            }
+        )
+
+        # Mock contract limits table (table 1)
+        mock_limits_df = pd.DataFrame(
+            {
+                "Season": ["2025-2026", "2024-2025"],
+                "0-6 YOS Max": ["$38,661,750", "$35,147,500"],
+                "7-9 YOS Max": ["$46,394,100", "$42,177,000"],
+                "10+ YOS Max": ["$54,126,450", "$49,206,500"],
+                "0 YOS Min": ["$1,157,153", "$1,119,563"],
+                "1 YOS Min": ["$1,862,265", "$1,902,133"],
+                "2 YOS Min": ["$2,296,274", "$2,087,519"],
+                "10+ YOS Min": ["$3,634,153", "$3,196,448"],
+            }
+        )
+
+        mock_read_html.return_value = [mock_cap_df, mock_limits_df]
+
+        result = fetch_data.fetch_salary_cap_history()
+
+        assert result is not None
+        assert result["source"] == "realgm"
+        assert "salary_cap_history" in result
+        assert "contract_limits" in result
+        assert len(result["salary_cap_history"]) == 2
+        assert len(result["contract_limits"]) == 2
+        assert result["salary_cap_history"][0]["Season"] == "2025-2026"
+        assert result["contract_limits"][0]["Season"] == "2025-2026"
+
+    @patch("src.etl.fetch_data.requests.get")
+    @patch("src.etl.fetch_data.time.sleep")
+    def test_fetch_salary_cap_history_retry_on_403(self, mock_sleep, mock_get):
+        """Test retry logic when RealGM returns 403 (blocked)."""
+        # First attempt returns 403, second succeeds
+        mock_response_403 = Mock()
+        mock_response_403.status_code = 403
+
+        mock_response_200 = Mock()
+        mock_response_200.status_code = 200
+        mock_response_200.text = "<html>mock</html>"
+
+        mock_get.side_effect = [mock_response_403, mock_response_200]
+
+        with patch("src.etl.fetch_data.pd.read_html") as mock_read_html:
+            mock_df = pd.DataFrame({"Season": ["2025-2026"], "Salary Cap": ["$154,647,000"]})
+            mock_read_html.return_value = [mock_df, pd.DataFrame()]
+
+            result = fetch_data.fetch_salary_cap_history(max_retries=3)
+
+            assert result is not None
+            assert mock_get.call_count == 2
+            # Should sleep 1s initially, then 2s for retry
+            assert mock_sleep.call_count == 2
+
+    @patch("src.etl.fetch_data.requests.get")
+    @patch("src.etl.fetch_data.time.sleep")
+    def test_fetch_salary_cap_history_all_retries_fail(self, mock_sleep, mock_get):
+        """Test that function returns None after all retries fail with 403."""
+        mock_response = Mock()
+        mock_response.status_code = 403
+        mock_get.return_value = mock_response
+
+        result = fetch_data.fetch_salary_cap_history(max_retries=3)
+
+        assert result is None
+        assert mock_get.call_count == 3
+
+    @patch("src.etl.fetch_data.pd.read_html")
+    @patch("src.etl.fetch_data.requests.get")
+    @patch("src.etl.fetch_data.time.sleep")
+    def test_fetch_salary_cap_history_handles_no_tables(self, mock_sleep, mock_get, mock_read_html):
+        """Test handling when no tables are found in response."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.text = "<html>no tables</html>"
+        mock_get.return_value = mock_response
+
+        mock_read_html.return_value = []
+
+        result = fetch_data.fetch_salary_cap_history(max_retries=2)
+
+        assert result is None
+        # Should retry when no tables found
+        assert mock_get.call_count == 2
+
+
 class TestHandlerEnvironmentValidation:
     """Test handler validates required environment variables."""
 

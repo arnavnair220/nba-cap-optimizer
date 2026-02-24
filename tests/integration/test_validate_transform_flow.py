@@ -312,6 +312,8 @@ class TestDataEnrichmentThroughPipeline:
                 return mock_realistic_monthly_data["players"]
             elif "stats" in s3_key:
                 return mock_realistic_monthly_data["stats"]
+            elif "salary_cap" in s3_key:
+                return mock_realistic_monthly_data["salary_cap_history"]
             elif "salaries" in s3_key:
                 return mock_realistic_monthly_data["salaries"]
             elif "teams" in s3_key:
@@ -419,6 +421,8 @@ class TestDataEnrichmentThroughPipeline:
                 return mock_realistic_monthly_data["players"]
             elif "stats" in s3_key:
                 return mock_realistic_monthly_data["stats"]
+            elif "salary_cap" in s3_key:
+                return mock_realistic_monthly_data["salary_cap_history"]
             elif "salaries" in s3_key:
                 return mock_realistic_monthly_data["salaries"]
             elif "teams" in s3_key:
@@ -572,11 +576,24 @@ class TestDataConsistencyAcrossStages:
         """
         total_salary = sum(s["annual_salary"] for s in mock_salary_data["salaries"])
 
+        # Create salary cap data for this test
+        from tests.integration.conftest import create_salary_cap_history_data
+
+        salary_cap_data = create_salary_cap_history_data("2025-2026")
+        mock_salary_cap = {
+            "fetch_timestamp": "2025-01-01T00:00:00",
+            "source": "realgm",
+            "salary_cap_history": salary_cap_data["cap_df"].to_dict("records"),
+            "contract_limits": salary_cap_data["limits_df"].to_dict("records"),
+        }
+
         def mock_load_impl(s3_key):
             if "players" in s3_key:
                 return mock_active_players
             elif "stats" in s3_key:
                 return mock_complete_stats_data
+            elif "salary_cap" in s3_key:
+                return mock_salary_cap
             elif "salaries" in s3_key:
                 return mock_salary_data
             elif "teams" in s3_key:

@@ -806,6 +806,285 @@ def validate_salary_data(data: Dict[str, Any]) -> Dict[str, Any]:
     return results
 
 
+def _validate_dollar_amount_field(
+    field_name: str,
+    field_value: Any,
+    required: bool,
+    min_amount: Optional[int] = None,
+    max_amount: Optional[int] = None,
+) -> tuple[Optional[int], List[str], List[str]]:
+    """
+    Validate a dollar amount field from salary cap data.
+
+    Returns:
+        Tuple of (parsed_amount, errors, warnings)
+    """
+    errors = []
+    warnings = []
+
+    if not field_value:
+        if required:
+            errors.append(f"{field_name} field is missing or empty")
+        else:
+            warnings.append(f"{field_name} field is missing")
+        return None, errors, warnings
+
+    try:
+        amount = int(str(field_value).replace("$", "").replace(",", ""))
+
+        if amount <= 0:
+            errors.append(f"{field_name} must be positive")
+        else:
+            if min_amount and amount < min_amount:
+                warnings.append(f"{field_name} seems low ({amount:,}). Verify this is correct.")
+            if max_amount and amount > max_amount:
+                warnings.append(f"{field_name} seems high ({amount:,}). Verify this is correct.")
+
+        return amount, errors, warnings
+    except (ValueError, AttributeError) as e:
+        errors.append(f"Invalid {field_name} format: {field_value} ({e})")
+        return None, errors, warnings
+
+
+def validate_salary_cap_history(cap_history_data: Dict[str, Any], season: str) -> Dict[str, Any]:
+    """
+    Validate salary cap history data from RealGM.
+
+    Checks:
+    - Season field exists and matches expected season
+    - Salary cap is present and within reasonable bounds
+    - Luxury tax >= salary cap (if present)
+    - Aprons are in correct order (if present)
+    - MLE amounts are reasonable (if present)
+
+    Args:
+        cap_history_data: Raw salary cap history from fetch
+        season: Expected season (e.g., "2025-26")
+
+    Returns:
+        Validation results with errors and warnings
+    """
+    results = {
+        "data_type": "salary_cap_history",
+        "valid": True,
+        "errors": [],
+        "warnings": [],
+        "statistics": {},
+    }
+
+    if not cap_history_data:
+        results["valid"] = False
+        results["errors"].append("Salary cap history data is missing")
+        return results
+
+    salary_cap_history = cap_history_data.get("salary_cap_history", [])
+
+    if not salary_cap_history:
+        results["valid"] = False
+        results["errors"].append("Salary cap history array is empty")
+        return results
+
+    # Normalize season format for matching
+    from .transform_data import _normalize_season_format
+
+    expected_season = _normalize_season_format(season)
+
+    # Find record for current season
+    season_record = None
+    for record in salary_cap_history:
+        if record.get("Season") == expected_season:
+            season_record = record
+            break
+
+    if not season_record:
+        results["valid"] = False
+        results["errors"].append(
+            f"No salary cap data found for season {expected_season}. "
+            f"Available: {[r.get('Season') for r in salary_cap_history[:5]]}"
+        )
+        return results
+
+    # Validate season field
+    if not season_record.get("Season"):
+        results["valid"] = False
+        results["errors"].append("Season field is missing")
+        return results
+
+    # Validate salary cap (required field)
+    salary_cap, cap_errors, cap_warnings = _validate_dollar_amount_field(
+        "Salary Cap", season_record.get("Salary Cap"), True, 50_000_000, 300_000_000
+    )
+    results["errors"].extend(cap_errors)
+    results["warnings"].extend(cap_warnings)
+    if cap_errors:
+        results["valid"] = False
+        if not salary_cap:
+            return results
+
+    # Validate luxury tax (required field)
+    luxury_tax, tax_errors, tax_warnings = _validate_dollar_amount_field(
+        "Luxury Tax", season_record.get("Luxury Tax"), True
+    )
+    results["errors"].extend(tax_errors)
+    results["warnings"].extend(tax_warnings)
+    if tax_errors:
+        results["valid"] = False
+    elif luxury_tax and salary_cap and luxury_tax <= salary_cap:
+        results["warnings"].append(
+            f"Luxury tax ({luxury_tax:,}) should be greater than salary cap ({salary_cap:,})"
+        )
+
+    # Validate 1st Apron (required field)
+    first_apron, first_errors, first_warnings = _validate_dollar_amount_field(
+        "1st Apron", season_record.get("1st Apron"), True
+    )
+    results["errors"].extend(first_errors)
+    results["warnings"].extend(first_warnings)
+    if first_errors:
+        results["valid"] = False
+
+    # Validate 2nd Apron (warn if missing, error if invalid format)
+    second_apron, second_errors, second_warnings = _validate_dollar_amount_field(
+        "2nd Apron", season_record.get("2nd Apron"), False
+    )
+    results["errors"].extend(second_errors)
+    results["warnings"].extend(second_warnings)
+    if second_errors:
+        results["valid"] = False
+    elif first_apron and second_apron and second_apron <= first_apron:
+        results["warnings"].append(
+            f"2nd Apron ({second_apron:,}) should be greater than 1st Apron ({first_apron:,})"
+        )
+
+    # Validate MLE amounts (all required)
+    for mle_field in ["Non-Taxpayer MLE", "Taxpayer MLE", "Team Room MLE", "BAE"]:
+        _, mle_errors, mle_warnings = _validate_dollar_amount_field(
+            mle_field, season_record.get(mle_field), True, max_amount=20_000_000
+        )
+        results["errors"].extend(mle_errors)
+        results["warnings"].extend(mle_warnings)
+        if mle_errors:
+            results["valid"] = False
+
+    return results
+
+
+def validate_contract_limits(contract_limits_data: Dict[str, Any], season: str) -> Dict[str, Any]:
+    """
+    Validate contract limits data from RealGM.
+
+    Checks:
+    - Season field exists and matches expected season
+    - Max contract amounts increase with years of service
+    - Min contract amounts are reasonable
+    - All required fields are present
+
+    Args:
+        contract_limits_data: Raw contract limits from fetch
+        season: Expected season (e.g., "2025-26")
+
+    Returns:
+        Validation results with errors and warnings
+    """
+    results = {
+        "data_type": "contract_limits",
+        "valid": True,
+        "errors": [],
+        "warnings": [],
+        "statistics": {},
+    }
+
+    if not contract_limits_data:
+        results["valid"] = False
+        results["errors"].append("Contract limits data is missing")
+        return results
+
+    contract_limits = contract_limits_data.get("contract_limits", [])
+
+    if not contract_limits:
+        results["valid"] = False
+        results["errors"].append("Contract limits array is empty")
+        return results
+
+    # Normalize season format for matching
+    from .transform_data import _normalize_season_format
+
+    expected_season = _normalize_season_format(season)
+
+    # Find record for current season
+    season_record = None
+    for record in contract_limits:
+        if record.get("Season") == expected_season:
+            season_record = record
+            break
+
+    if not season_record:
+        results["valid"] = False
+        results["errors"].append(
+            f"No contract limits found for season {expected_season}. "
+            f"Available: {[r.get('Season') for r in contract_limits[:5]]}"
+        )
+        return results
+
+    # Validate max contracts (all required)
+    max_fields = ["0-6 YOS Max", "7-9 YOS Max", "10+ YOS Max"]
+    max_amounts = []
+
+    for field in max_fields:
+        value_str = season_record.get(field)
+        if not value_str:
+            results["valid"] = False
+            results["errors"].append(f"{field} field is missing or empty")
+        else:
+            try:
+                amount = int(str(value_str).replace("$", "").replace(",", ""))
+                max_amounts.append(amount)
+
+                if amount <= 0:
+                    results["valid"] = False
+                    results["errors"].append(f"{field} must be positive")
+                elif amount > 100_000_000:
+                    results["warnings"].append(f"{field} seems high ({amount:,})")
+            except (ValueError, AttributeError):
+                results["valid"] = False
+                results["errors"].append(f"Invalid {field} format: {value_str}")
+
+    # Check that max salaries increase with years of service
+    if len(max_amounts) == 3:
+        if not (max_amounts[0] < max_amounts[1] < max_amounts[2]):
+            results["warnings"].append(
+                f"Max salaries should increase with YOS: {max_amounts[0]:,} < {max_amounts[1]:,} < {max_amounts[2]:,}"
+            )
+
+    # Validate min contracts (all required)
+    min_fields = ["0 YOS Min", "1 YOS Min", "2 YOS Min", "10+ YOS Min"]
+    min_amounts = []
+
+    for field in min_fields:
+        value_str = season_record.get(field)
+        if not value_str:
+            results["valid"] = False
+            results["errors"].append(f"{field} field is missing or empty")
+            continue
+
+        try:
+            amount = int(str(value_str).replace("$", "").replace(",", ""))
+            min_amounts.append(amount)
+
+            if amount <= 0:
+                results["valid"] = False
+                results["errors"].append(f"{field} must be positive")
+            elif amount < 500_000:
+                results["warnings"].append(f"{field} seems low ({amount:,})")
+            elif amount > 10_000_000:
+                results["warnings"].append(f"{field} seems high ({amount:,})")
+        except (ValueError, AttributeError):
+            results["valid"] = False
+            results["errors"].append(f"Invalid {field} format: {value_str}")
+
+    return results
+
+
 def handler(event, context):
     """
     Lambda handler for validating NBA data.
@@ -851,9 +1130,12 @@ def handler(event, context):
         "warning_count": 0,
     }
 
+    # Extract season from event for salary cap validation
+    season = event.get("season", "2025-26")
+
     # Define files to validate based on fetch type
     # stats_only (daily): Only player_stats
-    # monthly: player_stats, teams, salaries
+    # monthly: player_stats, teams, salaries, salary_cap_history, contract_limits
     # full: All of the above (game_logs validation TBD)
     all_files = {
         "stats": (f"raw/stats/{partition}/league_player_stats.json", validate_stats_data, True),
@@ -866,6 +1148,16 @@ def handler(event, context):
             f"raw/salaries/{partition}/player_salaries.json",
             validate_salary_data,
             fetch_type in ["monthly", "full"],
+        ),
+        "salary_cap_history": (
+            f"raw/salary_cap/{partition}/salary_cap_history.json",
+            lambda data: validate_salary_cap_history(data, season),
+            fetch_type in ["monthly", "full"],  # Required for monthly/full fetches
+        ),
+        "contract_limits": (
+            f"raw/salary_cap/{partition}/salary_cap_history.json",
+            lambda data: validate_contract_limits(data, season),
+            fetch_type in ["monthly", "full"],  # Required for monthly/full fetches
         ),
     }
 

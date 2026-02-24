@@ -319,3 +319,95 @@ class TestHandlerDataLoad:
         assert result["statusCode"] == 500
         mock_conn.rollback.assert_called_once()
         mock_conn.close.assert_called_once()
+
+
+class TestUpsertSalaryCapHistory:
+    """Test upserting salary cap history data."""
+
+    @patch("src.etl.load_to_rds.execute_batch")
+    def test_upsert_salary_cap_history_success(self, mock_execute_batch):
+        """Test successful upsert of salary cap history."""
+        mock_cursor = Mock()
+        cap_history = [
+            {
+                "season": "2025-2026",
+                "salary_cap": 154647000,
+                "luxury_tax": 187895000,
+                "first_apron": 178655000,
+                "second_apron": 189495000,
+                "bae": 5168000,
+                "non_taxpayer_mle": 13040000,
+                "taxpayer_mle": 5685000,
+                "team_room_mle": 8781000,
+            },
+            {
+                "season": "2024-2025",
+                "salary_cap": 140588000,
+                "luxury_tax": 170814000,
+                "first_apron": 172346000,
+                "second_apron": 182794000,
+                "bae": 4700000,
+                "non_taxpayer_mle": 12405000,
+                "taxpayer_mle": 5183000,
+                "team_room_mle": 7981000,
+            },
+        ]
+
+        count = load_to_rds.upsert_salary_cap_history(mock_cursor, cap_history)
+
+        assert count == 2
+        mock_execute_batch.assert_called_once()
+        # Verify the SQL contains ON CONFLICT
+        sql_call = mock_execute_batch.call_args[0][1]
+        assert "ON CONFLICT" in sql_call
+        assert "salary_cap_history" in sql_call
+
+    @patch("src.etl.load_to_rds.execute_batch")
+    def test_upsert_salary_cap_history_empty_data(self, mock_execute_batch):
+        """Test handling of empty salary cap data."""
+        mock_cursor = Mock()
+
+        count = load_to_rds.upsert_salary_cap_history(mock_cursor, [])
+
+        assert count == 0
+        mock_execute_batch.assert_not_called()
+
+
+class TestUpsertContractLimits:
+    """Test upserting contract limits data."""
+
+    @patch("src.etl.load_to_rds.execute_batch")
+    def test_upsert_contract_limits_success(self, mock_execute_batch):
+        """Test successful upsert of contract limits."""
+        mock_cursor = Mock()
+        contract_limits = [
+            {
+                "season": "2025-2026",
+                "max_0_6_yos": 38661750,
+                "max_7_9_yos": 46394100,
+                "max_10_plus_yos": 54126450,
+                "min_0_yos": 1157153,
+                "min_1_yos": 1862265,
+                "min_2_yos": 2296274,
+                "min_10_plus_yos": 3634153,
+            }
+        ]
+
+        count = load_to_rds.upsert_contract_limits(mock_cursor, contract_limits)
+
+        assert count == 1
+        mock_execute_batch.assert_called_once()
+        # Verify the SQL contains ON CONFLICT
+        sql_call = mock_execute_batch.call_args[0][1]
+        assert "ON CONFLICT" in sql_call
+        assert "contract_limits" in sql_call
+
+    @patch("src.etl.load_to_rds.execute_batch")
+    def test_upsert_contract_limits_empty_data(self, mock_execute_batch):
+        """Test handling of empty contract limits data."""
+        mock_cursor = Mock()
+
+        count = load_to_rds.upsert_contract_limits(mock_cursor, [])
+
+        assert count == 0
+        mock_execute_batch.assert_not_called()

@@ -110,3 +110,36 @@ CREATE TABLE IF NOT EXISTS teams (
 );
 
 CREATE INDEX IF NOT EXISTS idx_teams_abbreviation ON teams(abbreviation);
+
+-- Salary Cap History table: League-wide salary cap information by season
+CREATE TABLE IF NOT EXISTS salary_cap_history (
+    season VARCHAR(20) PRIMARY KEY,
+    salary_cap BIGINT,
+    luxury_tax BIGINT,
+    first_apron BIGINT,
+    second_apron BIGINT,
+    bae BIGINT,
+    non_taxpayer_mle BIGINT,
+    taxpayer_mle BIGINT,
+    team_room_mle BIGINT,
+    source VARCHAR(50),
+    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_salary_cap_history_season ON salary_cap_history(season);
+
+-- Contract Limits table: Max and min contract amounts by years of service
+CREATE TABLE IF NOT EXISTS contract_limits (
+    season VARCHAR(20) PRIMARY KEY,
+    max_0_6_yos BIGINT,
+    max_7_9_yos BIGINT,
+    max_10_plus_yos BIGINT,
+    min_0_yos INTEGER,
+    min_1_yos INTEGER,
+    min_2_yos INTEGER,
+    min_10_plus_yos INTEGER,
+    source VARCHAR(50),
+    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_contract_limits_season ON contract_limits(season);

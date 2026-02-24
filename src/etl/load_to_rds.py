@@ -244,6 +244,39 @@ CREATE TABLE IF NOT EXISTS teams (
 );
 
 CREATE INDEX IF NOT EXISTS idx_teams_abbreviation ON teams(abbreviation);
+
+-- Salary Cap History table: League-wide salary cap information by season
+CREATE TABLE IF NOT EXISTS salary_cap_history (
+    season VARCHAR(20) PRIMARY KEY,
+    salary_cap BIGINT,
+    luxury_tax BIGINT,
+    first_apron BIGINT,
+    second_apron BIGINT,
+    bae BIGINT,
+    non_taxpayer_mle BIGINT,
+    taxpayer_mle BIGINT,
+    team_room_mle BIGINT,
+    source VARCHAR(50),
+    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_salary_cap_history_season ON salary_cap_history(season);
+
+-- Contract Limits table: Max and min contract amounts by years of service
+CREATE TABLE IF NOT EXISTS contract_limits (
+    season VARCHAR(20) PRIMARY KEY,
+    max_0_6_yos BIGINT,
+    max_7_9_yos BIGINT,
+    max_10_plus_yos BIGINT,
+    min_0_yos INTEGER,
+    min_1_yos INTEGER,
+    min_2_yos INTEGER,
+    min_10_plus_yos INTEGER,
+    source VARCHAR(50),
+    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_contract_limits_season ON contract_limits(season);
         """
 
         cursor.execute(schema_sql)
@@ -443,6 +476,116 @@ def upsert_player_stats(cursor, stats_data: List[Dict[str, Any]], season: str) -
     return len(data)
 
 
+def upsert_salary_cap_history(cursor, cap_history_data: List[Dict[str, Any]]) -> int:
+    """
+    Upsert salary cap history into the salary_cap_history table.
+
+    Args:
+        cursor: Database cursor
+        cap_history_data: List of salary cap dictionaries from transformed data
+
+    Returns:
+        Number of salary cap records upserted
+    """
+    if not cap_history_data:
+        logger.warning("No salary cap history data to upsert")
+        return 0
+
+    sql = """
+        INSERT INTO salary_cap_history (
+            season, salary_cap, luxury_tax, first_apron, second_apron,
+            bae, non_taxpayer_mle, taxpayer_mle, team_room_mle, source
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (season) DO UPDATE
+        SET
+            salary_cap = EXCLUDED.salary_cap,
+            luxury_tax = EXCLUDED.luxury_tax,
+            first_apron = EXCLUDED.first_apron,
+            second_apron = EXCLUDED.second_apron,
+            bae = EXCLUDED.bae,
+            non_taxpayer_mle = EXCLUDED.non_taxpayer_mle,
+            taxpayer_mle = EXCLUDED.taxpayer_mle,
+            team_room_mle = EXCLUDED.team_room_mle,
+            source = EXCLUDED.source,
+            last_updated = CURRENT_TIMESTAMP
+    """
+
+    data = [
+        (
+            c["season"],
+            c.get("salary_cap"),
+            c.get("luxury_tax"),
+            c.get("first_apron"),
+            c.get("second_apron"),
+            c.get("bae"),
+            c.get("non_taxpayer_mle"),
+            c.get("taxpayer_mle"),
+            c.get("team_room_mle"),
+            "realgm",
+        )
+        for c in cap_history_data
+    ]
+
+    execute_batch(cursor, sql, data)
+    logger.info(f"Upserted {len(data)} salary cap history records")
+    return len(data)
+
+
+def upsert_contract_limits(cursor, contract_limits_data: List[Dict[str, Any]]) -> int:
+    """
+    Upsert contract limits into the contract_limits table.
+
+    Args:
+        cursor: Database cursor
+        contract_limits_data: List of contract limit dictionaries from transformed data
+
+    Returns:
+        Number of contract limit records upserted
+    """
+    if not contract_limits_data:
+        logger.warning("No contract limits data to upsert")
+        return 0
+
+    sql = """
+        INSERT INTO contract_limits (
+            season, max_0_6_yos, max_7_9_yos, max_10_plus_yos,
+            min_0_yos, min_1_yos, min_2_yos, min_10_plus_yos, source
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (season) DO UPDATE
+        SET
+            max_0_6_yos = EXCLUDED.max_0_6_yos,
+            max_7_9_yos = EXCLUDED.max_7_9_yos,
+            max_10_plus_yos = EXCLUDED.max_10_plus_yos,
+            min_0_yos = EXCLUDED.min_0_yos,
+            min_1_yos = EXCLUDED.min_1_yos,
+            min_2_yos = EXCLUDED.min_2_yos,
+            min_10_plus_yos = EXCLUDED.min_10_plus_yos,
+            source = EXCLUDED.source,
+            last_updated = CURRENT_TIMESTAMP
+    """
+
+    data = [
+        (
+            c["season"],
+            c.get("max_0_6_yos"),
+            c.get("max_7_9_yos"),
+            c.get("max_10_plus_yos"),
+            c.get("min_0_yos"),
+            c.get("min_1_yos"),
+            c.get("min_2_yos"),
+            c.get("min_10_plus_yos"),
+            "realgm",
+        )
+        for c in contract_limits_data
+    ]
+
+    execute_batch(cursor, sql, data)
+    logger.info(f"Upserted {len(data)} contract limit records")
+    return len(data)
+
+
 def upsert_teams(cursor, teams_data: List[Dict[str, Any]]) -> int:
     """
     Upsert teams into the teams table.
@@ -616,6 +759,10 @@ def handler(event, context):
         salaries_s3 = load_from_s3(f"transformed/salaries/{partition}/enriched_salaries.json")
         stats_s3 = load_from_s3(f"transformed/stats/{partition}/enriched_player_stats.json")
         teams_s3 = load_from_s3(f"transformed/teams/{partition}/enriched_teams.json")
+        cap_history_s3 = load_from_s3(f"transformed/salary_cap/{partition}/salary_cap_history.json")
+        contract_limits_s3 = load_from_s3(
+            f"transformed/salary_cap/{partition}/contract_limits.json"
+        )
 
         # Begin transaction
         logger.info("Beginning database transaction...")
@@ -662,6 +809,28 @@ def handler(event, context):
                 results["errors"].append(f"Teams upsert failed: {str(e)}")
         else:
             logger.warning("No teams data found - skipping teams upsert")
+
+        # 4. Upsert salary cap history (if available)
+        if cap_history_s3 and cap_history_s3.get("salary_cap_history"):
+            try:
+                count = upsert_salary_cap_history(cursor, cap_history_s3["salary_cap_history"])
+                results["loaded"]["salary_cap_history"] = count
+            except Exception as e:
+                logger.error(f"Failed to upsert salary cap history: {e}")
+                results["errors"].append(f"Salary cap history upsert failed: {str(e)}")
+        else:
+            logger.warning("No salary cap history data found - skipping")
+
+        # 5. Upsert contract limits (if available)
+        if contract_limits_s3 and contract_limits_s3.get("contract_limits"):
+            try:
+                count = upsert_contract_limits(cursor, contract_limits_s3["contract_limits"])
+                results["loaded"]["contract_limits"] = count
+            except Exception as e:
+                logger.error(f"Failed to upsert contract limits: {e}")
+                results["errors"].append(f"Contract limits upsert failed: {str(e)}")
+        else:
+            logger.warning("No contract limits data found - skipping")
 
         # Commit transaction
         conn.commit()

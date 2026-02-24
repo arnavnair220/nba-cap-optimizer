@@ -52,7 +52,9 @@ class TestEmptyDataValidation:
         assert result["validation_passed"] is False
         body = json.loads(result["body"])
         assert body["valid"] is False
-        assert body["error_count"] == 3  # stats, teams, salaries
+        assert (
+            body["error_count"] == 5
+        )  # stats, teams, salaries, salary_cap_history, contract_limits
 
     @patch("src.etl.validate_data.ENVIRONMENT", "test")
     @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
@@ -1631,3 +1633,295 @@ class TestLeagueAverageAndAwardsExclusion:
         assert result["errors"] == []
         awards_warnings = [w for w in result["warnings"] if "Awards" in w]
         assert len(awards_warnings) == 0
+
+
+class TestSalaryCapValidation:
+    """Test salary cap history validation."""
+
+    def test_valid_salary_cap_data(self):
+        """Test validation of valid salary cap data."""
+        cap_data = {
+            "source": "realgm",
+            "salary_cap_history": [
+                {
+                    "Season": "2025-2026",
+                    "Salary Cap": "$154,647,000",
+                    "Luxury Tax": "$187,895,000",
+                    "1st Apron": "$178,655,000",
+                    "2nd Apron": "$189,495,000",
+                    "BAE": "$5,168,000",
+                    "Non-Taxpayer MLE": "$13,040,000",
+                    "Taxpayer MLE": "$5,685,000",
+                    "Team Room MLE": "$8,781,000",
+                }
+            ],
+        }
+
+        result = validate_data.validate_salary_cap_history(cap_data, "2025-26")
+
+        assert result["valid"] is True
+        assert result["data_type"] == "salary_cap_history"
+        assert result["errors"] == []
+
+    def test_missing_salary_cap_data(self):
+        """Test validation when salary cap data is missing."""
+        result = validate_data.validate_salary_cap_history(None, "2025-26")
+
+        assert result["valid"] is False
+        assert "missing" in result["errors"][0].lower()
+
+    def test_empty_salary_cap_array(self):
+        """Test validation when salary cap array is empty."""
+        cap_data = {"salary_cap_history": []}
+
+        result = validate_data.validate_salary_cap_history(cap_data, "2025-26")
+
+        assert result["valid"] is False
+        assert "empty" in result["errors"][0].lower()
+
+    def test_season_not_found(self):
+        """Test validation when requested season is not in data."""
+        cap_data = {
+            "salary_cap_history": [
+                {"Season": "2024-2025", "Salary Cap": "$140,588,000"},
+                {"Season": "2023-2024", "Salary Cap": "$136,021,000"},
+            ]
+        }
+
+        result = validate_data.validate_salary_cap_history(cap_data, "2025-26")
+
+        assert result["valid"] is False
+        assert "No salary cap data found" in result["errors"][0]
+        assert "2025-2026" in result["errors"][0]
+
+    def test_missing_salary_cap_field(self):
+        """Test validation when salary cap field is missing."""
+        cap_data = {
+            "salary_cap_history": [
+                {
+                    "Season": "2025-2026",
+                    "Luxury Tax": "$187,895,000",
+                }
+            ]
+        }
+
+        result = validate_data.validate_salary_cap_history(cap_data, "2025-26")
+
+        assert result["valid"] is False
+        assert "Salary Cap field is missing" in result["errors"][0]
+
+    def test_negative_salary_cap(self):
+        """Test validation when salary cap is negative."""
+        cap_data = {"salary_cap_history": [{"Season": "2025-2026", "Salary Cap": "$-100,000,000"}]}
+
+        result = validate_data.validate_salary_cap_history(cap_data, "2025-26")
+
+        assert result["valid"] is False
+        assert "must be positive" in result["errors"][0]
+
+    def test_unreasonably_low_salary_cap(self):
+        """Test warning for unreasonably low salary cap."""
+        cap_data = {
+            "salary_cap_history": [
+                {
+                    "Season": "2025-2026",
+                    "Salary Cap": "$10,000,000",
+                    "Luxury Tax": "$15,000,000",
+                    "1st Apron": "$12,000,000",
+                    "BAE": "$1,000,000",
+                    "Non-Taxpayer MLE": "$2,000,000",
+                    "Taxpayer MLE": "$1,500,000",
+                    "Team Room MLE": "$1,800,000",
+                }
+            ]
+        }
+
+        result = validate_data.validate_salary_cap_history(cap_data, "2025-26")
+
+        assert result["valid"] is True
+        assert len(result["warnings"]) > 0
+        assert "seems low" in result["warnings"][0].lower()
+
+    def test_luxury_tax_less_than_salary_cap(self):
+        """Test warning when luxury tax is less than salary cap."""
+        cap_data = {
+            "salary_cap_history": [
+                {
+                    "Season": "2025-2026",
+                    "Salary Cap": "$154,647,000",
+                    "Luxury Tax": "$100,000,000",
+                    "1st Apron": "$178,655,000",
+                    "BAE": "$5,168,000",
+                    "Non-Taxpayer MLE": "$13,040,000",
+                    "Taxpayer MLE": "$5,685,000",
+                    "Team Room MLE": "$8,781,000",
+                }
+            ]
+        }
+
+        result = validate_data.validate_salary_cap_history(cap_data, "2025-26")
+
+        assert result["valid"] is True
+        assert len(result["warnings"]) > 0
+        assert "greater than salary cap" in result["warnings"][0].lower()
+
+    def test_missing_mandatory_fields_cause_errors(self):
+        """Test that missing mandatory fields cause validation errors."""
+        cap_data = {
+            "salary_cap_history": [
+                {
+                    "Season": "2025-2026",
+                    "Salary Cap": "$154,647,000",
+                    # Missing all other required fields
+                }
+            ]
+        }
+
+        result = validate_data.validate_salary_cap_history(cap_data, "2025-26")
+
+        assert result["valid"] is False
+        assert len(result["errors"]) >= 6  # Luxury Tax, 1st Apron, BAE, 3 MLEs
+
+    def test_missing_second_apron_causes_warning(self):
+        """Test that missing 2nd Apron causes a warning but not an error."""
+        cap_data = {
+            "salary_cap_history": [
+                {
+                    "Season": "2025-2026",
+                    "Salary Cap": "$154,647,000",
+                    "Luxury Tax": "$187,895,000",
+                    "1st Apron": "$178,655,000",
+                    # Missing 2nd Apron
+                    "BAE": "$5,168,000",
+                    "Non-Taxpayer MLE": "$13,040,000",
+                    "Taxpayer MLE": "$5,685,000",
+                    "Team Room MLE": "$8,781,000",
+                }
+            ]
+        }
+
+        result = validate_data.validate_salary_cap_history(cap_data, "2025-26")
+
+        assert result["valid"] is True
+        assert len(result["warnings"]) > 0
+        assert any("2nd Apron" in w for w in result["warnings"])
+
+
+class TestContractLimitsValidation:
+    """Test contract limits validation."""
+
+    def test_valid_contract_limits(self):
+        """Test validation of valid contract limits data."""
+        limits_data = {
+            "contract_limits": [
+                {
+                    "Season": "2025-2026",
+                    "0-6 YOS Max": "$38,661,750",
+                    "7-9 YOS Max": "$46,394,100",
+                    "10+ YOS Max": "$54,126,450",
+                    "0 YOS Min": "$1,157,153",
+                    "1 YOS Min": "$1,862,265",
+                    "2 YOS Min": "$2,296,274",
+                    "10+ YOS Min": "$3,634,153",
+                }
+            ]
+        }
+
+        result = validate_data.validate_contract_limits(limits_data, "2025-26")
+
+        assert result["valid"] is True
+        assert result["data_type"] == "contract_limits"
+        assert result["errors"] == []
+
+    def test_missing_contract_limits_data(self):
+        """Test validation when contract limits data is missing."""
+        result = validate_data.validate_contract_limits(None, "2025-26")
+
+        assert result["valid"] is False
+        assert "missing" in result["errors"][0].lower()
+
+    def test_max_salaries_increase_with_yos(self):
+        """Test that max salaries properly increase with years of service."""
+        limits_data = {
+            "contract_limits": [
+                {
+                    "Season": "2025-2026",
+                    "0-6 YOS Max": "$38,661,750",
+                    "7-9 YOS Max": "$46,394,100",
+                    "10+ YOS Max": "$54,126,450",
+                    "0 YOS Min": "$1,157,153",
+                    "1 YOS Min": "$1,862,265",
+                    "2 YOS Min": "$2,296,274",
+                    "10+ YOS Min": "$3,634,153",
+                }
+            ]
+        }
+
+        result = validate_data.validate_contract_limits(limits_data, "2025-26")
+
+        assert result["valid"] is True
+        yos_warnings = [w for w in result["warnings"] if "YOS" in w and "increase" in w.lower()]
+        assert len(yos_warnings) == 0
+
+    def test_max_salaries_wrong_order(self):
+        """Test warning when max salaries do not increase with YOS."""
+        limits_data = {
+            "contract_limits": [
+                {
+                    "Season": "2025-2026",
+                    "0-6 YOS Max": "$54,126,450",
+                    "7-9 YOS Max": "$46,394,100",
+                    "10+ YOS Max": "$38,661,750",
+                    "0 YOS Min": "$1,157,153",
+                    "1 YOS Min": "$1,862,265",
+                    "2 YOS Min": "$2,296,274",
+                    "10+ YOS Min": "$3,634,153",
+                }
+            ]
+        }
+
+        result = validate_data.validate_contract_limits(limits_data, "2025-26")
+
+        assert result["valid"] is True
+        assert len(result["warnings"]) > 0
+        assert "should increase with YOS" in result["warnings"][0]
+
+    def test_missing_mandatory_contract_field(self):
+        """Test that missing mandatory contract limit fields cause errors."""
+        limits_data = {
+            "contract_limits": [
+                {
+                    "Season": "2025-2026",
+                    "0-6 YOS Max": "$38,661,750",
+                    "7-9 YOS Max": "$46,394,100",
+                    # Missing 10+ YOS Max and all minimums
+                }
+            ]
+        }
+
+        result = validate_data.validate_contract_limits(limits_data, "2025-26")
+
+        assert result["valid"] is False
+        assert len(result["errors"]) >= 5  # 10+ YOS Max and 4 minimum fields
+
+    def test_negative_min_salary(self):
+        """Test error when minimum salary is negative."""
+        limits_data = {
+            "contract_limits": [
+                {
+                    "Season": "2025-2026",
+                    "0-6 YOS Max": "$38,661,750",
+                    "7-9 YOS Max": "$46,394,100",
+                    "10+ YOS Max": "$54,126,450",
+                    "0 YOS Min": "$-1,000,000",
+                    "1 YOS Min": "$1,862,265",
+                    "2 YOS Min": "$2,296,274",
+                    "10+ YOS Min": "$3,634,153",
+                }
+            ]
+        }
+
+        result = validate_data.validate_contract_limits(limits_data, "2025-26")
+
+        assert result["valid"] is False
+        assert any("must be positive" in e for e in result["errors"])
