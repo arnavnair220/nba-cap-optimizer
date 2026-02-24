@@ -108,6 +108,51 @@ def create_basketball_reference_advanced_stats(
     }
 
 
+def create_salary_cap_history_data(season: str = "2025-2026") -> Dict[str, Any]:
+    """
+    Create mock salary cap history data from RealGM.
+
+    Returns a dictionary with salary cap history and contract limits DataFrames.
+    """
+    import pandas as pd
+
+    # Mock salary cap history table (first table from RealGM)
+    cap_df = pd.DataFrame(
+        [
+            {
+                "Season": season,
+                "Salary Cap": "$154,647,000",
+                "Luxury Tax": "$187,895,000",
+                "1st Apron": "$178,655,000",
+                "2nd Apron": "$189,495,000",
+                "BAE": "$5,168,000",
+                "Non-Taxpayer MLE": "$13,040,000",
+                "Taxpayer MLE": "$5,685,000",
+                "Team Room MLE": "$8,781,000",
+            }
+        ]
+    )
+
+    # Mock contract limits table (second table from RealGM)
+    limits_df = pd.DataFrame(
+        [
+            {
+                "Season": season,
+                "0-6 YOS Max": "$38,661,750",
+                "7-9 YOS Max": "$46,394,100",
+                "10+ YOS Max": "$54,126,450",
+                "0 YOS Min": "$1,157,153",
+                "1 YOS Min": "$1,862,265",
+                "2 YOS Min": "$2,296,274",
+                "10+ YOS Min": "$3,634,153",
+                "Minimum Scale": "Full Scale",
+            }
+        ]
+    )
+
+    return {"cap_df": cap_df, "limits_df": limits_df}
+
+
 @pytest.fixture
 def mock_complete_stats_data():
     """
@@ -405,11 +450,23 @@ def mock_realistic_monthly_data():
         ]
     }
 
+    # Salary cap data
+    salary_cap_data = create_salary_cap_history_data("2025-2026")
+    salary_cap_history = {
+        "fetch_timestamp": datetime.utcnow().isoformat(),
+        "source": "realgm",
+        "salary_cap_history": salary_cap_data["cap_df"].to_dict("records"),
+        "contract_limits": salary_cap_data["limits_df"].to_dict("records"),
+        "cap_columns": list(salary_cap_data["cap_df"].columns),
+        "contract_columns": list(salary_cap_data["limits_df"].columns),
+    }
+
     return {
         "players": players,
         "stats": stats,
         "salaries": salaries,
         "teams": teams,
+        "salary_cap_history": salary_cap_history,
     }
 
 

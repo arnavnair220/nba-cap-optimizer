@@ -20,6 +20,7 @@ from src.etl import fetch_data, validate_data
 from tests.integration.conftest import (
     create_basketball_reference_advanced_stats,
     create_basketball_reference_player_stats,
+    create_salary_cap_history_data,
 )
 
 
@@ -64,7 +65,15 @@ class TestFetchValidateEventContract:
             for i in range(350)
         ]
         mock_advanced_df = pd.DataFrame(advanced_stats)
-        mock_read_html.side_effect = [[mock_pergame_df], [mock_advanced_df]]
+
+        # Mock salary cap data from RealGM
+        salary_cap_data = create_salary_cap_history_data("2025-2026")
+
+        mock_read_html.side_effect = [
+            [mock_pergame_df],  # Per-game stats
+            [mock_advanced_df],  # Advanced stats
+            [salary_cap_data["cap_df"], salary_cap_data["limits_df"]],  # Salary cap history
+        ]
 
         captured_data = {}
         mock_save_s3.side_effect = lambda data, key: captured_data.update({key: data}) or True
@@ -121,7 +130,15 @@ class TestFetchValidateEventContract:
             for i in range(350)
         ]
         mock_advanced_df = pd.DataFrame(advanced_stats)
-        mock_read_html.side_effect = [[mock_pergame_df], [mock_advanced_df]]
+
+        # Mock salary cap data from RealGM
+        salary_cap_data = create_salary_cap_history_data("2025-2026")
+
+        mock_read_html.side_effect = [
+            [mock_pergame_df],  # Per-game stats
+            [mock_advanced_df],  # Advanced stats
+            [salary_cap_data["cap_df"], salary_cap_data["limits_df"]],  # Salary cap history
+        ]
 
         saved_keys = []
         loaded_keys = []
@@ -205,7 +222,15 @@ class TestEndToEndDataFlow:
             for i in range(349)
         ]
         mock_advanced_df = pd.DataFrame(advanced_stats)
-        mock_read_html.side_effect = [[mock_pergame_df], [mock_advanced_df]]
+
+        # Mock salary cap data from RealGM
+        salary_cap_data = create_salary_cap_history_data("2025-2026")
+
+        mock_read_html.side_effect = [
+            [mock_pergame_df],  # Per-game stats
+            [mock_advanced_df],  # Advanced stats
+            [salary_cap_data["cap_df"], salary_cap_data["limits_df"]],  # Salary cap history
+        ]
 
         # Simulate actual S3 storage - fetch saves, validate loads
         s3_storage = {}
@@ -294,7 +319,15 @@ class TestEndToEndDataFlow:
             for i in range(350)
         ]
         mock_advanced_df = pd.DataFrame(advanced_stats)
-        mock_read_html.side_effect = [[mock_pergame_df], [mock_advanced_df]]
+
+        # Mock salary cap data from RealGM
+        salary_cap_data = create_salary_cap_history_data("2025-2026")
+
+        mock_read_html.side_effect = [
+            [mock_pergame_df],  # Per-game stats
+            [mock_advanced_df],  # Advanced stats
+            [salary_cap_data["cap_df"], salary_cap_data["limits_df"]],  # Salary cap history
+        ]
 
         # Generate realistic NBA salaries totaling ~$4.2B (within valid $3.5B-$7B range)
         # Range from $1M to $20M across 400 players
@@ -481,7 +514,15 @@ class TestCompletePipelineFlow:
             for i in range(348)
         ]
         mock_advanced_df = pd.DataFrame(advanced_stats)
-        mock_read_html.side_effect = [[mock_pergame_df], [mock_advanced_df]]
+
+        # Mock salary cap data from RealGM
+        salary_cap_data = create_salary_cap_history_data("2025-2026")
+
+        mock_read_html.side_effect = [
+            [mock_pergame_df],  # Per-game stats
+            [mock_advanced_df],  # Advanced stats
+            [salary_cap_data["cap_df"], salary_cap_data["limits_df"]],  # Salary cap history
+        ]
 
         # Simulate S3 storage
         s3_storage = {}
@@ -614,7 +655,15 @@ class TestCompletePipelineFlow:
             ),
         ]
         mock_advanced_df = pd.DataFrame(advanced_stats)
-        mock_read_html.side_effect = [[mock_pergame_df], [mock_advanced_df]]
+
+        # Mock salary cap data from RealGM
+        salary_cap_data = create_salary_cap_history_data("2025-2026")
+
+        mock_read_html.side_effect = [
+            [mock_pergame_df],  # Per-game stats
+            [mock_advanced_df],  # Advanced stats
+            [salary_cap_data["cap_df"], salary_cap_data["limits_df"]],  # Salary cap history
+        ]
 
         # Generate realistic salary data (need enough players to meet $3.5B-$7B validation)
         # Include the 2 main test players plus additional mock players
@@ -862,7 +911,15 @@ class TestCompletePipelineFlow:
             for i in range(player_count)
         ]
         mock_advanced_df = pd.DataFrame(advanced_stats)
-        mock_read_html.side_effect = [[mock_pergame_df], [mock_advanced_df]]
+
+        # Mock salary cap data from RealGM
+        salary_cap_data = create_salary_cap_history_data("2025-2026")
+
+        mock_read_html.side_effect = [
+            [mock_pergame_df],  # Per-game stats
+            [mock_advanced_df],  # Advanced stats
+            [salary_cap_data["cap_df"], salary_cap_data["limits_df"]],  # Salary cap history
+        ]
 
         # Simulate S3 storage
         s3_storage = {}

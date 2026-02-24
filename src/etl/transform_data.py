@@ -387,6 +387,198 @@ def enrich_player_stats(stats_data: Dict[str, Any]) -> List[Dict[str, Any]]:
         return []
 
 
+def _normalize_season_format(season: str) -> str:
+    """
+    Normalize season format from "2025-26" to "2025-2026" to match RealGM format.
+
+    Args:
+        season: Season in format "YYYY-YY" (e.g., "2025-26")
+
+    Returns:
+        Season in format "YYYY-YYYY" (e.g., "2025-2026")
+    """
+    if "-" not in season:
+        return season
+
+    parts = season.split("-")
+    if len(parts) != 2:
+        return season
+
+    start_year = parts[0]
+    end_year_short = parts[1]
+
+    # Convert short year to full year
+    if len(end_year_short) == 2:
+        # Assume 20xx for now (will work until year 2100)
+        end_year = "20" + end_year_short
+    else:
+        end_year = end_year_short
+
+    return f"{start_year}-{end_year}"
+
+
+def transform_contract_limits(
+    cap_data: Dict[str, Any], season: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """
+    Transform and clean contract limits data from RealGM.
+
+    Converts dollar amounts from strings to integers for max/min contract amounts.
+    Optionally filters to a specific season.
+
+    Args:
+        cap_data: Raw salary cap history data from RealGM (includes contract_limits)
+        season: Optional season to filter (e.g., "2025-26"). If None, returns all seasons.
+
+    Returns:
+        List of cleaned contract limit dictionaries (filtered by season if provided)
+    """
+    logger.info("Transforming contract limits...")
+
+    try:
+        contract_limits = cap_data.get("contract_limits", [])
+
+        if not contract_limits:
+            logger.warning("No contract limits found")
+            return []
+
+        def clean_dollar_amount(value: Any) -> Optional[int]:
+            """Convert dollar string to integer."""
+            if value is None or value == "":
+                return None
+            if isinstance(value, (int, float)):
+                return int(value)
+
+            try:
+                cleaned = str(value).replace("$", "").replace(",", "").strip()
+                return int(cleaned) if cleaned else None
+            except (ValueError, AttributeError):
+                return None
+
+        transformed_records = []
+
+        # Normalize filter season if provided
+        filter_season = _normalize_season_format(season) if season else None
+
+        for record in contract_limits:
+            if not isinstance(record, dict):
+                continue
+
+            record_season = record.get("Season")
+            if not record_season:
+                logger.debug("Skipping record with no season")
+                continue
+
+            # Filter by season if specified
+            if filter_season and record_season != filter_season:
+                continue
+
+            transformed_record = {
+                "season": record_season,
+                "max_0_6_yos": clean_dollar_amount(record.get("0-6 YOS Max")),
+                "max_7_9_yos": clean_dollar_amount(record.get("7-9 YOS Max")),
+                "max_10_plus_yos": clean_dollar_amount(record.get("10+ YOS Max")),
+                "min_0_yos": clean_dollar_amount(record.get("0 YOS Min")),
+                "min_1_yos": clean_dollar_amount(record.get("1 YOS Min")),
+                "min_2_yos": clean_dollar_amount(record.get("2 YOS Min")),
+                "min_10_plus_yos": clean_dollar_amount(record.get("10+ YOS Min")),
+            }
+
+            transformed_records.append(transformed_record)
+
+        if filter_season and len(transformed_records) == 0:
+            logger.warning(f"No contract limits found for season {filter_season}")
+
+        logger.info(f"Transformed {len(transformed_records)} contract limit records")
+        return transformed_records
+
+    except Exception as e:
+        logger.error(f"Error transforming contract limits: {e}")
+        return []
+
+
+def transform_salary_cap_history(
+    cap_data: Dict[str, Any], season: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """
+    Transform and clean salary cap history data from RealGM.
+
+    Converts dollar amounts from strings (e.g., "$154,647,000") to integers.
+    Optionally filters to a specific season.
+
+    Args:
+        cap_data: Raw salary cap history data from RealGM
+        season: Optional season to filter (e.g., "2025-26"). If None, returns all seasons.
+
+    Returns:
+        List of cleaned salary cap dictionaries (filtered by season if provided)
+    """
+    logger.info("Transforming salary cap history...")
+
+    try:
+        salary_cap_history = cap_data.get("salary_cap_history", [])
+
+        if not salary_cap_history:
+            logger.warning("No salary cap history found")
+            return []
+
+        def clean_dollar_amount(value: Any) -> Optional[int]:
+            """Convert dollar string to integer."""
+            if value is None or value == "":
+                return None
+            if isinstance(value, (int, float)):
+                return int(value)
+
+            # Remove $, commas, and convert to int
+            try:
+                cleaned = str(value).replace("$", "").replace(",", "").strip()
+                return int(cleaned) if cleaned else None
+            except (ValueError, AttributeError):
+                return None
+
+        transformed_records = []
+
+        # Normalize filter season if provided
+        filter_season = _normalize_season_format(season) if season else None
+
+        for record in salary_cap_history:
+            if not isinstance(record, dict):
+                continue
+
+            record_season = record.get("Season")
+            if not record_season:
+                logger.debug("Skipping record with no season")
+                continue
+
+            # Filter by season if specified
+            if filter_season and record_season != filter_season:
+                continue
+
+            transformed_record = {
+                "season": record_season,
+                "salary_cap": clean_dollar_amount(record.get("Salary Cap")),
+                "luxury_tax": clean_dollar_amount(record.get("Luxury Tax")),
+                "first_apron": clean_dollar_amount(record.get("1st Apron")),
+                "second_apron": clean_dollar_amount(record.get("2nd Apron")),
+                "bae": clean_dollar_amount(record.get("BAE")),
+                "non_taxpayer_mle": clean_dollar_amount(record.get("Non-Taxpayer MLE")),
+                "taxpayer_mle": clean_dollar_amount(record.get("Taxpayer MLE")),
+                "team_room_mle": clean_dollar_amount(record.get("Team Room MLE")),
+            }
+
+            transformed_records.append(transformed_record)
+
+        if filter_season and len(transformed_records) == 0:
+            logger.warning(f"No salary cap data found for season {filter_season}")
+
+        logger.info(f"Transformed {len(transformed_records)} salary cap records")
+        return transformed_records
+
+    except Exception as e:
+        logger.error(f"Error transforming salary cap history: {e}")
+        return []
+
+
 def enrich_team_data(
     teams: List[Dict[str, Any]],
     enriched_salaries: List[Dict[str, Any]],
@@ -492,7 +684,166 @@ def enrich_team_data(
     return enriched_teams
 
 
-def handler(event, context):
+def _process_salary_data(
+    salary_data: Optional[Dict[str, Any]], partition: str, results: Dict[str, Any]
+) -> List[Dict[str, Any]]:
+    """Process and save salary data."""
+    if not salary_data or not salary_data.get("salaries"):
+        logger.warning("Skipping salary processing - missing salary data")
+        return []
+
+    logger.info("Processing salary data...")
+    # Normalize player names in salary data
+    enriched_salaries = []
+    for salary in salary_data["salaries"]:
+        normalized_salary = salary.copy()
+        if "player_name" in normalized_salary:
+            normalized_salary["player_name"] = normalize_to_ascii(normalized_salary["player_name"])
+        enriched_salaries.append(normalized_salary)
+
+    # Calculate salary statistics
+    total_count = len(enriched_salaries)
+    results["statistics"]["total_salaries"] = total_count
+
+    # Calculate salary aggregations
+    salary_values = [s["annual_salary"] for s in enriched_salaries]
+    if salary_values:
+        results["statistics"]["avg_salary"] = round(sum(salary_values) / len(salary_values), 2)
+        results["statistics"]["min_salary"] = min(salary_values)
+        results["statistics"]["max_salary"] = max(salary_values)
+        results["statistics"]["total_salary_cap"] = sum(salary_values)
+
+    # Save transformed salaries
+    transformed_salary_data = {
+        "transform_timestamp": datetime.utcnow().isoformat(),
+        "source": salary_data.get("source", "unknown"),
+        "season": (
+            salary_data.get("salaries", [{}])[0].get("season", "unknown")
+            if enriched_salaries
+            else "unknown"
+        ),
+        "statistics": {"total_salaries": total_count},
+        "salaries": enriched_salaries,
+    }
+
+    s3_key = f"transformed/salaries/{partition}/enriched_salaries.json"
+    if save_to_s3(transformed_salary_data, s3_key):
+        results["transformed"].append("enriched_salaries")
+        logger.info(f"Saved {total_count} salary records")
+    else:
+        results["errors"].append("Failed to save salary data")
+
+    return enriched_salaries
+
+
+def _process_player_stats(
+    stats_data: Dict[str, Any], partition: str, results: Dict[str, Any]
+) -> Optional[List[Dict[str, Any]]]:
+    """Process and save player stats data."""
+    logger.info("Enriching player statistics...")
+    enriched_stats = enrich_player_stats(stats_data)
+
+    if not enriched_stats:
+        results["errors"].append("Failed to enrich player stats")
+        return None
+
+    results["statistics"]["total_player_stats"] = len(enriched_stats)
+
+    # Calculate stats aggregations
+    players_with_stats = [p for p in enriched_stats if p.get("points") is not None]
+    if players_with_stats:
+        avg_points = sum(float(p["points"] or 0) for p in players_with_stats) / len(
+            players_with_stats
+        )
+        avg_rebounds = sum(float(p["rebounds"] or 0) for p in players_with_stats) / len(
+            players_with_stats
+        )
+        avg_assists = sum(float(p["assists"] or 0) for p in players_with_stats) / len(
+            players_with_stats
+        )
+
+        results["statistics"]["avg_points_per_game"] = round(avg_points, 2)
+        results["statistics"]["avg_rebounds_per_game"] = round(avg_rebounds, 2)
+        results["statistics"]["avg_assists_per_game"] = round(avg_assists, 2)
+
+    # Save enriched stats
+    transformed_stats_data = {
+        "transform_timestamp": datetime.utcnow().isoformat(),
+        "season": stats_data.get("season", "unknown"),
+        "source": stats_data.get("source", "basketball_reference"),
+        "statistics": {"total_players": len(enriched_stats)},
+        "player_stats": enriched_stats,
+    }
+
+    s3_key = f"transformed/stats/{partition}/enriched_player_stats.json"
+    if save_to_s3(transformed_stats_data, s3_key):
+        results["transformed"].append("enriched_player_stats")
+        logger.info(f"Saved enriched stats for {len(enriched_stats)} players")
+    else:
+        results["errors"].append("Failed to save enriched stats")
+
+    return enriched_stats
+
+
+def _process_salary_cap_data(
+    cap_history_data: Optional[Dict[str, Any]],
+    partition: str,
+    season: str,
+    results: Dict[str, Any],
+) -> None:
+    """Process and save salary cap data."""
+    if not cap_history_data:
+        logger.info("No salary cap history data found - skipping")
+        return
+
+    # Transform salary cap history (filter by current season)
+    logger.info(f"Transforming salary cap history for season {season}...")
+    transformed_cap_history = transform_salary_cap_history(cap_history_data, season=season)
+
+    if transformed_cap_history:
+        results["statistics"]["total_cap_seasons"] = len(transformed_cap_history)
+
+        # Save transformed salary cap history
+        s3_key = f"transformed/salary_cap/{partition}/salary_cap_history.json"
+        transformed_cap_data = {
+            "transform_timestamp": datetime.utcnow().isoformat(),
+            "source": cap_history_data.get("source", "realgm"),
+            "statistics": {"total_seasons": len(transformed_cap_history)},
+            "salary_cap_history": transformed_cap_history,
+        }
+        if save_to_s3(transformed_cap_data, s3_key):
+            results["transformed"].append("salary_cap_history")
+            logger.info(f"Saved salary cap history for {len(transformed_cap_history)} seasons")
+        else:
+            results["errors"].append("Failed to save salary cap history")
+    else:
+        results["errors"].append("Failed to transform salary cap history")
+
+    # Transform contract limits
+    logger.info(f"Transforming contract limits for season {season}...")
+    transformed_contract_limits = transform_contract_limits(cap_history_data, season=season)
+
+    if transformed_contract_limits:
+        results["statistics"]["total_contract_limit_seasons"] = len(transformed_contract_limits)
+
+        # Save transformed contract limits
+        s3_key = f"transformed/salary_cap/{partition}/contract_limits.json"
+        transformed_limits_data = {
+            "transform_timestamp": datetime.utcnow().isoformat(),
+            "source": cap_history_data.get("source", "realgm"),
+            "statistics": {"total_seasons": len(transformed_contract_limits)},
+            "contract_limits": transformed_contract_limits,
+        }
+        if save_to_s3(transformed_limits_data, s3_key):
+            results["transformed"].append("contract_limits")
+            logger.info(f"Saved contract limits for {len(transformed_contract_limits)} seasons")
+        else:
+            results["errors"].append("Failed to save contract limits")
+    else:
+        results["errors"].append("Failed to transform contract limits")
+
+
+def handler(event, context):  # noqa: C901
     """
     Lambda handler for transforming NBA data.
 
@@ -669,7 +1020,72 @@ def handler(event, context):
         else:
             results["errors"].append("Failed to enrich player stats")
 
-        # 4. Enrich and save team data with aggregations
+        # 4. Transform salary cap history and contract limits (if available)
+        cap_history_data = load_from_s3(f"raw/salary_cap/{partition}/salary_cap_history.json")
+
+        # Extract season from event or partition
+        season = event.get("season", "2025-26")
+
+        if cap_history_data:
+            # Transform salary cap history (filter by current season)
+            logger.info(f"Transforming salary cap history for season {season}...")
+            transformed_cap_history = transform_salary_cap_history(cap_history_data, season=season)
+
+            if transformed_cap_history:
+                results["statistics"]["total_cap_seasons"] = len(transformed_cap_history)
+
+                # Save transformed salary cap history
+                s3_key = f"transformed/salary_cap/{partition}/salary_cap_history.json"
+                transformed_cap_data = {
+                    "transform_timestamp": datetime.utcnow().isoformat(),
+                    "source": cap_history_data.get("source", "realgm"),
+                    "statistics": {
+                        "total_seasons": len(transformed_cap_history),
+                    },
+                    "salary_cap_history": transformed_cap_history,
+                }
+                if save_to_s3(transformed_cap_data, s3_key):
+                    results["transformed"].append("salary_cap_history")
+                    logger.info(
+                        f"Saved salary cap history for {len(transformed_cap_history)} seasons"
+                    )
+                else:
+                    results["errors"].append("Failed to save salary cap history")
+            else:
+                results["errors"].append("Failed to transform salary cap history")
+
+            # Transform contract limits (filter by current season)
+            logger.info(f"Transforming contract limits for season {season}...")
+            transformed_contract_limits = transform_contract_limits(cap_history_data, season=season)
+
+            if transformed_contract_limits:
+                results["statistics"]["total_contract_limit_seasons"] = len(
+                    transformed_contract_limits
+                )
+
+                # Save transformed contract limits
+                s3_key = f"transformed/salary_cap/{partition}/contract_limits.json"
+                transformed_limits_data = {
+                    "transform_timestamp": datetime.utcnow().isoformat(),
+                    "source": cap_history_data.get("source", "realgm"),
+                    "statistics": {
+                        "total_seasons": len(transformed_contract_limits),
+                    },
+                    "contract_limits": transformed_contract_limits,
+                }
+                if save_to_s3(transformed_limits_data, s3_key):
+                    results["transformed"].append("contract_limits")
+                    logger.info(
+                        f"Saved contract limits for {len(transformed_contract_limits)} seasons"
+                    )
+                else:
+                    results["errors"].append("Failed to save contract limits")
+            else:
+                results["errors"].append("Failed to transform contract limits")
+        else:
+            logger.info("No salary cap history data found - skipping")
+
+        # 5. Enrich and save team data with aggregations
         if teams_data and teams_data.get("teams"):
             logger.info("Enriching team data with salary and performance aggregations...")
 

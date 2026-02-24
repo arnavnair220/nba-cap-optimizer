@@ -329,6 +329,111 @@ def fetch_espn_salaries(season: str = "2025-26") -> List[Dict[str, Any]]:
     return all_salaries
 
 
+def fetch_salary_cap_history(max_retries: int = 3) -> Optional[Dict[str, Any]]:
+    """
+    Fetch league-wide salary cap history from RealGM with retry logic.
+
+    This includes salary cap, luxury tax, aprons, and exception amounts for each season.
+
+    Args:
+        max_retries: Maximum number of retry attempts
+
+    Returns:
+        Salary cap history data with season-by-season cap information
+
+    Note:
+        If this fails from AWS Lambda (403/blocked), consider:
+        1. Storing a static JSON file in S3 and loading it instead
+        2. Using an alternative data source
+        3. Updating manually once per season (cap changes infrequently)
+    """
+    logger.info("Fetching salary cap history from RealGM...")
+
+    url = "https://basketball.realgm.com/nba/info/salary_cap"
+
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/91.0.4472.124 Safari/537.36"
+        )
+    }
+
+    for attempt in range(max_retries):
+        try:
+            if attempt > 0:
+                backoff_delay = 2**attempt  # Exponential backoff: 2s, 4s, 8s
+                logger.info(
+                    f"Retry attempt {attempt + 1}/{max_retries} after {backoff_delay}s delay"
+                )
+                time.sleep(backoff_delay)
+            else:
+                time.sleep(1)  # Be respectful with rate limiting
+
+            response = requests.get(url, headers=headers, timeout=30)
+
+            if response.status_code == 403:
+                logger.warning(
+                    f"Attempt {attempt + 1}/{max_retries}: Received 403 Forbidden from RealGM. "
+                    "Site may be blocking AWS IPs. Consider using a static data file."
+                )
+                if attempt == max_retries - 1:
+                    logger.error(
+                        "All retries exhausted. Salary cap history fetch blocked. "
+                        "Recommendation: Store cap history as static JSON in S3."
+                    )
+                    return None
+                continue
+
+            if response.status_code != 200:
+                logger.error(f"Failed to fetch salary cap history: HTTP {response.status_code}")
+                if attempt == max_retries - 1:
+                    return None
+                continue
+
+            # Parse tables with pandas
+            from io import StringIO
+
+            tables = pd.read_html(StringIO(response.text))
+
+            if not tables or len(tables) == 0:
+                logger.error("No tables found in salary cap history page")
+                if attempt == max_retries - 1:
+                    return None
+                continue
+
+            # First table has salary cap, luxury tax, aprons, and exceptions
+            df_cap = tables[0]
+            cap_records = df_cap.to_dict("records")
+
+            # Second table has max/min contract amounts by years of service
+            df_contracts = tables[1] if len(tables) > 1 else None
+            contract_records = df_contracts.to_dict("records") if df_contracts is not None else []
+
+            data = {
+                "fetch_timestamp": datetime.utcnow().isoformat(),
+                "source": "realgm",
+                "salary_cap_history": cap_records,
+                "contract_limits": contract_records,
+                "cap_columns": list(df_cap.columns),
+                "contract_columns": list(df_contracts.columns) if df_contracts is not None else [],
+            }
+
+            logger.info(
+                f"Successfully fetched salary cap history for {len(cap_records)} seasons "
+                f"and contract limits for {len(contract_records)} seasons"
+            )
+            return data
+
+        except Exception as e:
+            logger.warning(f"Attempt {attempt + 1}/{max_retries} failed: {e}")
+            if attempt == max_retries - 1:
+                logger.error(f"All {max_retries} attempts failed to fetch salary cap history: {e}")
+                return None
+
+    return None
+
+
 def fetch_salary_data(season: str = "2025-26") -> Dict[str, Any]:
     """
     Fetch player salary data from ESPN.
@@ -443,6 +548,19 @@ def handler(event, context):
                 results["fetched"].append("salaries")
             else:
                 results["errors"].append("Failed to save salary data")
+
+        # 4. Fetch and store salary cap history (monthly or full only)
+        if fetch_type in ["monthly", "full"]:
+            logger.info("Fetching salary cap history...")
+            cap_history_data = fetch_salary_cap_history()
+            if cap_history_data:
+                s3_key = f"raw/salary_cap/{date_partition}/salary_cap_history.json"
+                if save_to_s3(cap_history_data, s3_key):
+                    results["fetched"].append("salary_cap_history")
+                else:
+                    results["errors"].append("Failed to save salary cap history")
+            else:
+                results["errors"].append("Failed to fetch salary cap history")
 
         # 4. Fetch detailed game logs for top players (optional, for full fetch)
         if fetch_type == "full" and stats_data:
