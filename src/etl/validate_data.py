@@ -27,19 +27,6 @@ S3_BUCKET = os.environ.get("DATA_BUCKET")
 ENVIRONMENT = os.environ.get("ENVIRONMENT")
 
 # JSON Schemas for different data types
-PLAYER_SCHEMA = {
-    "$schema": "http://json-schema.org/draft-07/schema#",
-    "type": "object",
-    "required": ["id", "full_name"],
-    "properties": {
-        "id": {"type": "integer"},
-        "full_name": {"type": "string", "minLength": 1},
-        "first_name": {"type": "string"},
-        "last_name": {"type": "string"},
-        "is_active": {"type": "boolean"},
-    },
-}
-
 PLAYER_STATS_SCHEMA = {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "type": "object",
@@ -171,72 +158,6 @@ def validate_json_schema(data: Any, schema: Dict[str, Any]) -> Tuple[bool, List[
         return True, []
     except ValidationError as e:
         return False, [str(e)]
-
-
-def validate_players_data(data: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Validate players data.
-
-    Args:
-        data: Players data
-
-    Returns:
-        Validation results
-    """
-    errors: List[str] = []
-    warnings: List[str] = []
-    statistics: Dict[str, Any] = {}
-    valid = True
-
-    if "players" not in data:
-        errors.append("Missing 'players' key in data")
-        return {
-            "data_type": "players",
-            "valid": False,
-            "errors": errors,
-            "warnings": warnings,
-            "statistics": statistics,
-        }
-
-    players = data["players"]
-    statistics["total_players"] = len(players)
-
-    # Validate each player
-    invalid_players = []
-    for i, player in enumerate(players):
-        is_valid_player, player_errors = validate_json_schema(player, PLAYER_SCHEMA)
-        if not is_valid_player:
-            invalid_players.append(f"Player {i}: {player_errors}")
-
-    if invalid_players:
-        valid = False
-        errors.extend(invalid_players[:10])  # Limit to first 10 errors
-        statistics["invalid_players"] = len(invalid_players)
-
-    # Data quality checks
-    # Note: fetch_active_players() already returns only active players, so total_players == active
-    total_count = len(players)
-    if total_count < 400:
-        warnings.append(f"Low player count: {total_count} (expected 450+)")
-    elif total_count > 600:
-        warnings.append(f"High player count: {total_count} (expected ~450-550)")
-
-    # Check for duplicate player IDs
-    player_ids = [p.get("id") for p in players if p.get("id") is not None]
-    unique_ids = set(player_ids)
-    if len(player_ids) != len(unique_ids):
-        duplicates = len(player_ids) - len(unique_ids)
-        valid = False
-        errors.append(f"Found {duplicates} duplicate player IDs")
-        statistics["duplicate_players"] = duplicates
-
-    return {
-        "data_type": "players",
-        "valid": valid,
-        "errors": errors,
-        "warnings": warnings,
-        "statistics": statistics,
-    }
 
 
 def _validate_season_and_timestamp(data: Dict[str, Any], warnings: List[str]) -> None:
@@ -932,15 +853,10 @@ def handler(event, context):
 
     # Define files to validate based on fetch type
     # stats_only (daily): Only player_stats
-    # monthly: active_players, player_stats, teams, salaries
+    # monthly: player_stats, teams, salaries
     # full: All of the above (game_logs validation TBD)
     all_files = {
         "stats": (f"raw/stats/{partition}/league_player_stats.json", validate_stats_data, True),
-        "players": (
-            f"raw/players/{partition}/active_players.json",
-            validate_players_data,
-            fetch_type in ["monthly", "full"],
-        ),
         "teams": (
             f"raw/teams/{partition}/nba_teams.json",
             validate_teams_data,

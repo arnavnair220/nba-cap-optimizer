@@ -77,49 +77,6 @@ class TestNormalizeTeamAbbreviation:
         assert result == "BOS"
 
 
-class TestMatchSalariesWithPlayers:
-    """Test salary matching with player IDs."""
-
-    def test_exact_name_match(self):
-        """Test matching with exact name match."""
-        salaries = [{"player_name": "LeBron James", "annual_salary": 50000000, "season": "2025-26"}]
-        players = [{"id": 2544, "full_name": "LeBron James"}]
-
-        result = transform_data.match_salaries_with_players(salaries, players)
-
-        assert result[0]["player_id"] == 2544
-        assert result[0]["player_name"] == "LeBron James"
-
-    def test_unicode_name_match(self):
-        """Test matching works when player has Unicode name and salary has ASCII."""
-        # NBA API returns Unicode names, ESPN salaries have ASCII
-        salaries = [
-            {"player_name": "Nikola Jokic", "annual_salary": 51000000, "season": "2025-26"},
-            {"player_name": "Luka Doncic", "annual_salary": 43000000, "season": "2025-26"},
-        ]
-        players = [
-            {"id": 203999, "full_name": "Nikola Jokić"},  # Unicode
-            {"id": 1629029, "full_name": "Luka Dončić"},  # Unicode
-        ]
-
-        result = transform_data.match_salaries_with_players(salaries, players)
-
-        # Should match despite accent differences
-        assert result[0]["player_id"] == 203999
-        assert result[1]["player_id"] == 1629029
-
-    def test_no_match_sets_none(self):
-        """Test player_id is None when no match found."""
-        salaries = [
-            {"player_name": "Unknown Player", "annual_salary": 10000000, "season": "2025-26"}
-        ]
-        players = [{"id": 1, "full_name": "Known Player"}]
-
-        result = transform_data.match_salaries_with_players(salaries, players)
-
-        assert result[0]["player_id"] is None
-
-
 class TestEnrichPlayerStats:
     """Test player stats enrichment with Basketball Reference data."""
 

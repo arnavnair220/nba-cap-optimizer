@@ -1,18 +1,9 @@
 -- NBA Cap Optimizer Database Schema
 -- PostgreSQL schema for storing NBA player stats, salaries, and team data
 
--- Players table: Master player list from NBA API
-CREATE TABLE IF NOT EXISTS players (
-    id INTEGER PRIMARY KEY,
-    full_name VARCHAR(255) NOT NULL UNIQUE
-);
-
-CREATE INDEX IF NOT EXISTS idx_players_full_name ON players(full_name);
-
 -- Salaries table: Annual salary per player per season
 CREATE TABLE IF NOT EXISTS salaries (
     id SERIAL PRIMARY KEY,
-    player_id INTEGER REFERENCES players(id),
     player_name VARCHAR(255) NOT NULL,
     annual_salary INTEGER NOT NULL,
     season VARCHAR(20) NOT NULL,
@@ -20,14 +11,12 @@ CREATE TABLE IF NOT EXISTS salaries (
     UNIQUE(player_name, season)
 );
 
-CREATE INDEX IF NOT EXISTS idx_salaries_player_id ON salaries(player_id);
 CREATE INDEX IF NOT EXISTS idx_salaries_player_name ON salaries(player_name);
 CREATE INDEX IF NOT EXISTS idx_salaries_season ON salaries(season);
 
 -- Player stats table: Per-game and advanced statistics from Basketball Reference
 CREATE TABLE IF NOT EXISTS player_stats (
     id SERIAL PRIMARY KEY,
-    player_id INTEGER REFERENCES players(id),
     player_name VARCHAR(255) NOT NULL,
     season VARCHAR(20) NOT NULL,
     team_abbreviation VARCHAR(10),
@@ -90,7 +79,6 @@ CREATE TABLE IF NOT EXISTS player_stats (
     UNIQUE(player_name, season, team_abbreviation)
 );
 
-CREATE INDEX IF NOT EXISTS idx_player_stats_player_id ON player_stats(player_id);
 CREATE INDEX IF NOT EXISTS idx_player_stats_player_name ON player_stats(player_name);
 CREATE INDEX IF NOT EXISTS idx_player_stats_season ON player_stats(season);
 CREATE INDEX IF NOT EXISTS idx_player_stats_team ON player_stats(team_abbreviation);

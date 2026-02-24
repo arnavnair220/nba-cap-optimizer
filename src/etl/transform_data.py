@@ -127,54 +127,6 @@ def save_to_s3(data: Dict[str, Any], s3_key: str) -> bool:
         return False
 
 
-def match_salaries_with_players(
-    salaries: List[Dict[str, Any]], active_players: List[Dict[str, Any]]
-) -> List[Dict[str, Any]]:
-    """
-    Match salary data with player IDs using normalized name matching.
-
-    Handles Unicode names from NBA API by normalizing to ASCII before matching.
-    Example: "Nikola Jokić" (NBA API) matches "Nikola Jokic" (ESPN)
-
-    Args:
-        salaries: List of salary dictionaries (from ESPN - has player_name)
-        active_players: List of player dictionaries (from NBA API - has id and full_name)
-
-    Returns:
-        Salaries enriched with player_id field
-    """
-    logger.info("Matching salaries with player IDs...")
-
-    # Create a lookup dictionary: normalized_name -> player_id
-    player_lookup = {}
-    for player in active_players:
-        full_name = player.get("full_name", "")
-        player_id = player.get("id")
-
-        if full_name and player_id:
-            # Normalize: ASCII conversion, lowercase, remove extra whitespace
-            normalized_name = " ".join(normalize_to_ascii(full_name).lower().split())
-            player_lookup[normalized_name] = player_id
-
-    # Match salaries
-    matched = 0
-    for salary in salaries:
-        player_name = salary.get("player_name", "")
-        # Normalize: ASCII conversion, lowercase, remove extra whitespace
-        normalized = " ".join(normalize_to_ascii(player_name).lower().split())
-
-        if normalized in player_lookup:
-            salary["player_id"] = player_lookup[normalized]
-            matched += 1
-        else:
-            salary["player_id"] = None
-
-    match_rate = (matched / len(salaries) * 100) if salaries else 0
-    logger.info(f"Matched: {matched}/{len(salaries)} ({match_rate:.1f}%)")
-
-    return salaries
-
-
 def _build_stat_dict(pg_stat: Dict[str, Any], team_abbrev: Optional[str]) -> Dict[str, Any]:
     """
     Build a stat dictionary from a per-game stat row.
@@ -595,7 +547,6 @@ def handler(event, context):
         # 1. Load raw data from S3
         logger.info("Loading raw data from S3...")
 
-        players_data = load_from_s3(f"raw/players/{partition}/active_players.json")
         stats_data = load_from_s3(f"raw/stats/{partition}/league_player_stats.json")
         salary_data = load_from_s3(f"raw/salaries/{partition}/player_salaries.json")
         teams_data = load_from_s3(f"raw/teams/{partition}/nba_teams.json")
@@ -609,23 +560,15 @@ def handler(event, context):
                 "body": json.dumps(results),
             }
 
-        # 2. Enrich salary data with player IDs (if both datasets available)
+        # 2. Process salary data (if available)
         enriched_salaries = []
-        if salary_data and players_data and salary_data.get("salaries"):
-            logger.info("Enriching salary data with player IDs...")
-            enriched_salaries = match_salaries_with_players(
-                salary_data["salaries"], players_data.get("players", [])
-            )
+        if salary_data and salary_data.get("salaries"):
+            logger.info("Processing salary data...")
+            enriched_salaries = salary_data["salaries"]
 
             # Calculate salary statistics
-            matched_count = sum(1 for s in enriched_salaries if s.get("player_id") is not None)
             total_count = len(enriched_salaries)
-            match_rate = (matched_count / total_count * 100) if total_count > 0 else 0
-
-            results["statistics"]["salary_match_rate"] = round(match_rate, 2)
             results["statistics"]["total_salaries"] = total_count
-            results["statistics"]["matched_salaries"] = matched_count
-            results["statistics"]["unmatched_salaries"] = total_count - matched_count
 
             # Calculate salary aggregations
             salary_values = [s["annual_salary"] for s in enriched_salaries]
@@ -637,7 +580,7 @@ def handler(event, context):
                 results["statistics"]["max_salary"] = max(salary_values)
                 results["statistics"]["total_salary_cap"] = sum(salary_values)
 
-            # Save enriched salaries
+            # Save transformed salaries
             transformed_salary_data = {
                 "transform_timestamp": datetime.utcnow().isoformat(),
                 "source": salary_data.get("source", "unknown"),
@@ -648,8 +591,6 @@ def handler(event, context):
                 ),
                 "statistics": {
                     "total_salaries": total_count,
-                    "matched_salaries": matched_count,
-                    "match_rate": round(match_rate, 2),
                 },
                 "salaries": enriched_salaries,
             }
@@ -657,11 +598,11 @@ def handler(event, context):
             s3_key = f"transformed/salaries/{partition}/enriched_salaries.json"
             if save_to_s3(transformed_salary_data, s3_key):
                 results["transformed"].append("enriched_salaries")
-                logger.info(f"Saved enriched salaries: {matched_count}/{total_count} matched")
+                logger.info(f"Saved {total_count} salary records")
             else:
-                results["errors"].append("Failed to save enriched salaries")
+                results["errors"].append("Failed to save salary data")
         else:
-            logger.warning("Skipping salary enrichment - missing salary or player data")
+            logger.warning("Skipping salary processing - missing salary data")
 
         # 3. Enrich player stats from Basketball Reference
         logger.info("Enriching player statistics...")

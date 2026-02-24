@@ -360,16 +360,15 @@ class TestDataEnrichmentThroughPipeline:
         assert "enriched_player_stats" in body["transformed"]
         assert "enriched_teams" in body["transformed"]
 
-        # Verify enriched_salaries has player_id
+        # Verify enriched_salaries data
         salary_key = [k for k in saved_data.keys() if "enriched_salaries" in k][0]
         enriched_salaries = saved_data[salary_key]
         assert len(enriched_salaries["salaries"]) == 400
-        assert all(s.get("player_id") is not None for s in enriched_salaries["salaries"])
 
         lebron_salary = next(
             s for s in enriched_salaries["salaries"] if s["player_name"] == "LeBron James"
         )
-        assert lebron_salary["player_id"] == 2544
+        assert lebron_salary["player_name"] == "LeBron James"
 
         # Verify enriched_stats merges per-game + advanced
         stats_key = [k for k in saved_data.keys() if "enriched_player_stats" in k][0]
@@ -402,7 +401,7 @@ class TestDataEnrichmentThroughPipeline:
     @patch("src.etl.transform_data.S3_BUCKET", "test-bucket")
     @patch("src.etl.transform_data.save_to_s3")
     @patch("src.etl.transform_data.load_from_s3")
-    def test_salary_player_matching_with_unicode_names(
+    def test_salary_data_with_unicode_names(
         self,
         mock_transform_load,
         mock_transform_save,
@@ -411,8 +410,8 @@ class TestDataEnrichmentThroughPipeline:
         mock_realistic_monthly_data,
     ):
         """
-        Test salary-player matching with Unicode names (Jokić, Dončić).
-        Verify ASCII normalization works correctly across validate→transform.
+        Test salary data flows correctly with Unicode names (Jokić, Dončić).
+        Verify data integrity across validate→transform.
         """
 
         def mock_load_impl(s3_key):
@@ -462,7 +461,7 @@ class TestDataEnrichmentThroughPipeline:
 
         assert transform_result["statusCode"] == 200
 
-        # Verify salary matching worked despite ASCII normalization
+        # Verify salary data flows correctly
         salary_key = [k for k in saved_data.keys() if "enriched_salaries" in k][0]
         enriched_salaries = saved_data[salary_key]
 
@@ -472,12 +471,11 @@ class TestDataEnrichmentThroughPipeline:
             s for s in enriched_salaries["salaries"] if "Doncic" in s["player_name"]
         )
 
-        # Both should have matched player IDs (tests Unicode name matching)
-        assert jokic_salary["player_id"] == 203999
-        assert doncic_salary["player_id"] == 1629029
-
-        # Verify match rate is 100%
-        assert enriched_salaries["statistics"]["match_rate"] == 100.0
+        # Verify salary data is present
+        assert jokic_salary["player_name"] == "Nikola Jokic"
+        assert doncic_salary["player_name"] == "Luka Doncic"
+        assert "annual_salary" in jokic_salary
+        assert "annual_salary" in doncic_salary
 
 
 class TestDataConsistencyAcrossStages:

@@ -332,7 +332,6 @@ class TestHandlerSeasonParameter:
 
     @patch("src.etl.fetch_data.fetch_espn_salaries")
     @patch("src.etl.fetch_data.teams.get_teams")
-    @patch("src.etl.fetch_data.players.get_active_players")
     @patch("src.etl.fetch_data.fetch_player_stats")
     @patch("src.etl.fetch_data.save_to_s3")
     @patch("src.etl.fetch_data.S3_BUCKET", "test-bucket")
@@ -341,12 +340,10 @@ class TestHandlerSeasonParameter:
         self,
         mock_save,
         mock_fetch_stats,
-        mock_get_players,
         mock_get_teams,
         mock_fetch_salaries,
     ):
         """Test that monthly fetch passes season to both stats and salaries."""
-        mock_get_players.return_value = []
         mock_get_teams.return_value = []
         mock_fetch_stats.return_value = {
             "season": "2023-24",

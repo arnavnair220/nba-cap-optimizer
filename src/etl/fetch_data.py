@@ -24,9 +24,9 @@ import requests
 from botocore.exceptions import ClientError
 from bs4 import BeautifulSoup
 
-# Keep nba_api imports only for static data (players, teams)
+# Keep nba_api imports only for static data (teams)
 # Stats fetching now uses Basketball-Reference.com scraping
-from nba_api.stats.static import players, teams
+from nba_api.stats.static import teams
 
 # Configure logging
 logger = logging.getLogger()
@@ -72,29 +72,6 @@ def save_to_s3(data: Dict[str, Any], s3_key: str) -> bool:
     except ClientError as e:
         logger.error(f"Failed to save to S3: {e}")
         return False
-
-
-def fetch_active_players() -> List[Dict[str, Any]]:
-    """
-    Fetch all active NBA players.
-
-    Returns raw player data from NBA API with original Unicode names preserved.
-    Name normalization is handled in transform_data for matching purposes.
-
-    Returns:
-        List of player dictionaries with original Unicode names
-    """
-    logger.info("Fetching active players...")
-
-    try:
-        # Get all players from static data (preserves Unicode names)
-        all_players = players.get_active_players()
-
-        logger.info(f"Found {len(all_players)} active players")
-        return cast(List[Dict[str, Any]], all_players)
-    except Exception as e:
-        logger.error(f"Failed to fetch players: {e}")
-        return []
 
 
 def fetch_player_stats(season: str = "2025-26", max_retries: int = 3) -> Optional[Dict[str, Any]]:
@@ -435,21 +412,8 @@ def handler(event, context):
 
     results = {"statusCode": 200, "fetched": [], "errors": []}
 
-    players_data = None
-
     try:
-        # 1. Fetch and store active players (monthly or full only)
-        if fetch_type in ["monthly", "full"]:
-            logger.info("Fetching active players...")
-            players_data = fetch_active_players()
-            if players_data:
-                s3_key = f"raw/players/{date_partition}/active_players.json"
-                if save_to_s3({"players": players_data}, s3_key):
-                    results["fetched"].append("active_players")
-            else:
-                results["errors"].append("Failed to fetch active players")
-
-        # 2. Fetch and store player stats (always)
+        # 1. Fetch and store player stats (always)
         logger.info("Fetching player stats...")
         stats_data = fetch_player_stats(season)
         if stats_data:
@@ -459,7 +423,7 @@ def handler(event, context):
         else:
             results["errors"].append("Failed to fetch player stats")
 
-        # 3. Fetch and store team data (monthly or full only)
+        # 2. Fetch and store team data (monthly or full only)
         if fetch_type in ["monthly", "full"]:
             logger.info("Fetching team data...")
             teams_data = fetch_team_data()
@@ -470,7 +434,7 @@ def handler(event, context):
             else:
                 results["errors"].append("Failed to fetch teams")
 
-        # 4. Fetch and store salary data from ESPN (monthly or full only)
+        # 3. Fetch and store salary data from ESPN (monthly or full only)
         if fetch_type in ["monthly", "full"]:
             logger.info("Fetching salary data...")
             salary_data = fetch_salary_data(season)
@@ -480,7 +444,7 @@ def handler(event, context):
             else:
                 results["errors"].append("Failed to save salary data")
 
-        # 5. Fetch detailed game logs for top players (optional, for full fetch)
+        # 4. Fetch detailed game logs for top players (optional, for full fetch)
         if fetch_type == "full" and stats_data:
             logger.info("Fetching detailed game logs for top players...")
             # Get top 50 players by minutes played
