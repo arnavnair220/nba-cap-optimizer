@@ -329,6 +329,60 @@ def fetch_espn_salaries(season: str = "2025-26") -> List[Dict[str, Any]]:
     return all_salaries
 
 
+def load_static_salary_cap_data() -> Optional[Dict[str, Any]]:
+    """
+    Load salary cap data from static JSON file as fallback when RealGM is unavailable.
+
+    This static file contains historical NBA salary cap data and is used as a
+    fallback when RealGM blocks requests (common from AWS Lambda IPs).
+
+    Returns:
+        Salary cap history data from static JSON file, or None if file can't be loaded
+    """
+    try:
+        # Path relative to this file: src/etl/fetch_data.py -> data/salary_cap_history.json
+        static_file_path = os.path.join(
+            os.path.dirname(__file__), "../../data/salary_cap_history.json"
+        )
+        logger.info(f"Loading static salary cap data from {static_file_path}")
+
+        with open(static_file_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        # Transform to match the structure returned by fetch_salary_cap_history
+        result = {
+            "fetch_timestamp": datetime.utcnow().isoformat(),
+            "source": "static_fallback",
+            "salary_cap_history": data["salary_cap_history"],
+            "contract_limits": data["contract_limits"],
+            "cap_columns": (
+                list(data["salary_cap_history"][0].keys()) if data["salary_cap_history"] else []
+            ),
+            "contract_columns": (
+                list(data["contract_limits"][0].keys()) if data["contract_limits"] else []
+            ),
+        }
+
+        logger.info(
+            f"Successfully loaded static salary cap data: {len(result['salary_cap_history'])} "
+            f"seasons, {len(result['contract_limits'])} contract limits"
+        )
+        return result
+
+    except FileNotFoundError:
+        logger.error(
+            f"Static salary cap data file not found at {static_file_path}. "
+            "Deploy data/salary_cap_history.json with Lambda package."
+        )
+        return None
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse static salary cap JSON: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"Unexpected error loading static salary cap data: {e}")
+        return None
+
+
 def fetch_salary_cap_history(max_retries: int = 3) -> Optional[Dict[str, Any]]:
     """
     Fetch league-wide salary cap history from RealGM with retry logic.
@@ -342,10 +396,9 @@ def fetch_salary_cap_history(max_retries: int = 3) -> Optional[Dict[str, Any]]:
         Salary cap history data with season-by-season cap information
 
     Note:
-        If this fails from AWS Lambda (403/blocked), consider:
-        1. Storing a static JSON file in S3 and loading it instead
-        2. Using an alternative data source
-        3. Updating manually once per season (cap changes infrequently)
+        If RealGM is unavailable (403/blocked from AWS Lambda IPs), this function
+        automatically falls back to loading static salary cap data from
+        data/salary_cap_history.json included in the Lambda deployment package
     """
     logger.info("Fetching salary cap history from RealGM...")
 
@@ -378,17 +431,17 @@ def fetch_salary_cap_history(max_retries: int = 3) -> Optional[Dict[str, Any]]:
                     "Site may be blocking AWS IPs. Consider using a static data file."
                 )
                 if attempt == max_retries - 1:
-                    logger.error(
-                        "All retries exhausted. Salary cap history fetch blocked. "
-                        "Recommendation: Store cap history as static JSON in S3."
+                    logger.warning(
+                        "All retries exhausted. RealGM blocked. Falling back to static data."
                     )
-                    return None
+                    return load_static_salary_cap_data()
                 continue
 
             if response.status_code != 200:
                 logger.error(f"Failed to fetch salary cap history: HTTP {response.status_code}")
                 if attempt == max_retries - 1:
-                    return None
+                    logger.warning("All retries exhausted. Falling back to static data.")
+                    return load_static_salary_cap_data()
                 continue
 
             # Parse tables with pandas
@@ -399,7 +452,8 @@ def fetch_salary_cap_history(max_retries: int = 3) -> Optional[Dict[str, Any]]:
             if not tables or len(tables) == 0:
                 logger.error("No tables found in salary cap history page")
                 if attempt == max_retries - 1:
-                    return None
+                    logger.warning("All retries exhausted. Falling back to static data.")
+                    return load_static_salary_cap_data()
                 continue
 
             # First table has salary cap, luxury tax, aprons, and exceptions
@@ -428,10 +482,14 @@ def fetch_salary_cap_history(max_retries: int = 3) -> Optional[Dict[str, Any]]:
         except Exception as e:
             logger.warning(f"Attempt {attempt + 1}/{max_retries} failed: {e}")
             if attempt == max_retries - 1:
-                logger.error(f"All {max_retries} attempts failed to fetch salary cap history: {e}")
-                return None
+                logger.warning(
+                    f"All {max_retries} attempts failed to fetch from RealGM. "
+                    "Falling back to static data."
+                )
+                return load_static_salary_cap_data()
 
-    return None
+    logger.warning("Unexpected: No data fetched from RealGM. Falling back to static data.")
+    return load_static_salary_cap_data()
 
 
 def fetch_salary_data(season: str = "2025-26") -> Dict[str, Any]:
