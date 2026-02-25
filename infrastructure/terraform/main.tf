@@ -745,17 +745,17 @@ resource "aws_sfn_state_machine" "etl_pipeline" {
 # EVENTBRIDGE (Schedule for ETL)
 # ============================================================================
 
-# Daily schedule for player stats only
-resource "aws_cloudwatch_event_rule" "daily_etl" {
-  name                = "${local.name_prefix}-daily-etl"
-  description         = "Trigger daily ETL pipeline for stats at 6 AM UTC"
-  schedule_expression = "cron(0 6 * * ? *)"
+# Weekly schedule for player stats only (every Sunday)
+resource "aws_cloudwatch_event_rule" "weekly_etl" {
+  name                = "${local.name_prefix}-weekly-etl"
+  description         = "Trigger weekly ETL pipeline for stats every Sunday at 6 AM UTC"
+  schedule_expression = "cron(0 6 ? * SUN *)"
   tags                = local.common_tags
 }
 
-resource "aws_cloudwatch_event_target" "daily_etl_pipeline" {
-  rule      = aws_cloudwatch_event_rule.daily_etl.name
-  target_id = "DailyETLStateMachine"
+resource "aws_cloudwatch_event_target" "weekly_etl_pipeline" {
+  rule      = aws_cloudwatch_event_rule.weekly_etl.name
+  target_id = "WeeklyETLStateMachine"
   arn       = aws_sfn_state_machine.etl_pipeline.arn
   role_arn  = aws_iam_role.eventbridge_step_functions.arn
 

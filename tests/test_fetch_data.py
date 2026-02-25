@@ -551,24 +551,40 @@ class TestFetchSalaryCapHistory:
             # Should sleep 1s initially, then 2s for retry
             assert mock_sleep.call_count == 2
 
+    @patch("src.etl.fetch_data.load_static_salary_cap_data")
     @patch("src.etl.fetch_data.requests.get")
     @patch("src.etl.fetch_data.time.sleep")
-    def test_fetch_salary_cap_history_all_retries_fail(self, mock_sleep, mock_get):
-        """Test that function returns None after all retries fail with 403."""
+    def test_fetch_salary_cap_history_all_retries_fail_uses_fallback(
+        self, mock_sleep, mock_get, mock_load_static
+    ):
+        """Test that function falls back to static data after all retries fail with 403."""
         mock_response = Mock()
         mock_response.status_code = 403
         mock_get.return_value = mock_response
 
+        # Mock static fallback data
+        mock_static_data = {
+            "source": "static_fallback",
+            "salary_cap_history": [{"season": "2024-2025", "salary_cap": 140588000}],
+            "contract_limits": [],
+        }
+        mock_load_static.return_value = mock_static_data
+
         result = fetch_data.fetch_salary_cap_history(max_retries=3)
 
-        assert result is None
+        assert result is not None
+        assert result["source"] == "static_fallback"
         assert mock_get.call_count == 3
+        assert mock_load_static.call_count == 1
 
+    @patch("src.etl.fetch_data.load_static_salary_cap_data")
     @patch("src.etl.fetch_data.pd.read_html")
     @patch("src.etl.fetch_data.requests.get")
     @patch("src.etl.fetch_data.time.sleep")
-    def test_fetch_salary_cap_history_handles_no_tables(self, mock_sleep, mock_get, mock_read_html):
-        """Test handling when no tables are found in response."""
+    def test_fetch_salary_cap_history_handles_no_tables(
+        self, mock_sleep, mock_get, mock_read_html, mock_load_static
+    ):
+        """Test handling when no tables are found in response - falls back to static."""
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.text = "<html>no tables</html>"
@@ -576,11 +592,46 @@ class TestFetchSalaryCapHistory:
 
         mock_read_html.return_value = []
 
+        # Mock static fallback
+        mock_static_data = {"source": "static_fallback", "salary_cap_history": []}
+        mock_load_static.return_value = mock_static_data
+
         result = fetch_data.fetch_salary_cap_history(max_retries=2)
 
-        assert result is None
-        # Should retry when no tables found
+        # Should retry when no tables found, then fall back to static
         assert mock_get.call_count == 2
+        assert mock_load_static.call_count == 1
+        assert result is not None
+        assert result["source"] == "static_fallback"
+
+    def test_load_static_salary_cap_data_success(self):
+        """Test successfully loading static salary cap data from JSON file."""
+        result = fetch_data.load_static_salary_cap_data()
+
+        assert result is not None
+        assert result["source"] == "static_fallback"
+        assert "salary_cap_history" in result
+        assert "contract_limits" in result
+        assert len(result["salary_cap_history"]) > 0
+        assert len(result["contract_limits"]) > 0
+        # Verify structure matches expected format
+        assert "season" in result["salary_cap_history"][0]
+        assert "salary_cap" in result["salary_cap_history"][0]
+
+    @patch("builtins.open", side_effect=FileNotFoundError("No such file"))
+    def test_load_static_salary_cap_data_file_not_found(self, mock_open):
+        """Test handling when static data file is missing."""
+        result = fetch_data.load_static_salary_cap_data()
+
+        assert result is None
+
+    @patch("builtins.open")
+    @patch("json.load", side_effect=Exception("JSON parse error"))
+    def test_load_static_salary_cap_data_parse_error(self, mock_json_load, mock_open):
+        """Test handling when static data JSON is malformed."""
+        result = fetch_data.load_static_salary_cap_data()
+
+        assert result is None
 
 
 class TestHandlerEnvironmentValidation:
