@@ -608,7 +608,7 @@ class TestFetchSalaryCapHistory:
     @patch("src.etl.fetch_data.s3_client")
     def test_load_static_salary_cap_data_success(self, mock_s3):
         """Test successfully loading static salary cap data from S3."""
-        # Mock S3 response
+        # Mock S3 response with complete static data structure
         mock_s3.get_object.return_value = {
             "Body": Mock(
                 read=Mock(
@@ -619,9 +619,28 @@ class TestFetchSalaryCapHistory:
                                     "season": "2024-2025",
                                     "salary_cap": 140588000,
                                     "luxury_tax": 170814000,
+                                    "first_apron": 178132000,
+                                    "second_apron": 188931000,
+                                    "bae": 4668000,
+                                    "non_taxpayer_mle": 12822000,
+                                    "taxpayer_mle": 5168000,
+                                    "team_room_mle": 7983000,
+                                    "source": "static_data",
                                 }
                             ],
-                            "contract_limits": [{"season": "2024-2025", "max_0_6_years": 35147000}],
+                            "contract_limits": [
+                                {
+                                    "season": "2024-2025",
+                                    "max_0_6_years": 35147000,
+                                    "max_7_9_years": 42176400,
+                                    "max_10_plus_years": 49205800,
+                                    "min_0_years": 1157153,
+                                    "min_1_years": 1862265,
+                                    "min_2_years": 2087519,
+                                    "min_10_plus_years": 3303771,
+                                    "source": "static_data",
+                                }
+                            ],
                         }
                     ).encode("utf-8")
                 )
@@ -636,9 +655,10 @@ class TestFetchSalaryCapHistory:
         assert "contract_limits" in result
         assert len(result["salary_cap_history"]) > 0
         assert len(result["contract_limits"]) > 0
-        # Verify structure matches expected format
-        assert "season" in result["salary_cap_history"][0]
-        assert "salary_cap" in result["salary_cap_history"][0]
+        # Verify structure matches RealGM format (Title Case with spaces)
+        assert "Season" in result["salary_cap_history"][0]
+        assert "Salary Cap" in result["salary_cap_history"][0]
+        assert "1st Apron" in result["salary_cap_history"][0]
         mock_s3.get_object.assert_called_once()
 
     @patch("src.etl.fetch_data.s3_client")
