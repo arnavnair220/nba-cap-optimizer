@@ -699,7 +699,7 @@ class TestTransformSalaryCapHistory:
         result = transform_data.transform_salary_cap_history(cap_data)
 
         assert len(result) == 2
-        assert result[0]["season"] == "2025-2026"
+        assert result[0]["season"] == "2025-26"
         assert result[0]["salary_cap"] == 154647000
         assert result[0]["luxury_tax"] == 187895000
         assert result[0]["first_apron"] == 178655000
@@ -726,6 +726,7 @@ class TestTransformSalaryCapHistory:
         result = transform_data.transform_salary_cap_history(cap_data)
 
         assert len(result) == 1
+        assert result[0]["season"] == "2025-26"
         assert result[0]["salary_cap"] == 154647000
         assert result[0]["luxury_tax"] is None
         assert result[0]["first_apron"] is None
@@ -752,8 +753,8 @@ class TestTransformSalaryCapHistory:
         result = transform_data.transform_salary_cap_history(cap_data)
 
         assert len(result) == 2
-        assert result[0]["season"] == "2025-2026"
-        assert result[1]["season"] == "2023-2024"
+        assert result[0]["season"] == "2025-26"
+        assert result[1]["season"] == "2023-24"
 
     def test_transform_salary_cap_history_filters_by_season(self):
         """Test filtering by specific season."""
@@ -769,7 +770,7 @@ class TestTransformSalaryCapHistory:
         result = transform_data.transform_salary_cap_history(cap_data, season="2025-26")
 
         assert len(result) == 1
-        assert result[0]["season"] == "2025-2026"
+        assert result[0]["season"] == "2025-26"
         assert result[0]["salary_cap"] == 154647000
 
     def test_transform_salary_cap_history_no_match_returns_empty(self):
@@ -809,7 +810,7 @@ class TestTransformContractLimits:
         result = transform_data.transform_contract_limits(cap_data)
 
         assert len(result) == 1
-        assert result[0]["season"] == "2025-2026"
+        assert result[0]["season"] == "2025-26"
         assert result[0]["max_0_6_yos"] == 38661750
         assert result[0]["max_7_9_yos"] == 46394100
         assert result[0]["max_10_plus_yos"] == 54126450
@@ -842,6 +843,7 @@ class TestTransformContractLimits:
         result = transform_data.transform_contract_limits(cap_data)
 
         assert len(result) == 1
+        assert result[0]["season"] == "2025-26"
         assert result[0]["max_0_6_yos"] == 38661750
         assert result[0]["max_7_9_yos"] is None
         assert result[0]["max_10_plus_yos"] is None
@@ -869,7 +871,7 @@ class TestTransformContractLimits:
         result = transform_data.transform_contract_limits(cap_data, season="2025-26")
 
         assert len(result) == 1
-        assert result[0]["season"] == "2025-2026"
+        assert result[0]["season"] == "2025-26"
         assert result[0]["max_0_6_yos"] == 38661750
 
     def test_transform_contract_limits_no_match_returns_empty(self):
