@@ -417,6 +417,35 @@ def _normalize_season_format(season: str) -> str:
     return f"{start_year}-{end_year}"
 
 
+def _convert_season_to_short_format(season: str) -> str:
+    """
+    Convert season format from "2025-2026" to "2025-26".
+
+    Args:
+        season: Season in format "YYYY-YYYY" (e.g., "2025-2026")
+
+    Returns:
+        Season in format "YYYY-YY" (e.g., "2025-26")
+    """
+    if "-" not in season:
+        return season
+
+    parts = season.split("-")
+    if len(parts) != 2:
+        return season
+
+    start_year = parts[0]
+    end_year_full = parts[1]
+
+    # Convert full year to short year (last 2 digits)
+    if len(end_year_full) == 4:
+        end_year_short = end_year_full[-2:]
+        return f"{start_year}-{end_year_short}"
+
+    # Already in short format
+    return season
+
+
 def transform_contract_limits(
     cap_data: Dict[str, Any], season: Optional[str] = None
 ) -> List[Dict[str, Any]]:
@@ -474,7 +503,7 @@ def transform_contract_limits(
                 continue
 
             transformed_record = {
-                "season": record_season,
+                "season": _convert_season_to_short_format(record_season),
                 "max_0_6_yos": clean_dollar_amount(record.get("0-6 YOS Max")),
                 "max_7_9_yos": clean_dollar_amount(record.get("7-9 YOS Max")),
                 "max_10_plus_yos": clean_dollar_amount(record.get("10+ YOS Max")),
@@ -555,7 +584,7 @@ def transform_salary_cap_history(
                 continue
 
             transformed_record = {
-                "season": record_season,
+                "season": _convert_season_to_short_format(record_season),
                 "salary_cap": clean_dollar_amount(record.get("Salary Cap")),
                 "luxury_tax": clean_dollar_amount(record.get("Luxury Tax")),
                 "first_apron": clean_dollar_amount(record.get("1st Apron")),
