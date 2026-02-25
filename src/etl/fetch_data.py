@@ -331,23 +331,21 @@ def fetch_espn_salaries(season: str = "2025-26") -> List[Dict[str, Any]]:
 
 def load_static_salary_cap_data() -> Optional[Dict[str, Any]]:
     """
-    Load salary cap data from static JSON file as fallback when RealGM is unavailable.
+    Load salary cap data from S3 static file as fallback when RealGM is unavailable.
 
     This static file contains historical NBA salary cap data and is used as a
     fallback when RealGM blocks requests (common from AWS Lambda IPs).
 
     Returns:
-        Salary cap history data from static JSON file, or None if file can't be loaded
+        Salary cap history data from S3 static file, or None if file can't be loaded
     """
     try:
-        # Path relative to this file: src/etl/fetch_data.py -> data/salary_cap_history.json
-        static_file_path = os.path.join(
-            os.path.dirname(__file__), "../../data/salary_cap_history.json"
-        )
-        logger.info(f"Loading static salary cap data from {static_file_path}")
+        # Load from S3 static location
+        s3_key = "static/salary_cap_history.json"
+        logger.info(f"Loading static salary cap data from s3://{S3_BUCKET}/{s3_key}")
 
-        with open(static_file_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+        data = json.loads(response["Body"].read().decode("utf-8"))
 
         # Transform to match the structure returned by fetch_salary_cap_history
         result = {
@@ -364,22 +362,24 @@ def load_static_salary_cap_data() -> Optional[Dict[str, Any]]:
         }
 
         logger.info(
-            f"Successfully loaded static salary cap data: {len(result['salary_cap_history'])} "
-            f"seasons, {len(result['contract_limits'])} contract limits"
+            f"Successfully loaded static salary cap data from S3: "
+            f"{len(result['salary_cap_history'])} seasons, "
+            f"{len(result['contract_limits'])} contract limits"
         )
         return result
 
-    except FileNotFoundError:
-        logger.error(
-            f"Static salary cap data file not found at {static_file_path}. "
-            "Deploy data/salary_cap_history.json with Lambda package."
-        )
-        return None
     except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse static salary cap JSON: {e}")
+        logger.error(f"Failed to parse static salary cap JSON from S3: {e}")
         return None
     except Exception as e:
-        logger.error(f"Unexpected error loading static salary cap data: {e}")
+        # Check if it's a NoSuchKey error (S3 file not found)
+        if hasattr(e, "response") and e.response.get("Error", {}).get("Code") == "NoSuchKey":
+            logger.error(
+                f"Static salary cap data not found in S3 at s3://{S3_BUCKET}/{s3_key}. "
+                "Upload data/salary_cap_history.json to S3 static/ folder."
+            )
+        else:
+            logger.error(f"Unexpected error loading static salary cap data from S3: {e}")
         return None
 
 
@@ -398,7 +398,7 @@ def fetch_salary_cap_history(max_retries: int = 3) -> Optional[Dict[str, Any]]:
     Note:
         If RealGM is unavailable (403/blocked from AWS Lambda IPs), this function
         automatically falls back to loading static salary cap data from
-        data/salary_cap_history.json included in the Lambda deployment package
+        S3 at static/salary_cap_history.json
     """
     logger.info("Fetching salary cap history from RealGM...")
 
