@@ -44,7 +44,7 @@ class TestSchemaCreation:
     def test_ensure_schema_exists_when_tables_exist(self):
         """Test schema check when tables already exist."""
         mock_cursor = Mock()
-        mock_cursor.fetchone.return_value = [True]  # Tables exist
+        mock_cursor.fetchone.return_value = [5]  # All 5 tables exist
 
         result = load_to_rds.ensure_schema_exists(mock_cursor)
 
@@ -55,7 +55,7 @@ class TestSchemaCreation:
     def test_ensure_schema_exists_creates_tables(self):
         """Test schema creation when tables don't exist."""
         mock_cursor = Mock()
-        mock_cursor.fetchone.return_value = [False]  # Tables don't exist
+        mock_cursor.fetchone.return_value = [0]  # No tables exist
 
         result = load_to_rds.ensure_schema_exists(mock_cursor)
 
