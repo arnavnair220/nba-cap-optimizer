@@ -38,6 +38,23 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "data" {
   }
 }
 
+# Upload static salary cap data to S3 (for Lambda fallback)
+resource "aws_s3_object" "salary_cap_static_data" {
+  bucket       = aws_s3_bucket.data.id
+  key          = "static/salary_cap_history.json"
+  source       = "${path.module}/../../data/salary_cap_history.json"
+  etag         = filemd5("${path.module}/../../data/salary_cap_history.json")
+  content_type = "application/json"
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name        = "Static Salary Cap Data"
+      Description = "Historical NBA salary cap data for Lambda fallback"
+    }
+  )
+}
+
 # ============================================================================
 # VPC & NETWORKING (for RDS)
 # ============================================================================

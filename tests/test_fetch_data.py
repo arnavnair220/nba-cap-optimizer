@@ -2,6 +2,7 @@
 Tests for fetch_data Lambda function.
 """
 
+import json
 from unittest.mock import MagicMock, Mock, patch
 
 import pandas as pd
@@ -604,8 +605,29 @@ class TestFetchSalaryCapHistory:
         assert result is not None
         assert result["source"] == "static_fallback"
 
-    def test_load_static_salary_cap_data_success(self):
-        """Test successfully loading static salary cap data from JSON file."""
+    @patch("src.etl.fetch_data.s3_client")
+    def test_load_static_salary_cap_data_success(self, mock_s3):
+        """Test successfully loading static salary cap data from S3."""
+        # Mock S3 response
+        mock_s3.get_object.return_value = {
+            "Body": Mock(
+                read=Mock(
+                    return_value=json.dumps(
+                        {
+                            "salary_cap_history": [
+                                {
+                                    "season": "2024-2025",
+                                    "salary_cap": 140588000,
+                                    "luxury_tax": 170814000,
+                                }
+                            ],
+                            "contract_limits": [{"season": "2024-2025", "max_0_6_years": 35147000}],
+                        }
+                    ).encode("utf-8")
+                )
+            )
+        }
+
         result = fetch_data.load_static_salary_cap_data()
 
         assert result is not None
@@ -617,18 +639,26 @@ class TestFetchSalaryCapHistory:
         # Verify structure matches expected format
         assert "season" in result["salary_cap_history"][0]
         assert "salary_cap" in result["salary_cap_history"][0]
+        mock_s3.get_object.assert_called_once()
 
-    @patch("builtins.open", side_effect=FileNotFoundError("No such file"))
-    def test_load_static_salary_cap_data_file_not_found(self, mock_open):
-        """Test handling when static data file is missing."""
+    @patch("src.etl.fetch_data.s3_client")
+    def test_load_static_salary_cap_data_file_not_found(self, mock_s3):
+        """Test handling when static data file is missing from S3."""
+        from botocore.exceptions import ClientError
+
+        mock_s3.get_object.side_effect = ClientError({"Error": {"Code": "NoSuchKey"}}, "GetObject")
+        mock_s3.exceptions.NoSuchKey = ClientError
+
         result = fetch_data.load_static_salary_cap_data()
 
         assert result is None
 
-    @patch("builtins.open")
-    @patch("json.load", side_effect=Exception("JSON parse error"))
-    def test_load_static_salary_cap_data_parse_error(self, mock_json_load, mock_open):
+    @patch("src.etl.fetch_data.s3_client")
+    def test_load_static_salary_cap_data_parse_error(self, mock_s3):
         """Test handling when static data JSON is malformed."""
+        # Mock S3 returning invalid JSON
+        mock_s3.get_object.return_value = {"Body": Mock(read=Mock(return_value=b"invalid json"))}
+
         result = fetch_data.load_static_salary_cap_data()
 
         assert result is None
