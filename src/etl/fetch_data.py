@@ -347,17 +347,50 @@ def load_static_salary_cap_data() -> Optional[Dict[str, Any]]:
         response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
         data = json.loads(response["Body"].read().decode("utf-8"))
 
+        # Transform keys to match RealGM format (what transform_data expects)
+        # Static data uses snake_case, but RealGM returns Title Case with spaces
+        cap_history_transformed = []
+        for record in data["salary_cap_history"]:
+            cap_history_transformed.append(
+                {
+                    "Season": record["season"],
+                    "Salary Cap": f"${record['salary_cap']:,}",
+                    "Luxury Tax": f"${record['luxury_tax']:,}",
+                    "1st Apron": f"${record['first_apron']:,}" if record["first_apron"] else None,
+                    "2nd Apron": f"${record['second_apron']:,}" if record["second_apron"] else None,
+                    "BAE": f"${record['bae']:,}",
+                    "Non-Taxpayer MLE": f"${record['non_taxpayer_mle']:,}",
+                    "Taxpayer MLE": f"${record['taxpayer_mle']:,}",
+                    "Team Room MLE": f"${record['team_room_mle']:,}",
+                }
+            )
+
+        contract_limits_transformed = []
+        for record in data["contract_limits"]:
+            contract_limits_transformed.append(
+                {
+                    "Season": record["season"],
+                    "0-6 YOS Max": f"${record['max_0_6_years']:,}",
+                    "7-9 YOS Max": f"${record['max_7_9_years']:,}",
+                    "10+ YOS Max": f"${record['max_10_plus_years']:,}",
+                    "0 YOS Min": f"${record['min_0_years']:,}",
+                    "1 YOS Min": f"${record['min_1_years']:,}",
+                    "2 YOS Min": f"${record['min_2_years']:,}",
+                    "10+ YOS Min": f"${record['min_10_plus_years']:,}",
+                }
+            )
+
         # Transform to match the structure returned by fetch_salary_cap_history
         result = {
             "fetch_timestamp": datetime.utcnow().isoformat(),
             "source": "static_fallback",
-            "salary_cap_history": data["salary_cap_history"],
-            "contract_limits": data["contract_limits"],
+            "salary_cap_history": cap_history_transformed,
+            "contract_limits": contract_limits_transformed,
             "cap_columns": (
-                list(data["salary_cap_history"][0].keys()) if data["salary_cap_history"] else []
+                list(cap_history_transformed[0].keys()) if cap_history_transformed else []
             ),
             "contract_columns": (
-                list(data["contract_limits"][0].keys()) if data["contract_limits"] else []
+                list(contract_limits_transformed[0].keys()) if contract_limits_transformed else []
             ),
         }
 
