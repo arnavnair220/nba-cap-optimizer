@@ -130,23 +130,24 @@ def ensure_schema_exists(cursor) -> bool:
         True if schema already existed, False if it was created
     """
     try:
-        # Check if any of our tables exist
+        # Check if ALL required tables exist (not just one)
         cursor.execute("""
-            SELECT EXISTS (
-                SELECT FROM information_schema.tables
-                WHERE table_schema = 'public'
-                AND table_name = 'player_stats'
-            );
+            SELECT COUNT(*) FROM information_schema.tables
+            WHERE table_schema = 'public'
+            AND table_name IN ('player_stats', 'salaries', 'teams', 'salary_cap_history', 'contract_limits')
         """)
 
-        schema_exists = cursor.fetchone()[0]
+        table_count = cursor.fetchone()[0]
 
-        if schema_exists:
-            logger.info("Database schema already exists")
+        if table_count == 5:
+            logger.info("Database schema already exists (all 5 tables present)")
             return True
-
-        # Schema doesn't exist - create it
-        logger.info("Database schema not found, creating tables...")
+        elif table_count > 0:
+            logger.warning(
+                f"Partial schema detected ({table_count}/5 tables). Creating missing tables..."
+            )
+        else:
+            logger.info("Database schema not found, creating all tables...")
 
         # Execute schema creation SQL
         schema_sql = """
@@ -847,10 +848,14 @@ def handler(event, context):
 
         logger.info(f"Data load completed: {results['summary']}")
 
+        # Return 422 if there were any errors during load, otherwise 200
+        has_errors = len(results["errors"]) > 0
+        status_code = 422 if has_errors else 200
+
         return {
-            "statusCode": 200,
+            "statusCode": status_code,
             "body": json.dumps(results),
-            "load_successful": len(results["errors"]) == 0,
+            "load_successful": not has_errors,
             "records_loaded": results["loaded"],
         }
 
