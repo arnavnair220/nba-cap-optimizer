@@ -1271,8 +1271,7 @@ resource "aws_cloudwatch_event_target" "monthly_training_target" {
   role_arn  = aws_iam_role.eventbridge_sfn.arn
 
   input = jsonencode({
-    season    = "2025-26"
-    timestamp = "$$.Execution.Name"
+    season = "2025-26"
   })
 }
 
@@ -1284,7 +1283,6 @@ resource "aws_cloudwatch_event_target" "weekly_predictions_target" {
   role_arn  = aws_iam_role.eventbridge_sfn.arn
 
   input = jsonencode({
-    season    = "2025-26"
-    timestamp = "$$.Execution.Name"
+    season = "2025-26"
   })
 }
