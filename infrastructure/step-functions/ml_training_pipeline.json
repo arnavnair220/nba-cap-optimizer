@@ -33,7 +33,14 @@
         },
         "AppSpecification": {
           "ImageUri": "763104351884.dkr.ecr.us-east-1.amazonaws.com/sagemaker-scikit-learn:1.0-1-cpu-py3",
-          "ContainerEntrypoint.$": "States.Array('python3', '/opt/ml/processing/input/code/feature_engineering.py', '--mode', 'train', '--seasons-before', $.season, '--output-path', '/opt/ml/processing/output/features.csv')"
+          "ContainerEntrypoint": [
+            "python3",
+            "/opt/ml/processing/input/code/feature_engineering.py",
+            "--mode",
+            "train",
+            "--output-path",
+            "/opt/ml/processing/output/features.csv"
+          ]
         },
         "ProcessingResources": {
           "ClusterConfig": {
@@ -49,7 +56,8 @@
           }
         },
         "Environment": {
-          "DB_SECRET_ARN": "${db_secret_arn}"
+          "DB_SECRET_ARN": "${db_secret_arn}",
+          "SEASONS_BEFORE.$": "$.season"
         }
       },
       "ResultPath": "$.featureEngineeringResult",

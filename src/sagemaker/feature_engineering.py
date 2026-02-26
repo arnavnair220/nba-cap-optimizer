@@ -698,7 +698,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--seasons-before",
         type=str,
-        default="2025-26",
+        default=None,
         help="For train mode: exclude this season and later",
     )
     parser.add_argument(
@@ -710,11 +710,12 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # Use environment variable or CLI arg for output path
+    # Use environment variable or CLI arg for output path and seasons_before
     output_path = args.output_path or os.environ.get("OUTPUT_PATH", "features.csv")
+    seasons_before = args.seasons_before or os.environ.get("SEASONS_BEFORE", "2025-26")
 
     df, feature_cols = engineer_features(
-        mode=args.mode, seasons_before=args.seasons_before, output_path=output_path
+        mode=args.mode, seasons_before=seasons_before, output_path=output_path
     )
 
     print(f"\nFeature engineering complete ({args.mode} mode)!")
