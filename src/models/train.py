@@ -1,7 +1,7 @@
 """
 SageMaker training script for NBA salary prediction.
 
-Trains two XGBoost regression models:
+Trains two Random Forest regression models:
 1. Salary as % of cap (actual contracts with CBA constraints)
 2. Salary as % of personal max (Fair Market Value)
 
@@ -13,11 +13,12 @@ import argparse
 import json
 import logging
 import os
+import pickle
 from typing import Dict, Tuple
 
 import numpy as np
 import pandas as pd
-import xgboost as xgb
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.model_selection import train_test_split
 
@@ -101,53 +102,50 @@ def split_data(
 
 def train_model(
     X_train: pd.DataFrame, y_train: pd.Series, X_test: pd.DataFrame, y_test: pd.Series, params: Dict
-) -> xgb.Booster:
+) -> RandomForestRegressor:
     """
-    Train XGBoost model with early stopping.
+    Train Random Forest model.
 
     Args:
         X_train: Training features
         y_train: Training targets
         X_test: Test features
         y_test: Test targets
-        params: XGBoost hyperparameters
+        params: Random Forest hyperparameters
 
     Returns:
-        Trained XGBoost booster
+        Trained Random Forest model
     """
-    logger.info("Training XGBoost model...")
+    logger.info("Training Random Forest model...")
     logger.info(f"Hyperparameters: {params}")
 
-    # Create DMatrix for XGBoost
-    dtrain = xgb.DMatrix(X_train, label=y_train)
-    dtest = xgb.DMatrix(X_test, label=y_test)
-
-    # Watchlist for early stopping
-    evals = [(dtrain, "train"), (dtest, "test")]
-
-    # Train model
-    model = xgb.train(
-        params=params,
-        dtrain=dtrain,
-        num_boost_round=params.get("num_boost_round", 1000),
-        evals=evals,
-        early_stopping_rounds=params.get("early_stopping_rounds", 50),
-        verbose_eval=50,
+    # Create and train Random Forest model
+    model = RandomForestRegressor(
+        n_estimators=params.get("n_estimators", 200),
+        max_depth=params.get("max_depth", 20),
+        min_samples_split=params.get("min_samples_split", 5),
+        min_samples_leaf=params.get("min_samples_leaf", 2),
+        max_features=params.get("max_features", "sqrt"),
+        random_state=params.get("random_state", 42),
+        n_jobs=-1,
+        verbose=1,
     )
 
-    logger.info(f"Training complete. Best iteration: {model.best_iteration}")
+    model.fit(X_train, y_train)
+
+    logger.info("Training complete")
 
     return model
 
 
 def evaluate_model(
-    model: xgb.Booster, X_test: pd.DataFrame, y_test: pd.Series, target_name: str
+    model: RandomForestRegressor, X_test: pd.DataFrame, y_test: pd.Series, target_name: str
 ) -> Dict:
     """
     Evaluate model performance on test set.
 
     Args:
-        model: Trained XGBoost model
+        model: Trained Random Forest model
         X_test: Test features
         y_test: Test targets
         target_name: Name of target variable
@@ -157,8 +155,7 @@ def evaluate_model(
     """
     logger.info(f"Evaluating model for {target_name}...")
 
-    dtest = xgb.DMatrix(X_test)
-    y_pred = model.predict(dtest)
+    y_pred = model.predict(X_test)
 
     # Calculate metrics
     rmse = np.sqrt(mean_squared_error(y_test, y_pred))
@@ -192,13 +189,17 @@ def evaluate_model(
 
 
 def save_model(
-    model: xgb.Booster, feature_cols: list, metrics: Dict, output_dir: str, model_name: str
+    model: RandomForestRegressor,
+    feature_cols: list,
+    metrics: Dict,
+    output_dir: str,
+    model_name: str,
 ):
     """
     Save trained model and metadata.
 
     Args:
-        model: Trained XGBoost model
+        model: Trained Random Forest model
         feature_cols: List of feature columns
         metrics: Evaluation metrics
         output_dir: Directory to save model
@@ -208,9 +209,10 @@ def save_model(
 
     os.makedirs(output_dir, exist_ok=True)
 
-    # Save XGBoost model
-    model_path = os.path.join(output_dir, f"{model_name}.json")
-    model.save_model(model_path)
+    # Save Random Forest model using pickle
+    model_path = os.path.join(output_dir, f"{model_name}.pkl")
+    with open(model_path, "wb") as f:
+        pickle.dump(model, f)
 
     # Save feature columns
     features_path = os.path.join(output_dir, f"{model_name}_features.json")
@@ -225,10 +227,10 @@ def save_model(
     # Save model metadata
     metadata = {
         "model_name": model_name,
-        "algorithm": "XGBoost",
+        "algorithm": "RandomForest",
         "num_features": len(feature_cols),
+        "n_estimators": model.n_estimators,
         "metrics": metrics,
-        "best_iteration": model.best_iteration,
     }
     metadata_path = os.path.join(output_dir, f"{model_name}_metadata.json")
     with open(metadata_path, "w") as f:
@@ -246,13 +248,11 @@ def main():
     parser.add_argument("--model-dir", type=str, default=os.environ.get("SM_MODEL_DIR"))
 
     # Hyperparameters
-    parser.add_argument("--max-depth", type=int, default=6)
-    parser.add_argument("--eta", type=float, default=0.1)
-    parser.add_argument("--subsample", type=float, default=0.8)
-    parser.add_argument("--colsample-bytree", type=float, default=0.8)
-    parser.add_argument("--min-child-weight", type=int, default=1)
-    parser.add_argument("--num-boost-round", type=int, default=1000)
-    parser.add_argument("--early-stopping-rounds", type=int, default=50)
+    parser.add_argument("--n-estimators", type=int, default=200)
+    parser.add_argument("--max-depth", type=int, default=20)
+    parser.add_argument("--min-samples-split", type=int, default=5)
+    parser.add_argument("--min-samples-leaf", type=int, default=2)
+    parser.add_argument("--max-features", type=str, default="sqrt")
     parser.add_argument("--test-size", type=float, default=0.2)
     parser.add_argument("--random-state", type=int, default=42)
 
@@ -272,17 +272,14 @@ def main():
     # Load data
     df, feature_cols = load_data(data_path)
 
-    # XGBoost parameters
-    xgb_params = {
-        "objective": "reg:squarederror",
+    # Random Forest parameters
+    rf_params = {
+        "n_estimators": args.n_estimators,
         "max_depth": args.max_depth,
-        "eta": args.eta,
-        "subsample": args.subsample,
-        "colsample_bytree": args.colsample_bytree,
-        "min_child_weight": args.min_child_weight,
-        "seed": args.random_state,
-        "num_boost_round": args.num_boost_round,
-        "early_stopping_rounds": args.early_stopping_rounds,
+        "min_samples_split": args.min_samples_split,
+        "min_samples_leaf": args.min_samples_leaf,
+        "max_features": args.max_features,
+        "random_state": args.random_state,
     }
 
     # Train Model 1: Salary as % of cap
@@ -298,7 +295,7 @@ def main():
         random_state=args.random_state,
     )
 
-    model_cap = train_model(X_train_cap, y_train_cap, X_test_cap, y_test_cap, xgb_params)
+    model_cap = train_model(X_train_cap, y_train_cap, X_test_cap, y_test_cap, rf_params)
 
     metrics_cap = evaluate_model(model_cap, X_test_cap, y_test_cap, "log_salary_cap_pct")
 
@@ -317,7 +314,7 @@ def main():
         random_state=args.random_state,
     )
 
-    model_fmv = train_model(X_train_fmv, y_train_fmv, X_test_fmv, y_test_fmv, xgb_params)
+    model_fmv = train_model(X_train_fmv, y_train_fmv, X_test_fmv, y_test_fmv, rf_params)
 
     metrics_fmv = evaluate_model(model_fmv, X_test_fmv, y_test_fmv, "log_salary_pct_of_max")
 

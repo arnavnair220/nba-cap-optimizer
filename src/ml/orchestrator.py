@@ -261,6 +261,9 @@ def handler(event, context):
 
     task_type = event.get("task")
 
+    if not task_type:
+        return {"status": "Error", "message": "Missing required parameter: task"}
+
     if task_type == "feature_engineering":
         return start_feature_engineering(event)
     elif task_type == "model_training":
@@ -270,7 +273,7 @@ def handler(event, context):
     elif task_type == "load_predictions":
         return invoke_load_predictions(event)
     else:
-        raise ValueError(f"Unknown task type: {task_type}")
+        return {"status": "Error", "message": f"Unknown task type: {task_type}"}
 
 
 # For local testing
