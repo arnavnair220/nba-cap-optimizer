@@ -1048,7 +1048,6 @@ resource "null_resource" "trigger_schema_migration" {
       aws lambda invoke \
         --function-name ${aws_lambda_function.migrate_schema.function_name} \
         --payload '{"RequestType":"Create"}' \
-        --profile ${var.aws_profile} \
         /tmp/schema-migration-output.json
       cat /tmp/schema-migration-output.json
     EOT
