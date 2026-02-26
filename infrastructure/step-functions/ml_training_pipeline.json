@@ -1,12 +1,12 @@
 {
   "Comment": "Monthly ML Model Training Pipeline - Trains new model with historical data",
-  "StartAt": "GenerateTimestamp",
+  "StartAt": "GenerateExecutionId",
   "States": {
-    "GenerateTimestamp": {
+    "GenerateExecutionId": {
       "Type": "Pass",
       "Parameters": {
         "season.$": "$.season",
-        "timestamp.$": "States.Format('{}', $$.Execution.StartTime)"
+        "execution_id.$": "$$.Execution.Name"
       },
       "Next": "FeatureEngineering"
     },
@@ -14,7 +14,7 @@
       "Type": "Task",
       "Resource": "arn:aws:states:::sagemaker:createProcessingJob.sync",
       "Parameters": {
-        "ProcessingJobName.$": "States.Format('feature-eng-{}', $.timestamp)",
+        "ProcessingJobName.$": "States.Format('feature-eng-{}', $.execution_id)",
         "RoleArn": "${sagemaker_role_arn}",
         "ProcessingInputs": [
           {
@@ -86,7 +86,7 @@
       "Type": "Task",
       "Resource": "arn:aws:states:::sagemaker:createTrainingJob.sync",
       "Parameters": {
-        "TrainingJobName.$": "States.Format('train-{}', $.timestamp)",
+        "TrainingJobName.$": "States.Format('train-{}', $.execution_id)",
         "RoleArn": "${sagemaker_role_arn}",
         "AlgorithmSpecification": {
           "TrainingImage": "763104351884.dkr.ecr.us-east-1.amazonaws.com/sagemaker-scikit-learn:1.0-1-cpu-py3",
