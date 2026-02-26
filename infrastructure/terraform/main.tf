@@ -958,19 +958,19 @@ resource "aws_lambda_function" "load_predictions" {
 # EVENTBRIDGE SCHEDULES (ML Pipeline)
 # ============================================================================
 
-# Monthly training schedule (First Sunday @ 2 AM UTC)
+# Monthly training schedule (First Sunday @ 7 AM UTC, after ETL at 6 AM)
 resource "aws_cloudwatch_event_rule" "monthly_ml_training" {
   name                = "${local.name_prefix}-monthly-ml-training"
-  description         = "Trigger monthly ML model training on first Sunday at 2 AM UTC"
-  schedule_expression = "cron(0 2 ? * 1#1 *)"
+  description         = "Trigger monthly ML model training on first Sunday at 7 AM UTC"
+  schedule_expression = "cron(0 7 ? * 1#1 *)"
   tags                = local.common_tags
 }
 
-# Weekly prediction schedule (Every Sunday @ 2 AM UTC)
+# Weekly prediction schedule (Every Sunday @ 7 AM UTC, after ETL at 6 AM)
 resource "aws_cloudwatch_event_rule" "weekly_ml_predictions" {
   name                = "${local.name_prefix}-weekly-ml-predictions"
-  description         = "Trigger weekly ML batch predictions every Sunday at 2 AM UTC"
-  schedule_expression = "cron(0 2 ? * SUN *)"
+  description         = "Trigger weekly ML batch predictions every Sunday at 7 AM UTC"
+  schedule_expression = "cron(0 7 ? * SUN *)"
   tags                = local.common_tags
 }
 
