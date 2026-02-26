@@ -38,32 +38,6 @@ class TestDatabaseConnection:
         assert creds["database"] == "test_db"
 
 
-class TestSchemaCreation:
-    """Test database schema creation."""
-
-    def test_ensure_schema_exists_when_tables_exist(self):
-        """Test schema check when tables already exist."""
-        mock_cursor = Mock()
-        mock_cursor.fetchone.return_value = [5]  # All 5 tables exist
-
-        result = load_to_rds.ensure_schema_exists(mock_cursor)
-
-        assert result is True
-        # Should only execute check query, not create tables
-        assert mock_cursor.execute.call_count == 1
-
-    def test_ensure_schema_exists_creates_tables(self):
-        """Test schema creation when tables don't exist."""
-        mock_cursor = Mock()
-        mock_cursor.fetchone.return_value = [0]  # No tables exist
-
-        result = load_to_rds.ensure_schema_exists(mock_cursor)
-
-        assert result is False
-        # Should execute check query + create tables query
-        assert mock_cursor.execute.call_count == 2
-
-
 class TestUpsertFunctions:
     """Test individual upsert functions."""
 
@@ -186,8 +160,6 @@ class TestHandlerDataLoad:
         # Mock database connection
         mock_conn = Mock()
         mock_cursor = Mock()
-        # Mock schema check - tables already exist
-        mock_cursor.fetchone.return_value = [True]
         mock_conn.cursor.return_value = mock_cursor
         mock_db_conn.return_value = mock_conn
 
@@ -245,8 +217,8 @@ class TestHandlerDataLoad:
         assert "player_stats" in result["records_loaded"]
         assert "teams" in result["records_loaded"]
 
-        # Verify database operations (commit called for schema + data)
-        assert mock_conn.commit.call_count == 2  # Schema creation + data loading
+        # Verify database operations (commit called for data)
+        assert mock_conn.commit.call_count == 1  # Data loading only (schema managed by Terraform)
         mock_conn.close.assert_called_once()
 
     @patch("src.etl.load_to_rds.ENVIRONMENT", "test")
@@ -262,8 +234,6 @@ class TestHandlerDataLoad:
         # Mock database connection
         mock_conn = Mock()
         mock_cursor = Mock()
-        # Mock schema check - tables already exist
-        mock_cursor.fetchone.return_value = [True]
         mock_conn.cursor.return_value = mock_cursor
         mock_db_conn.return_value = mock_conn
 
