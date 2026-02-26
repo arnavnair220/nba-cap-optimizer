@@ -7,7 +7,6 @@ and position interaction features.
 
 import numpy as np
 import pandas as pd
-import pytest
 
 from src.models.feature_engineering import (
     calculate_efficiency_features,

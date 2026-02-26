@@ -7,7 +7,6 @@ full training (which would be too slow for unit tests).
 
 import os
 import tempfile
-from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pandas as pd

@@ -14,7 +14,7 @@ import pytest
 # Set AWS region before importing modules that use boto3
 os.environ.setdefault("AWS_DEFAULT_REGION", "us-east-1")
 
-from src.ml.orchestrator import (
+from src.ml.orchestrator import (  # noqa: E402
     handler,
     invoke_load_predictions,
     start_batch_transform,
