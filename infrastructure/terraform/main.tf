@@ -1047,6 +1047,7 @@ resource "null_resource" "trigger_schema_migration" {
     command = <<-EOT
       aws lambda invoke \
         --function-name ${aws_lambda_function.migrate_schema.function_name} \
+        --cli-binary-format raw-in-base64-out \
         --payload '{"RequestType":"Create"}' \
         /tmp/schema-migration-output.json
       cat /tmp/schema-migration-output.json
