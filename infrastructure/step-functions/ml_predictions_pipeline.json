@@ -1,7 +1,15 @@
 {
   "Comment": "Weekly ML Predictions Pipeline - Generates salary predictions for current season",
-  "StartAt": "FeatureEngineering",
+  "StartAt": "GenerateTimestamp",
   "States": {
+    "GenerateTimestamp": {
+      "Type": "Pass",
+      "Parameters": {
+        "season.$": "$.season",
+        "timestamp.$": "States.Format('{}', $$.Execution.StartTime)"
+      },
+      "Next": "FeatureEngineering"
+    },
     "FeatureEngineering": {
       "Type": "Task",
       "Resource": "arn:aws:states:::sagemaker:createProcessingJob.sync",
