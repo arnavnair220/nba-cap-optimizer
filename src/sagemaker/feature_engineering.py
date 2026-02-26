@@ -129,6 +129,39 @@ def load_training_data(seasons_before: str = "2025-26") -> pd.DataFrame:
     return df
 
 
+def load_prediction_data() -> pd.DataFrame:
+    """
+    Load player stats from latest season and last 7 days for predictions.
+
+    Returns:
+        DataFrame with recent player stats (no salary data)
+    """
+    logger.info("Loading prediction data for latest season and last 7 days")
+
+    conn = get_db_connection()
+
+    # Get latest season and filter by last 7 days
+    query = """
+    SELECT ps.*
+    FROM player_stats ps
+    WHERE ps.season = (SELECT MAX(season) FROM player_stats)
+        AND ps.created_at >= NOW() - INTERVAL '7 days'
+        AND ps.minutes > 0
+        AND ps.games_played > 0
+    ORDER BY ps.player_name
+    """
+
+    df = pd.read_sql(query, conn)
+    conn.close()
+
+    logger.info(f"Loaded {len(df)} player records for predictions")
+    if len(df) > 0:
+        logger.info(f"Season: {df['season'].iloc[0]}")
+        logger.info(f"Date range: {df['created_at'].min()} to {df['created_at'].max()}")
+
+    return df
+
+
 def load_salary_cap_data() -> pd.DataFrame:
     """
     Load salary cap history from database.
@@ -558,25 +591,34 @@ def get_feature_columns() -> List[str]:
 
 
 def engineer_features(
-    seasons_before: str = "2025-26", output_path: Optional[str] = None
+    mode: str = "train",
+    seasons_before: str = "2025-26",
+    output_path: Optional[str] = None,
 ) -> Tuple[pd.DataFrame, List[str]]:
     """
     Main feature engineering pipeline.
 
-    Loads data, calculates all features and targets, and optionally saves to S3.
+    Loads data, calculates all features (and targets for training), saves to S3.
 
     Args:
-        seasons_before: Train on seasons before this (default: "2025-26")
+        mode: "train" or "predict"
+        seasons_before: Train on seasons before this (default: "2025-26", train mode only)
         output_path: Optional S3 path to save features (e.g., "s3://bucket/features.csv")
 
     Returns:
         Tuple of (feature_df, feature_columns)
     """
-    logger.info("Starting feature engineering pipeline...")
+    logger.info(f"Starting feature engineering pipeline in {mode} mode...")
 
-    # Load data
-    df = load_training_data(seasons_before=seasons_before)
-    salary_cap_df = load_salary_cap_data()
+    # Load data based on mode
+    if mode == "train":
+        df = load_training_data(seasons_before=seasons_before)
+        salary_cap_df = load_salary_cap_data()
+    elif mode == "predict":
+        df = load_prediction_data()
+        salary_cap_df = None
+    else:
+        raise ValueError(f"Invalid mode: {mode}. Must be 'train' or 'predict'")
 
     # Calculate features
     df = calculate_volume_features(df)
@@ -587,8 +629,9 @@ def engineer_features(
     df = calculate_position_features(df)
     df = calculate_position_interaction_features(df)
 
-    # Calculate targets
-    df = calculate_targets(df, salary_cap_df)
+    # Calculate targets (train mode only)
+    if mode == "train":
+        df = calculate_targets(df, salary_cap_df)
 
     # Get feature columns
     feature_cols = get_feature_columns()
@@ -611,11 +654,15 @@ def engineer_features(
         logger.info(f"Saving features to {output_path}")
 
         # Prepare output dataframe
-        output_cols = (
-            ["player_name", "season"]
-            + feature_cols
-            + ["log_salary_cap_pct", "log_salary_pct_of_max", "annual_salary", "salary_cap"]
-        )
+        if mode == "train":
+            output_cols = (
+                ["player_name", "season"]
+                + feature_cols
+                + ["log_salary_cap_pct", "log_salary_pct_of_max", "annual_salary", "salary_cap"]
+            )
+        else:  # predict mode
+            output_cols = ["player_name", "season"] + feature_cols
+
         output_df = df[output_cols]
 
         if output_path.startswith("s3://"):
@@ -638,11 +685,39 @@ def engineer_features(
 
 
 if __name__ == "__main__":
-    # For local testing
-    output_s3_path = os.environ.get("OUTPUT_PATH", "features.csv")
-    df, feature_cols = engineer_features(seasons_before="2025-26", output_path=output_s3_path)
+    import argparse
 
-    print("\nFeature engineering complete!")
+    parser = argparse.ArgumentParser(description="NBA Feature Engineering for SageMaker")
+    parser.add_argument(
+        "--mode",
+        type=str,
+        default="train",
+        choices=["train", "predict"],
+        help="Mode: train (all historical data) or predict (latest season + week)",
+    )
+    parser.add_argument(
+        "--seasons-before",
+        type=str,
+        default="2025-26",
+        help="For train mode: exclude this season and later",
+    )
+    parser.add_argument(
+        "--output-path",
+        type=str,
+        default=None,
+        help="S3 path to save features (e.g., s3://bucket/features.csv)",
+    )
+
+    args = parser.parse_args()
+
+    # Use environment variable or CLI arg for output path
+    output_path = args.output_path or os.environ.get("OUTPUT_PATH", "features.csv")
+
+    df, feature_cols = engineer_features(
+        mode=args.mode, seasons_before=args.seasons_before, output_path=output_path
+    )
+
+    print(f"\nFeature engineering complete ({args.mode} mode)!")
     print(f"Total features: {len(feature_cols)}")
     print(f"Total records: {len(df)}")
     print("\nFeature columns:")

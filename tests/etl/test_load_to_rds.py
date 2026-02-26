@@ -5,14 +5,14 @@ Tests for load_to_rds Lambda function.
 import json
 from unittest.mock import MagicMock, Mock, patch
 
-from src.etl import load_to_rds
+from src.lambdas.etl import load_to_rds
 
 
 class TestDatabaseConnection:
     """Test database connection management."""
 
-    @patch("src.etl.load_to_rds.get_secretsmanager_client")
-    @patch("src.etl.load_to_rds.DB_SECRET_ARN", "test-arn")
+    @patch("src.lambdas.etl.load_to_rds.get_secretsmanager_client")
+    @patch("src.lambdas.etl.load_to_rds.DB_SECRET_ARN", "test-arn")
     def test_get_db_credentials_success(self, mock_get_sm_client):
         """Test successful retrieval of database credentials."""
         mock_sm_client = Mock()
@@ -41,7 +41,7 @@ class TestDatabaseConnection:
 class TestUpsertFunctions:
     """Test individual upsert functions."""
 
-    @patch("src.etl.load_to_rds.execute_batch")
+    @patch("src.lambdas.etl.load_to_rds.execute_batch")
     def test_upsert_salaries(self, mock_execute_batch):
         """Test upserting salaries."""
         mock_cursor = Mock()
@@ -59,7 +59,7 @@ class TestUpsertFunctions:
         assert count == 1
         mock_execute_batch.assert_called_once()
 
-    @patch("src.etl.load_to_rds.execute_batch")
+    @patch("src.lambdas.etl.load_to_rds.execute_batch")
     def test_upsert_player_stats(self, mock_execute_batch):
         """Test upserting player stats."""
         mock_cursor = Mock()
@@ -85,7 +85,7 @@ class TestUpsertFunctions:
         assert count == 1
         mock_execute_batch.assert_called_once()
 
-    @patch("src.etl.load_to_rds.execute_batch")
+    @patch("src.lambdas.etl.load_to_rds.execute_batch")
     def test_upsert_teams(self, mock_execute_batch):
         """Test upserting teams."""
         mock_cursor = Mock()
@@ -114,9 +114,9 @@ class TestUpsertFunctions:
 class TestHandlerValidation:
     """Test handler validation logic."""
 
-    @patch("src.etl.load_to_rds.ENVIRONMENT", "test")
-    @patch("src.etl.load_to_rds.S3_BUCKET", "test-bucket")
-    @patch("src.etl.load_to_rds.DB_SECRET_ARN", "test-arn")
+    @patch("src.lambdas.etl.load_to_rds.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.load_to_rds.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.load_to_rds.DB_SECRET_ARN", "test-arn")
     def test_handler_skips_when_transformation_fails(self):
         """Test handler returns 400 when transformation_successful is false."""
         event = {
@@ -130,9 +130,9 @@ class TestHandlerValidation:
         body = json.loads(result["body"])
         assert "error" in body
 
-    @patch("src.etl.load_to_rds.ENVIRONMENT", "test")
-    @patch("src.etl.load_to_rds.S3_BUCKET", "test-bucket")
-    @patch("src.etl.load_to_rds.DB_SECRET_ARN", "test-arn")
+    @patch("src.lambdas.etl.load_to_rds.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.load_to_rds.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.load_to_rds.DB_SECRET_ARN", "test-arn")
     def test_handler_requires_data_location(self):
         """Test handler returns 400 when data_location is missing."""
         event = {
@@ -149,12 +149,12 @@ class TestHandlerValidation:
 class TestHandlerDataLoad:
     """Test handler data loading workflow."""
 
-    @patch("src.etl.load_to_rds.ENVIRONMENT", "test")
-    @patch("src.etl.load_to_rds.S3_BUCKET", "test-bucket")
-    @patch("src.etl.load_to_rds.DB_SECRET_ARN", "test-arn")
-    @patch("src.etl.load_to_rds.execute_batch")
-    @patch("src.etl.load_to_rds.get_db_connection")
-    @patch("src.etl.load_to_rds.load_from_s3")
+    @patch("src.lambdas.etl.load_to_rds.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.load_to_rds.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.load_to_rds.DB_SECRET_ARN", "test-arn")
+    @patch("src.lambdas.etl.load_to_rds.execute_batch")
+    @patch("src.lambdas.etl.load_to_rds.get_db_connection")
+    @patch("src.lambdas.etl.load_to_rds.load_from_s3")
     def test_handler_successful_load(self, mock_load_s3, mock_db_conn, mock_execute_batch):
         """Test handler successfully loads all data to RDS."""
         # Mock database connection
@@ -221,12 +221,12 @@ class TestHandlerDataLoad:
         assert mock_conn.commit.call_count == 1  # Data loading only (schema managed by Terraform)
         mock_conn.close.assert_called_once()
 
-    @patch("src.etl.load_to_rds.ENVIRONMENT", "test")
-    @patch("src.etl.load_to_rds.S3_BUCKET", "test-bucket")
-    @patch("src.etl.load_to_rds.DB_SECRET_ARN", "test-arn")
-    @patch("src.etl.load_to_rds.execute_batch")
-    @patch("src.etl.load_to_rds.get_db_connection")
-    @patch("src.etl.load_to_rds.load_from_s3")
+    @patch("src.lambdas.etl.load_to_rds.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.load_to_rds.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.load_to_rds.DB_SECRET_ARN", "test-arn")
+    @patch("src.lambdas.etl.load_to_rds.execute_batch")
+    @patch("src.lambdas.etl.load_to_rds.get_db_connection")
+    @patch("src.lambdas.etl.load_to_rds.load_from_s3")
     def test_handler_fails_without_player_stats(
         self, mock_load_s3, mock_db_conn, mock_execute_batch
     ):
@@ -259,11 +259,11 @@ class TestHandlerDataLoad:
         body = json.loads(result["body"])
         assert "player stats" in body["errors"][0].lower()
 
-    @patch("src.etl.load_to_rds.ENVIRONMENT", "test")
-    @patch("src.etl.load_to_rds.S3_BUCKET", "test-bucket")
-    @patch("src.etl.load_to_rds.DB_SECRET_ARN", "test-arn")
-    @patch("src.etl.load_to_rds.get_db_connection")
-    @patch("src.etl.load_to_rds.load_from_s3")
+    @patch("src.lambdas.etl.load_to_rds.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.load_to_rds.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.load_to_rds.DB_SECRET_ARN", "test-arn")
+    @patch("src.lambdas.etl.load_to_rds.get_db_connection")
+    @patch("src.lambdas.etl.load_to_rds.load_from_s3")
     def test_handler_rolls_back_on_error(self, mock_load_s3, mock_db_conn):
         """Test handler rolls back transaction on error."""
         # Mock database connection that fails
@@ -294,7 +294,7 @@ class TestHandlerDataLoad:
 class TestUpsertSalaryCapHistory:
     """Test upserting salary cap history data."""
 
-    @patch("src.etl.load_to_rds.execute_batch")
+    @patch("src.lambdas.etl.load_to_rds.execute_batch")
     def test_upsert_salary_cap_history_success(self, mock_execute_batch):
         """Test successful upsert of salary cap history."""
         mock_cursor = Mock()
@@ -332,7 +332,7 @@ class TestUpsertSalaryCapHistory:
         assert "ON CONFLICT" in sql_call
         assert "salary_cap_history" in sql_call
 
-    @patch("src.etl.load_to_rds.execute_batch")
+    @patch("src.lambdas.etl.load_to_rds.execute_batch")
     def test_upsert_salary_cap_history_empty_data(self, mock_execute_batch):
         """Test handling of empty salary cap data."""
         mock_cursor = Mock()
@@ -346,7 +346,7 @@ class TestUpsertSalaryCapHistory:
 class TestUpsertContractLimits:
     """Test upserting contract limits data."""
 
-    @patch("src.etl.load_to_rds.execute_batch")
+    @patch("src.lambdas.etl.load_to_rds.execute_batch")
     def test_upsert_contract_limits_success(self, mock_execute_batch):
         """Test successful upsert of contract limits."""
         mock_cursor = Mock()
@@ -372,7 +372,7 @@ class TestUpsertContractLimits:
         assert "ON CONFLICT" in sql_call
         assert "contract_limits" in sql_call
 
-    @patch("src.etl.load_to_rds.execute_batch")
+    @patch("src.lambdas.etl.load_to_rds.execute_batch")
     def test_upsert_contract_limits_empty_data(self, mock_execute_batch):
         """Test handling of empty contract limits data."""
         mock_cursor = Mock()

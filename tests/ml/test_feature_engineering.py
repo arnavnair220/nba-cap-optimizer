@@ -8,7 +8,7 @@ and position interaction features.
 import numpy as np
 import pandas as pd
 
-from src.models.feature_engineering import (
+from src.sagemaker.feature_engineering import (
     calculate_efficiency_features,
     calculate_position_features,
     calculate_position_interaction_features,

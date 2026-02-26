@@ -13,7 +13,7 @@ import pandas as pd
 import pytest
 from sklearn.ensemble import RandomForestRegressor
 
-from src.models.train import (
+from src.sagemaker.train import (
     evaluate_model,
     load_data,
     save_model,

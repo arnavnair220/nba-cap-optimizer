@@ -5,7 +5,7 @@ Tests for transform_data Lambda function (Basketball Reference version).
 import json
 from unittest.mock import MagicMock, patch
 
-from src.etl import transform_data
+from src.lambdas.etl import transform_data
 
 
 class TestNormalizeToAscii:
@@ -493,8 +493,8 @@ class TestEnrichTeamData:
 class TestHandlerValidationCheck:
     """Test handler validation gate logic."""
 
-    @patch("src.etl.transform_data.ENVIRONMENT", "test")
-    @patch("src.etl.transform_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.transform_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.transform_data.S3_BUCKET", "test-bucket")
     def test_handler_skips_transformation_when_validation_fails(self):
         """Test handler returns 400 when validation_passed is false."""
         event = {
@@ -510,11 +510,11 @@ class TestHandlerValidationCheck:
 class TestHandlerNaNValidation:
     """Test handler NaN validation logic."""
 
-    @patch("src.etl.transform_data.ENVIRONMENT", "test")
-    @patch("src.etl.transform_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.transform_data.save_to_s3")
-    @patch("src.etl.transform_data.enrich_player_stats")
-    @patch("src.etl.transform_data.load_from_s3")
+    @patch("src.lambdas.etl.transform_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.transform_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.transform_data.save_to_s3")
+    @patch("src.lambdas.etl.transform_data.enrich_player_stats")
+    @patch("src.lambdas.etl.transform_data.load_from_s3")
     def test_handler_returns_400_when_nan_in_statistics(
         self, mock_load, mock_enrich_player_stats, mock_save
     ):
@@ -559,10 +559,10 @@ class TestHandlerNaNValidation:
 class TestHandlerTransformation:
     """Test handler transformation workflow."""
 
-    @patch("src.etl.transform_data.ENVIRONMENT", "test")
-    @patch("src.etl.transform_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.transform_data.save_to_s3")
-    @patch("src.etl.transform_data.load_from_s3")
+    @patch("src.lambdas.etl.transform_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.transform_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.transform_data.save_to_s3")
+    @patch("src.lambdas.etl.transform_data.load_from_s3")
     def test_handler_successful_transformation(self, mock_load, mock_save):
         """Test handler successfully transforms Basketball Reference data."""
 
