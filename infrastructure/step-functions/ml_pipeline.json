@@ -1,0 +1,174 @@
+{
+  "Comment": "NBA Salary Prediction ML Pipeline",
+  "StartAt": "FeatureEngineering",
+  "States": {
+    "FeatureEngineering": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${orchestrator_lambda_arn}",
+        "Payload": {
+          "task": "feature_engineering",
+          "season.$": "$.season"
+        }
+      },
+      "ResultPath": "$.featureEngineeringResult",
+      "ResultSelector": {
+        "jobName.$": "$.Payload.jobName",
+        "jobArn.$": "$.Payload.jobArn",
+        "featuresPath.$": "$.Payload.featuresPath",
+        "timestamp.$": "$.Payload.timestamp"
+      },
+      "Next": "WaitForFeatureEngineering",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "NotifyFailure",
+          "ResultPath": "$.error"
+        }
+      ]
+    },
+    "WaitForFeatureEngineering": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sagemaker:describeProcessingJob.sync",
+      "Parameters": {
+        "ProcessingJobName.$": "$.featureEngineeringResult.jobName"
+      },
+      "ResultPath": "$.featureEngineeringStatus",
+      "Next": "ModelTraining",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "NotifyFailure",
+          "ResultPath": "$.error"
+        }
+      ]
+    },
+    "ModelTraining": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${orchestrator_lambda_arn}",
+        "Payload": {
+          "task": "model_training",
+          "featuresPath.$": "$.featureEngineeringResult.featuresPath",
+          "timestamp.$": "$.featureEngineeringResult.timestamp"
+        }
+      },
+      "ResultPath": "$.modelTrainingResult",
+      "ResultSelector": {
+        "jobName.$": "$.Payload.jobName",
+        "jobArn.$": "$.Payload.jobArn",
+        "modelPath.$": "$.Payload.modelPath",
+        "timestamp.$": "$.Payload.timestamp"
+      },
+      "Next": "WaitForModelTraining",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "NotifyFailure",
+          "ResultPath": "$.error"
+        }
+      ]
+    },
+    "WaitForModelTraining": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sagemaker:describeTrainingJob.sync",
+      "Parameters": {
+        "TrainingJobName.$": "$.modelTrainingResult.jobName"
+      },
+      "ResultPath": "$.modelTrainingStatus",
+      "Next": "BatchTransform",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "NotifyFailure",
+          "ResultPath": "$.error"
+        }
+      ]
+    },
+    "BatchTransform": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${orchestrator_lambda_arn}",
+        "Payload": {
+          "task": "batch_transform",
+          "modelPath.$": "$.modelTrainingResult.modelPath",
+          "timestamp.$": "$.modelTrainingResult.timestamp",
+          "season.$": "$.season"
+        }
+      },
+      "ResultPath": "$.batchTransformResult",
+      "ResultSelector": {
+        "jobName.$": "$.Payload.jobName",
+        "jobArn.$": "$.Payload.jobArn",
+        "predictionsPath.$": "$.Payload.predictionsPath",
+        "timestamp.$": "$.Payload.timestamp",
+        "season.$": "$.Payload.season"
+      },
+      "Next": "WaitForBatchTransform",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "NotifyFailure",
+          "ResultPath": "$.error"
+        }
+      ]
+    },
+    "WaitForBatchTransform": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sagemaker:describeTransformJob.sync",
+      "Parameters": {
+        "TransformJobName.$": "$.batchTransformResult.jobName"
+      },
+      "ResultPath": "$.batchTransformStatus",
+      "Next": "LoadPredictions",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "NotifyFailure",
+          "ResultPath": "$.error"
+        }
+      ]
+    },
+    "LoadPredictions": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${orchestrator_lambda_arn}",
+        "Payload": {
+          "task": "load_predictions",
+          "predictionsPath.$": "$.batchTransformResult.predictionsPath",
+          "season.$": "$.batchTransformResult.season",
+          "modelVersion": "v1.0.0"
+        }
+      },
+      "ResultPath": "$.loadPredictionsResult",
+      "Next": "NotifySuccess",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "NotifyFailure",
+          "ResultPath": "$.error"
+        }
+      ]
+    },
+    "NotifySuccess": {
+      "Type": "Pass",
+      "Result": {
+        "status": "SUCCESS",
+        "message": "ML pipeline completed successfully"
+      },
+      "End": true
+    },
+    "NotifyFailure": {
+      "Type": "Pass",
+      "Result": {
+        "status": "FAILED",
+        "message": "ML pipeline failed"
+      },
+      "End": true
+    }
+  }
+}

@@ -143,3 +143,35 @@ CREATE TABLE IF NOT EXISTS contract_limits (
 );
 
 CREATE INDEX IF NOT EXISTS idx_contract_limits_season ON contract_limits(season);
+
+-- Predictions table: ML model predictions for player Fair Market Value
+CREATE TABLE IF NOT EXISTS predictions (
+    id SERIAL PRIMARY KEY,
+    player_name VARCHAR(255) NOT NULL,
+    season VARCHAR(20) NOT NULL,
+
+    -- Predictions
+    predicted_salary_cap_pct REAL,  -- Predicted salary as % of cap
+    predicted_salary_pct_of_max REAL,  -- Predicted salary as % of personal max (FMV)
+    predicted_fmv BIGINT,  -- Fair Market Value in dollars
+
+    -- Actuals (for comparison)
+    actual_salary BIGINT,
+    actual_salary_cap_pct REAL,
+
+    -- Value assessment
+    value_over_replacement REAL,  -- VORP from stats
+    inefficiency_score REAL,  -- (actual - predicted) / predicted
+    value_category VARCHAR(20),  -- 'Bargain', 'Fair', 'Overpaid'
+
+    -- Model metadata
+    model_version VARCHAR(50),
+    prediction_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    UNIQUE(player_name, season, model_version)
+);
+
+CREATE INDEX IF NOT EXISTS idx_predictions_player_name ON predictions(player_name);
+CREATE INDEX IF NOT EXISTS idx_predictions_season ON predictions(season);
+CREATE INDEX IF NOT EXISTS idx_predictions_value_category ON predictions(value_category);
+CREATE INDEX IF NOT EXISTS idx_predictions_inefficiency ON predictions(inefficiency_score);

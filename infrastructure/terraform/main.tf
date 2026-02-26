@@ -696,6 +696,9 @@ resource "aws_lambda_function" "load_to_rds" {
       layers  # Managed by CI/CD
     ]
   }
+
+  # Ensure schema exists before ETL can write to tables
+  depends_on = [null_resource.trigger_schema_migration]
 }
 
 # ============================================================================
@@ -706,53 +709,11 @@ resource "aws_sfn_state_machine" "etl_pipeline" {
   name     = "${local.name_prefix}-etl-pipeline"
   role_arn = aws_iam_role.step_functions.arn
 
-  definition = jsonencode({
-    Comment = "Daily ETL pipeline for NBA stats"
-    StartAt = "FetchData"
-    States = {
-      FetchData = {
-        Type     = "Task"
-        Resource = aws_lambda_function.fetch_data.arn
-        Next     = "ValidateData"
-        Catch = [
-          {
-            ErrorEquals = ["States.ALL"]
-            Next        = "HandleError"
-          }
-        ]
-      }
-      ValidateData = {
-        Type     = "Task"
-        Resource = aws_lambda_function.validate_data.arn
-        Next     = "TransformData"
-        Catch = [
-          {
-            ErrorEquals = ["States.ALL"]
-            Next        = "HandleError"
-          }
-        ]
-      }
-      TransformData = {
-        Type     = "Task"
-        Resource = aws_lambda_function.transform_data.arn
-        Next     = "LoadToRDS"
-        Catch = [
-          {
-            ErrorEquals = ["States.ALL"]
-            Next        = "HandleError"
-          }
-        ]
-      }
-      LoadToRDS = {
-        Type     = "Task"
-        Resource = aws_lambda_function.load_to_rds.arn
-        End      = true
-      }
-      HandleError = {
-        Type  = "Fail"
-        Cause = "ETL Pipeline failed"
-      }
-    }
+  definition = templatefile("${path.module}/../step-functions/etl_pipeline.json", {
+    fetch_data_lambda_arn     = aws_lambda_function.fetch_data.arn
+    validate_data_lambda_arn  = aws_lambda_function.validate_data.arn
+    transform_data_lambda_arn = aws_lambda_function.transform_data.arn
+    load_to_rds_lambda_arn    = aws_lambda_function.load_to_rds.arn
   })
 
   tags = local.common_tags
@@ -878,4 +839,453 @@ resource "aws_cloudwatch_metric_alarm" "etl_failures" {
   }
 
   tags = local.common_tags
+}
+
+# ============================================================================
+# SAGEMAKER (ML Training and Predictions)
+# ============================================================================
+
+# SageMaker execution role
+resource "aws_iam_role" "sagemaker_execution" {
+  name = "${local.name_prefix}-sagemaker-execution"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "sagemaker.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = local.common_tags
+}
+
+# Attach SageMaker full access policy
+resource "aws_iam_role_policy_attachment" "sagemaker_full_access" {
+  role       = aws_iam_role.sagemaker_execution.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSageMakerFullAccess"
+}
+
+# Custom policy for S3, RDS, and Secrets Manager access
+resource "aws_iam_role_policy" "sagemaker_custom" {
+  name = "${local.name_prefix}-sagemaker-custom"
+  role = aws_iam_role.sagemaker_execution.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          aws_s3_bucket.data.arn,
+          "${aws_s3_bucket.data.arn}/*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue"
+        ]
+        Resource = aws_secretsmanager_secret.db_credentials.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+# ============================================================================
+# LAMBDA FUNCTION (Load Predictions)
+# ============================================================================
+
+# Lambda function to load batch predictions to RDS
+resource "aws_lambda_function" "load_predictions" {
+  function_name = "${local.name_prefix}-load-predictions"
+  role          = aws_iam_role.lambda_execution.arn
+  handler       = "src.ml.load_predictions.handler"
+  runtime       = var.lambda_runtime
+  timeout       = 300
+  memory_size   = 512
+
+  filename         = "placeholder.zip"
+  source_code_hash = filebase64sha256("placeholder.zip")
+
+  vpc_config {
+    subnet_ids         = [aws_subnet.private_a.id, aws_subnet.private_b.id]
+    security_group_ids = [aws_security_group.lambda.id]
+  }
+
+  environment {
+    variables = {
+      ENVIRONMENT   = var.environment
+      DATA_BUCKET   = aws_s3_bucket.data.bucket
+      DB_SECRET_ARN = aws_secretsmanager_secret.db_credentials.arn
+    }
+  }
+
+  tags = local.common_tags
+
+  lifecycle {
+    ignore_changes = [
+      filename,
+      source_code_hash,
+      layers
+    ]
+  }
+
+  # Ensure predictions table exists before ML can write to it
+  depends_on = [null_resource.trigger_schema_migration]
+}
+
+# ============================================================================
+# EVENTBRIDGE SCHEDULES (ML Pipeline)
+# ============================================================================
+
+# Monthly training schedule (First Sunday @ 7 AM UTC, after ETL at 6 AM)
+resource "aws_cloudwatch_event_rule" "monthly_ml_training" {
+  name                = "${local.name_prefix}-monthly-ml-training"
+  description         = "Trigger monthly ML model training on first Sunday at 7 AM UTC"
+  schedule_expression = "cron(0 7 ? * 1#1 *)"
+  tags                = local.common_tags
+}
+
+# Weekly prediction schedule (Every Sunday @ 7 AM UTC, after ETL at 6 AM)
+resource "aws_cloudwatch_event_rule" "weekly_ml_predictions" {
+  name                = "${local.name_prefix}-weekly-ml-predictions"
+  description         = "Trigger weekly ML batch predictions every Sunday at 7 AM UTC"
+  schedule_expression = "cron(0 7 ? * SUN *)"
+  tags                = local.common_tags
+}
+
+# ============================================================================
+# DATABASE SCHEMA MIGRATION
+# ============================================================================
+
+# Upload schema.sql to S3 for migration Lambda
+resource "aws_s3_object" "schema_sql" {
+  bucket       = aws_s3_bucket.data.id
+  key          = "db/schema.sql"
+  source       = "${path.module}/../../infrastructure/db/schema.sql"
+  etag         = filemd5("${path.module}/../../infrastructure/db/schema.sql")
+  content_type = "text/plain"
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name        = "Database Schema"
+      Description = "PostgreSQL schema for NBA Cap Optimizer"
+    }
+  )
+}
+
+# Schema migration Lambda function
+resource "aws_lambda_function" "migrate_schema" {
+  function_name = "${local.name_prefix}-migrate-schema"
+  role          = aws_iam_role.lambda_execution.arn
+  handler       = "src.db.migrate_schema.handler"
+  runtime       = var.lambda_runtime
+  timeout       = 300
+  memory_size   = 256
+
+  filename         = "placeholder.zip"
+  source_code_hash = filebase64sha256("placeholder.zip")
+
+  vpc_config {
+    subnet_ids         = [aws_subnet.private_a.id, aws_subnet.private_b.id]
+    security_group_ids = [aws_security_group.lambda.id]
+  }
+
+  environment {
+    variables = {
+      ENVIRONMENT        = var.environment
+      DB_SECRET_ARN      = aws_secretsmanager_secret.db_credentials.arn
+      SCHEMA_S3_BUCKET   = aws_s3_bucket.data.bucket
+      SCHEMA_S3_KEY      = "db/schema.sql"
+    }
+  }
+
+  tags = local.common_tags
+
+  lifecycle {
+    ignore_changes = [
+      filename,
+      source_code_hash,
+      layers
+    ]
+  }
+
+  # Ensure schema file is uploaded first
+  depends_on = [aws_s3_object.schema_sql]
+}
+
+# Trigger schema migration after deployment (custom resource)
+resource "null_resource" "trigger_schema_migration" {
+  # Re-run if schema file changes
+  triggers = {
+    schema_hash = filemd5("${path.module}/../../infrastructure/db/schema.sql")
+    lambda_arn  = aws_lambda_function.migrate_schema.arn
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      aws lambda invoke \
+        --function-name ${aws_lambda_function.migrate_schema.function_name} \
+        --payload '{"RequestType":"Create"}' \
+        --profile ${var.aws_profile} \
+        /tmp/schema-migration-output.json
+      cat /tmp/schema-migration-output.json
+    EOT
+  }
+
+  depends_on = [
+    aws_lambda_function.migrate_schema,
+    aws_db_instance.main
+  ]
+}
+
+# ============================================================================
+# ML ORCHESTRATOR LAMBDA
+# ============================================================================
+
+# Lambda function for Step Functions ML orchestration
+resource "aws_lambda_function" "ml_orchestrator" {
+  function_name = "${local.name_prefix}-ml-orchestrator"
+  role          = aws_iam_role.lambda_execution.arn
+  handler       = "src.ml.orchestrator.handler"
+  runtime       = var.lambda_runtime
+  timeout       = 300
+  memory_size   = 512
+
+  filename         = "placeholder.zip"
+  source_code_hash = filebase64sha256("placeholder.zip")
+
+  environment {
+    variables = {
+      ENVIRONMENT                = var.environment
+      SAGEMAKER_ROLE_ARN         = aws_iam_role.sagemaker_execution.arn
+      DATA_BUCKET                = aws_s3_bucket.data.bucket
+      LOAD_PREDICTIONS_FUNCTION  = aws_lambda_function.load_predictions.function_name
+    }
+  }
+
+  tags = local.common_tags
+
+  lifecycle {
+    ignore_changes = [
+      filename,
+      source_code_hash,
+      layers
+    ]
+  }
+}
+
+# Allow orchestrator to invoke SageMaker
+resource "aws_iam_role_policy" "lambda_sagemaker" {
+  name = "${local.name_prefix}-lambda-sagemaker"
+  role = aws_iam_role.lambda_execution.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "sagemaker:CreateProcessingJob",
+          "sagemaker:CreateTrainingJob",
+          "sagemaker:CreateTransformJob",
+          "sagemaker:CreateModel",
+          "sagemaker:DescribeProcessingJob",
+          "sagemaker:DescribeTrainingJob",
+          "sagemaker:DescribeTransformJob",
+          "sagemaker:DescribeModel"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "iam:PassRole"
+        ]
+        Resource = aws_iam_role.sagemaker_execution.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "lambda:InvokeFunction"
+        ]
+        Resource = aws_lambda_function.load_predictions.arn
+      }
+    ]
+  })
+}
+
+# ============================================================================
+# STEP FUNCTIONS (ML Pipeline)
+# ============================================================================
+
+# Step Functions execution role
+resource "aws_iam_role" "ml_pipeline_sfn" {
+  name = "${local.name_prefix}-ml-pipeline-sfn"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "states.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = local.common_tags
+}
+
+# Step Functions policy
+resource "aws_iam_role_policy" "ml_pipeline_sfn" {
+  name = "${local.name_prefix}-ml-pipeline-sfn-policy"
+  role = aws_iam_role.ml_pipeline_sfn.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "lambda:InvokeFunction"
+        ]
+        Resource = [
+          aws_lambda_function.ml_orchestrator.arn,
+          aws_lambda_function.load_predictions.arn
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "sagemaker:DescribeProcessingJob",
+          "sagemaker:DescribeTrainingJob",
+          "sagemaker:DescribeTransformJob",
+          "sagemaker:StopProcessingJob",
+          "sagemaker:StopTrainingJob",
+          "sagemaker:StopTransformJob"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "events:PutTargets",
+          "events:PutRule",
+          "events:DescribeRule"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+# Step Functions state machine
+resource "aws_sfn_state_machine" "ml_pipeline" {
+  name     = "${local.name_prefix}-ml-pipeline"
+  role_arn = aws_iam_role.ml_pipeline_sfn.arn
+
+  definition = templatefile("${path.module}/../step-functions/ml_pipeline.json", {
+    orchestrator_lambda_arn = aws_lambda_function.ml_orchestrator.arn
+  })
+
+  tags = local.common_tags
+}
+
+# ============================================================================
+# EVENTBRIDGE TARGETS (Connect schedules to Step Functions)
+# ============================================================================
+
+# IAM role for EventBridge to invoke Step Functions
+resource "aws_iam_role" "eventbridge_sfn" {
+  name = "${local.name_prefix}-eventbridge-sfn-ml"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "events.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = local.common_tags
+}
+
+resource "aws_iam_role_policy" "eventbridge_sfn" {
+  name = "${local.name_prefix}-eventbridge-sfn-policy"
+  role = aws_iam_role.eventbridge_sfn.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = "states:StartExecution"
+        Resource = aws_sfn_state_machine.ml_pipeline.arn
+      }
+    ]
+  })
+}
+
+# Monthly training target
+resource "aws_cloudwatch_event_target" "monthly_training_target" {
+  rule      = aws_cloudwatch_event_rule.monthly_ml_training.name
+  target_id = "MonthlyMLPipeline"
+  arn       = aws_sfn_state_machine.ml_pipeline.arn
+  role_arn  = aws_iam_role.eventbridge_sfn.arn
+
+  input = jsonencode({
+    season = "2025-26"
+    pipeline_type = "training"
+  })
+}
+
+# Weekly prediction target
+resource "aws_cloudwatch_event_target" "weekly_predictions_target" {
+  rule      = aws_cloudwatch_event_rule.weekly_ml_predictions.name
+  target_id = "WeeklyMLPipeline"
+  arn       = aws_sfn_state_machine.ml_pipeline.arn
+  role_arn  = aws_iam_role.eventbridge_sfn.arn
+
+  input = jsonencode({
+    season = "2025-26"
+    pipeline_type = "prediction"
+  })
 }
