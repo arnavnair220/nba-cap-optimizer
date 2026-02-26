@@ -958,11 +958,11 @@ resource "aws_lambda_function" "load_predictions" {
 # EVENTBRIDGE SCHEDULES (ML Pipeline)
 # ============================================================================
 
-# Monthly training schedule (First Sunday @ 7 AM UTC, after ETL at 6 AM)
+# Monthly training schedule (1st of month @ 7 AM UTC, after ETL at 6 AM)
 resource "aws_cloudwatch_event_rule" "monthly_ml_training" {
   name                = "${local.name_prefix}-monthly-ml-training"
-  description         = "Trigger monthly ML model training on first Sunday at 7 AM UTC"
-  schedule_expression = "cron(0 7 ? * 1#1 *)"
+  description         = "Trigger monthly ML model training on 1st of month at 7 AM UTC (after ETL at 6 AM)"
+  schedule_expression = "cron(0 7 1 * ? *)"
   tags                = local.common_tags
 }
 
@@ -1047,6 +1047,7 @@ resource "null_resource" "trigger_schema_migration" {
     command = <<-EOT
       aws lambda invoke \
         --function-name ${aws_lambda_function.migrate_schema.function_name} \
+        --cli-binary-format raw-in-base64-out \
         --payload '{"RequestType":"Create"}' \
         /tmp/schema-migration-output.json
       cat /tmp/schema-migration-output.json
