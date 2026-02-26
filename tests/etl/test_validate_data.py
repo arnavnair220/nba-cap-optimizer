@@ -6,16 +6,16 @@ import json
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 
-from src.etl import validate_data
+from src.lambdas.etl import validate_data
 
 
 class TestEmptyDataValidation:
     """Test validation behavior when no data files exist."""
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
     def test_stats_only_missing_required_file(self, mock_load, mock_save):
         """Test stats_only fetch fails when stats file is missing."""
         mock_load.return_value = None
@@ -33,10 +33,10 @@ class TestEmptyDataValidation:
         assert body["valid"] is False
         assert body["error_count"] == 1
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
     def test_monthly_missing_all_files(self, mock_load, mock_save):
         """Test monthly fetch fails when all files are missing."""
         mock_load.return_value = None
@@ -56,10 +56,10 @@ class TestEmptyDataValidation:
             body["error_count"] == 5
         )  # stats, teams, salaries, salary_cap_history, contract_limits
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
     def test_monthly_missing_one_required_file(self, mock_load, mock_save):
         """Test monthly fetch fails when one required file is missing."""
 
@@ -106,10 +106,10 @@ class TestEmptyDataValidation:
         assert body["valid"] is False
         assert body["error_count"] >= 1
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
     def test_stats_only_ignores_missing_monthly_files(self, mock_load, mock_save):
         """Test stats_only fetch doesn't fail when monthly files are missing."""
 
@@ -144,10 +144,10 @@ class TestEmptyDataValidation:
 class TestEmptyDataArrays:
     """Test validation behavior when data files exist but contain empty arrays."""
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
     def test_empty_players_array_fails(self, mock_load, mock_save):
         """Test validation fails when players array is empty."""
         mock_load.return_value = {"players": []}
@@ -169,10 +169,10 @@ class TestEmptyDataArrays:
 
         assert result["validation_passed"] is False
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
     def test_empty_salaries_array_with_warning(self, mock_load, mock_save):
         """Test validation warns when salaries array is empty."""
 
@@ -235,8 +235,8 @@ class TestEmptyDataArrays:
 class TestMissingDataLocationEvent:
     """Test validation behavior when event is missing required fields."""
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
     def test_missing_data_location(self):
         """Test validation fails when data_location is missing from event."""
         event = {}
@@ -251,10 +251,10 @@ class TestMissingDataLocationEvent:
 class TestBasketballReferenceValidation:
     """Test Basketball Reference specific validation logic."""
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
     def test_valid_basketball_reference_data(self, mock_load, mock_save):
         """Test validation passes with properly formatted Basketball Reference data."""
 
@@ -329,10 +329,10 @@ class TestBasketballReferenceValidation:
         assert body["valid"] is True
         assert body["error_count"] == 0
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
     def test_player_count_mismatch_warning(self, mock_load, mock_save):
         """Test warning when player counts differ by more than 2.5%."""
 
@@ -376,10 +376,10 @@ class TestBasketballReferenceValidation:
         # Should still pass validation (warning, not error)
         assert result["statusCode"] == 200
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
     def test_player_count_within_threshold(self, mock_load, mock_save):
         """Test no warning when player counts are within 2.5%."""
 
@@ -422,10 +422,10 @@ class TestBasketballReferenceValidation:
         assert "Player count mismatch" not in str(mock_save.call_args)
         assert result["statusCode"] == 200
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
     def test_missing_expected_columns(self, mock_load, mock_save):
         """Test error when expected columns are missing."""
 
@@ -461,10 +461,10 @@ class TestBasketballReferenceValidation:
         assert body["valid"] is False
         assert body["error_count"] > 0
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
     def test_unrealistic_stat_values(self, mock_load, mock_save):
         """Test warning for unrealistic stat values."""
 
@@ -565,10 +565,10 @@ class TestBasketballReferenceValidation:
         # Should still pass validation (warning, not error)
         assert result["statusCode"] == 200
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
     def test_low_player_count_warning(self, mock_load, mock_save):
         """Test warning when player count is below 300."""
 
@@ -612,10 +612,10 @@ class TestBasketballReferenceValidation:
         # Should still pass validation (warning, not error)
         assert result["statusCode"] == 200
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
     def test_wrong_source_field(self, mock_load, mock_save):
         """Test validation fails when source is not basketball_reference."""
 
@@ -646,10 +646,10 @@ class TestBasketballReferenceValidation:
         body = json.loads(result["body"])
         assert body["valid"] is False
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
     def test_valid_null_percentages_when_attempts_zero(self, mock_load, mock_save):
         """Test that null percentages are valid when corresponding attempts are zero."""
 
@@ -752,10 +752,10 @@ class TestBasketballReferenceValidation:
         assert body["valid"] is True
         assert body["error_count"] == 0
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
     def test_invalid_null_percentages_when_attempts_nonzero(self, mock_load, mock_save):
         """Test that null percentages are invalid when corresponding attempts are non-zero."""
 
@@ -900,10 +900,10 @@ class TestBasketballReferenceValidation:
         assert body["valid"] is False
         assert body["error_count"] > 0
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
     def test_mixed_null_and_zero_attempts(self, mock_load, mock_save):
         """Test players with some zero attempts (null %) and some non-zero attempts (valid %)."""
 
@@ -1030,10 +1030,10 @@ class TestNaNHandling:
         """Test _is_value_zero_or_null handles NaN."""
         assert validate_data._is_value_zero_or_null(float("nan")) is True
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
     def test_nan_in_percentage_allowed_when_attempts_zero(self, mock_load, mock_save):
         """Test NaN in percentage columns is valid when attempts are 0."""
 
@@ -1098,10 +1098,10 @@ class TestNaNHandling:
         result = validate_data.handler(event, MagicMock())
         assert result["statusCode"] == 200
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
     def test_nan_in_percentage_invalid_when_attempts_nonzero(self, mock_load, mock_save):
         """Test NaN in percentage columns is invalid when attempts > 0."""
 
@@ -1183,10 +1183,10 @@ class TestNaNHandling:
         result = validate_data.handler(event, MagicMock())
         assert result["statusCode"] == 422
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
     def test_tov_percentage_null_passes_validation(self, mock_load, mock_save):
         """Test TOV% can be null without failing validation (warn-only column)."""
 
@@ -1300,10 +1300,10 @@ class TestNaNHandling:
         body = json.loads(result["body"])
         assert body["valid"] is True
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
     def test_tov_percentage_null_warns_but_passes(self, mock_load, mock_save):
         """Test TOV% null generates warning but doesn't fail validation (warn-only column)."""
 

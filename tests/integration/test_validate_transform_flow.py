@@ -15,20 +15,20 @@ import json
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 
-from src.etl import transform_data, validate_data
+from src.lambdas.etl import transform_data, validate_data
 
 
 class TestValidateTransformEventContract:
     """Test the event contract between validate and transform lambdas."""
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
-    @patch("src.etl.transform_data.ENVIRONMENT", "test")
-    @patch("src.etl.transform_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.transform_data.save_to_s3")
-    @patch("src.etl.transform_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.transform_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.transform_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.transform_data.save_to_s3")
+    @patch("src.lambdas.etl.transform_data.load_from_s3")
     def test_validate_output_event_is_valid_transform_input(
         self,
         mock_transform_load,
@@ -77,12 +77,12 @@ class TestValidateTransformEventContract:
         assert "transformation_successful" in transform_result
         assert transform_result["transformation_successful"] is True
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
-    @patch("src.etl.transform_data.ENVIRONMENT", "test")
-    @patch("src.etl.transform_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.transform_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.transform_data.S3_BUCKET", "test-bucket")
     def test_transform_skips_when_validation_fails(self, mock_validate_load, mock_validate_save):
         """
         Test that transform_data returns 400 and skips processing
@@ -126,14 +126,14 @@ class TestValidateTransformEventContract:
         body = json.loads(transform_result["body"])
         assert "validation failed" in body["error"].lower()
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
-    @patch("src.etl.transform_data.ENVIRONMENT", "test")
-    @patch("src.etl.transform_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.transform_data.save_to_s3")
-    @patch("src.etl.transform_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.transform_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.transform_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.transform_data.save_to_s3")
+    @patch("src.lambdas.etl.transform_data.load_from_s3")
     def test_partition_paths_consistent_across_lambdas(
         self,
         mock_transform_load,
@@ -199,14 +199,14 @@ class TestValidateTransformEventContract:
 class TestDataEnrichmentThroughPipeline:
     """Test data enrichment from validate through transform."""
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
-    @patch("src.etl.transform_data.ENVIRONMENT", "test")
-    @patch("src.etl.transform_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.transform_data.save_to_s3")
-    @patch("src.etl.transform_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.transform_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.transform_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.transform_data.save_to_s3")
+    @patch("src.lambdas.etl.transform_data.load_from_s3")
     def test_validate_to_transform_stats_only_mode(
         self,
         mock_transform_load,
@@ -284,14 +284,14 @@ class TestDataEnrichmentThroughPipeline:
         assert lebron["per"] == 24.5
         assert lebron["vorp"] == 4.0
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
-    @patch("src.etl.transform_data.ENVIRONMENT", "test")
-    @patch("src.etl.transform_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.transform_data.save_to_s3")
-    @patch("src.etl.transform_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.transform_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.transform_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.transform_data.save_to_s3")
+    @patch("src.lambdas.etl.transform_data.load_from_s3")
     def test_validate_to_transform_monthly_all_data(
         self,
         mock_transform_load,
@@ -395,14 +395,14 @@ class TestDataEnrichmentThroughPipeline:
         assert "roster_with_salary" in lakers
         assert lakers["roster_count"] >= 0
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
-    @patch("src.etl.transform_data.ENVIRONMENT", "test")
-    @patch("src.etl.transform_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.transform_data.save_to_s3")
-    @patch("src.etl.transform_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.transform_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.transform_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.transform_data.save_to_s3")
+    @patch("src.lambdas.etl.transform_data.load_from_s3")
     def test_salary_data_with_unicode_names(
         self,
         mock_transform_load,
@@ -485,14 +485,14 @@ class TestDataEnrichmentThroughPipeline:
 class TestDataConsistencyAcrossStages:
     """Test data quality and consistency from validate through transform."""
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
-    @patch("src.etl.transform_data.ENVIRONMENT", "test")
-    @patch("src.etl.transform_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.transform_data.save_to_s3")
-    @patch("src.etl.transform_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.transform_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.transform_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.transform_data.save_to_s3")
+    @patch("src.lambdas.etl.transform_data.load_from_s3")
     def test_player_counts_consistent_validate_to_transform(
         self,
         mock_transform_load,
@@ -551,14 +551,14 @@ class TestDataConsistencyAcrossStages:
         assert len(enriched_stats["player_stats"]) == player_count
         assert enriched_stats["statistics"]["total_players"] == player_count
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
-    @patch("src.etl.transform_data.ENVIRONMENT", "test")
-    @patch("src.etl.transform_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.transform_data.save_to_s3")
-    @patch("src.etl.transform_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.transform_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.transform_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.transform_data.save_to_s3")
+    @patch("src.lambdas.etl.transform_data.load_from_s3")
     def test_salary_totals_consistent_validate_to_transform(
         self,
         mock_transform_load,

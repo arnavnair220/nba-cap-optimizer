@@ -10,7 +10,7 @@ import os
 # Set AWS region before importing modules that use boto3
 os.environ.setdefault("AWS_DEFAULT_REGION", "us-east-1")
 
-from src.ml.load_predictions import handler  # noqa: E402
+from src.lambdas.ml.load_predictions import handler  # noqa: E402
 
 
 class TestHandler:

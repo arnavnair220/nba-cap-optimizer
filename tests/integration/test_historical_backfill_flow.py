@@ -15,7 +15,7 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pandas as pd
 
-from src.etl import fetch_data, transform_data, validate_data
+from src.lambdas.etl import fetch_data, transform_data, validate_data
 from tests.integration.conftest import (
     create_basketball_reference_advanced_stats,
     create_basketball_reference_player_stats,
@@ -25,20 +25,20 @@ from tests.integration.conftest import (
 class TestHistoricalBackfillPipeline:
     """Test complete backfill pipeline for historical seasons."""
 
-    @patch("src.etl.fetch_data.pd.read_html")
-    @patch("src.etl.fetch_data.requests.get")
-    @patch("src.etl.fetch_data.time.sleep")
-    @patch("src.etl.fetch_data.save_to_s3")
-    @patch("src.etl.validate_data.load_from_s3")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.transform_data.load_from_s3")
-    @patch("src.etl.transform_data.save_to_s3")
-    @patch("src.etl.fetch_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.fetch_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.transform_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.transform_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.fetch_data.pd.read_html")
+    @patch("src.lambdas.etl.fetch_data.requests.get")
+    @patch("src.lambdas.etl.fetch_data.time.sleep")
+    @patch("src.lambdas.etl.fetch_data.save_to_s3")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.transform_data.load_from_s3")
+    @patch("src.lambdas.etl.transform_data.save_to_s3")
+    @patch("src.lambdas.etl.fetch_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.fetch_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.transform_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.transform_data.ENVIRONMENT", "test")
     def test_backfill_2022_23_season_complete_pipeline(
         self,
         mock_transform_save,
@@ -153,20 +153,20 @@ class TestHistoricalBackfillPipeline:
         enriched_stats = s3_storage[stats_key]
         assert enriched_stats["season"] == "2022-23"
 
-    @patch("src.etl.fetch_data.pd.read_html")
-    @patch("src.etl.fetch_data.requests.get")
-    @patch("src.etl.fetch_data.time.sleep")
-    @patch("src.etl.fetch_data.save_to_s3")
-    @patch("src.etl.validate_data.load_from_s3")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.transform_data.load_from_s3")
-    @patch("src.etl.transform_data.save_to_s3")
-    @patch("src.etl.fetch_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.fetch_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.transform_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.transform_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.fetch_data.pd.read_html")
+    @patch("src.lambdas.etl.fetch_data.requests.get")
+    @patch("src.lambdas.etl.fetch_data.time.sleep")
+    @patch("src.lambdas.etl.fetch_data.save_to_s3")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.transform_data.load_from_s3")
+    @patch("src.lambdas.etl.transform_data.save_to_s3")
+    @patch("src.lambdas.etl.fetch_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.fetch_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.transform_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.transform_data.ENVIRONMENT", "test")
     def test_season_parameter_flows_through_all_stages(
         self,
         mock_transform_save,
@@ -257,16 +257,16 @@ class TestHistoricalBackfillPipeline:
 class TestMultipleSeasonBackfill:
     """Test backfilling multiple seasons sequentially."""
 
-    @patch("src.etl.fetch_data.pd.read_html")
-    @patch("src.etl.fetch_data.requests.get")
-    @patch("src.etl.fetch_data.time.sleep")
-    @patch("src.etl.fetch_data.save_to_s3")
-    @patch("src.etl.validate_data.load_from_s3")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.fetch_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.fetch_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.fetch_data.pd.read_html")
+    @patch("src.lambdas.etl.fetch_data.requests.get")
+    @patch("src.lambdas.etl.fetch_data.time.sleep")
+    @patch("src.lambdas.etl.fetch_data.save_to_s3")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.fetch_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.fetch_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
     def test_backfill_three_seasons_independently(
         self,
         mock_validate_save_report,
@@ -356,10 +356,10 @@ class TestMultipleSeasonBackfill:
 class TestBackfillErrorHandling:
     """Test error handling during backfill operations."""
 
-    @patch("src.etl.fetch_data.fetch_player_stats")
-    @patch("src.etl.fetch_data.save_to_s3")
-    @patch("src.etl.fetch_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.fetch_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.fetch_data.fetch_player_stats")
+    @patch("src.lambdas.etl.fetch_data.save_to_s3")
+    @patch("src.lambdas.etl.fetch_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.fetch_data.ENVIRONMENT", "test")
     def test_backfill_handles_missing_historical_data(self, mock_save, mock_fetch_stats):
         """
         Test that backfill gracefully handles when historical data is unavailable.
@@ -376,15 +376,15 @@ class TestBackfillErrorHandling:
         body = json.loads(result["body"])
         assert len(body["errors"]) > 0
 
-    @patch("src.etl.fetch_data.pd.read_html")
-    @patch("src.etl.fetch_data.time.sleep")
-    @patch("src.etl.fetch_data.save_to_s3")
-    @patch("src.etl.validate_data.load_from_s3")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.fetch_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.fetch_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.fetch_data.pd.read_html")
+    @patch("src.lambdas.etl.fetch_data.time.sleep")
+    @patch("src.lambdas.etl.fetch_data.save_to_s3")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.fetch_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.fetch_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
     def test_backfill_validation_catches_data_quality_issues(
         self,
         mock_validate_save_report,
