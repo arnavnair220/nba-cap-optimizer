@@ -84,3 +84,17 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+# AWS CLI profile
+variable "aws_profile" {
+  description = "AWS CLI profile to use for deployments"
+  type        = string
+  default     = "personal-account"
+}
+
+# Current NBA season
+variable "current_season" {
+  description = "Current NBA season (YYYY-YY format)"
+  type        = string
+  default     = "2025-26"
+}
