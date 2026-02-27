@@ -25,6 +25,15 @@
               "S3DataType": "S3Prefix",
               "S3InputMode": "File"
             }
+          },
+          {
+            "InputName": "requirements",
+            "S3Input": {
+              "S3Uri": "s3://${data_bucket}/ml/code/requirements.txt",
+              "LocalPath": "/opt/ml/processing/input/code",
+              "S3DataType": "S3Prefix",
+              "S3InputMode": "File"
+            }
           }
         ],
         "ProcessingOutputConfig": {

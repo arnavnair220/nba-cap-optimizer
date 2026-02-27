@@ -72,6 +72,23 @@ resource "aws_s3_object" "feature_engineering_code" {
   )
 }
 
+# Upload SageMaker requirements file
+resource "aws_s3_object" "sagemaker_requirements" {
+  bucket       = aws_s3_bucket.data.id
+  key          = "ml/code/requirements.txt"
+  source       = "${path.module}/../../src/sagemaker/requirements.txt"
+  etag         = filemd5("${path.module}/../../src/sagemaker/requirements.txt")
+  content_type = "text/plain"
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name        = "SageMaker Requirements"
+      Description = "Python dependencies for SageMaker jobs"
+    }
+  )
+}
+
 # Upload SageMaker inference code
 resource "aws_s3_object" "inference_code" {
   bucket       = aws_s3_bucket.data.id
