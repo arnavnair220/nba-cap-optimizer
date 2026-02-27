@@ -353,6 +353,40 @@ resource "aws_vpc_endpoint" "secretsmanager" {
   )
 }
 
+# ECR API VPC Endpoint (for SageMaker to pull container images)
+resource "aws_vpc_endpoint" "ecr_api" {
+  vpc_id              = aws_vpc.main.id
+  service_name        = "com.amazonaws.${var.aws_region}.ecr.api"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = [aws_subnet.private_a.id, aws_subnet.private_b.id]
+  security_group_ids  = [aws_security_group.vpc_endpoints.id]
+  private_dns_enabled = true
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "${local.name_prefix}-ecr-api-endpoint"
+    }
+  )
+}
+
+# ECR Docker VPC Endpoint (for SageMaker to pull container layers)
+resource "aws_vpc_endpoint" "ecr_dkr" {
+  vpc_id              = aws_vpc.main.id
+  service_name        = "com.amazonaws.${var.aws_region}.ecr.dkr"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = [aws_subnet.private_a.id, aws_subnet.private_b.id]
+  security_group_ids  = [aws_security_group.vpc_endpoints.id]
+  private_dns_enabled = true
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "${local.name_prefix}-ecr-dkr-endpoint"
+    }
+  )
+}
+
 # CloudWatch Logs VPC Endpoint (for SageMaker container logs)
 resource "aws_vpc_endpoint" "logs" {
   vpc_id              = aws_vpc.main.id
@@ -896,6 +930,12 @@ resource "aws_cloudwatch_metric_alarm" "etl_failures" {
 # SAGEMAKER (ML Training and Predictions)
 # ============================================================================
 
+# Get SageMaker scikit-learn container image URI dynamically
+data "aws_sagemaker_prebuilt_ecr_image" "sklearn" {
+  repository_name = "sagemaker-scikit-learn"
+  image_tag       = "1.2-1-cpu-py3"
+}
+
 # SageMaker execution role
 resource "aws_iam_role" "sagemaker_execution" {
   name = "${local.name_prefix}-sagemaker-execution"
@@ -1216,6 +1256,7 @@ resource "aws_sfn_state_machine" "ml_training_pipeline" {
     rds_security_group_id    = aws_security_group.rds.id
     private_subnet_ids       = jsonencode([aws_subnet.private_a.id, aws_subnet.private_b.id])
     db_secret_arn            = aws_secretsmanager_secret.db_credentials.arn
+    sklearn_image_uri        = data.aws_sagemaker_prebuilt_ecr_image.sklearn.registry_path
   })
 
   tags = local.common_tags
@@ -1233,6 +1274,7 @@ resource "aws_sfn_state_machine" "ml_predictions_pipeline" {
     rds_security_group_id       = aws_security_group.rds.id
     private_subnet_ids          = jsonencode([aws_subnet.private_a.id, aws_subnet.private_b.id])
     db_secret_arn               = aws_secretsmanager_secret.db_credentials.arn
+    sklearn_image_uri           = data.aws_sagemaker_prebuilt_ecr_image.sklearn.registry_path
   })
 
   tags = local.common_tags

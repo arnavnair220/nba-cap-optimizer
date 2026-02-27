@@ -40,7 +40,7 @@
           ]
         },
         "AppSpecification": {
-          "ImageUri": "public.ecr.aws/sagemaker/sagemaker-distribution:latest-cpu",
+          "ImageUri": "${sklearn_image_uri}",
           "ContainerEntrypoint": [
             "python3",
             "/opt/ml/processing/input/code/feature_engineering.py",
@@ -89,7 +89,7 @@
         "TrainingJobName.$": "States.Format('train-{}', $.execution_id)",
         "RoleArn": "${sagemaker_role_arn}",
         "AlgorithmSpecification": {
-          "TrainingImage": "public.ecr.aws/sagemaker/sagemaker-distribution:latest-cpu",
+          "TrainingImage": "${sklearn_image_uri}",
           "TrainingInputMode": "File",
           "EnableSageMakerMetricsTimeSeries": true
         },
