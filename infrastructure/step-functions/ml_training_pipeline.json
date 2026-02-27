@@ -8,7 +8,32 @@
         "season.$": "$.season",
         "execution_id.$": "$$.Execution.Name"
       },
-      "Next": "FeatureEngineering"
+      "Next": "ExtractTrainingData"
+    },
+    "ExtractTrainingData": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${extract_training_data_lambda_arn}",
+        "Payload": {
+          "seasons_before.$": "$.season"
+        }
+      },
+      "ResultPath": "$.extractResult",
+      "ResultSelector": {
+        "s3_path.$": "$.Payload.s3_path",
+        "s3_bucket.$": "$.Payload.s3_bucket",
+        "s3_key.$": "$.Payload.s3_key",
+        "record_count.$": "$.Payload.record_count"
+      },
+      "Next": "FeatureEngineering",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "TrainingFailed"
+        }
+      ]
     },
     "FeatureEngineering": {
       "Type": "Task",
@@ -22,6 +47,15 @@
             "S3Input": {
               "S3Uri": "s3://${data_bucket}/ml/code/",
               "LocalPath": "/opt/ml/processing/input/code",
+              "S3DataType": "S3Prefix",
+              "S3InputMode": "File"
+            }
+          },
+          {
+            "InputName": "input-data",
+            "S3Input": {
+              "S3Uri.$": "$.extractResult.s3_path",
+              "LocalPath": "/opt/ml/processing/input/data",
               "S3DataType": "S3Prefix",
               "S3InputMode": "File"
             }
@@ -64,8 +98,8 @@
           }
         },
         "Environment": {
-          "DB_SECRET_ARN": "${db_secret_arn}",
-          "SEASONS_BEFORE.$": "$.season"
+          "INPUT_PATH.$": "$.extractResult.s3_path",
+          "DATA_BUCKET": "${data_bucket}"
         }
       },
       "ResultPath": "$.featureEngineeringResult",

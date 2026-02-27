@@ -1062,6 +1062,82 @@ resource "aws_lambda_function" "load_predictions" {
   depends_on = [null_resource.trigger_schema_migration]
 }
 
+# Lambda function to extract training data from RDS to S3
+resource "aws_lambda_function" "extract_training_data" {
+  function_name = "${local.name_prefix}-extract-training-data"
+  role          = aws_iam_role.lambda_execution.arn
+  handler       = "src.lambdas.ml.extract_training_data.lambda_handler"
+  runtime       = var.lambda_runtime
+  timeout       = 300
+  memory_size   = 512
+
+  filename         = "placeholder.zip"
+  source_code_hash = filebase64sha256("placeholder.zip")
+
+  vpc_config {
+    subnet_ids         = [aws_subnet.private_a.id, aws_subnet.private_b.id]
+    security_group_ids = [aws_security_group.lambda.id]
+  }
+
+  environment {
+    variables = {
+      ENVIRONMENT   = var.environment
+      DATA_BUCKET   = aws_s3_bucket.data.bucket
+      DB_SECRET_ARN = aws_secretsmanager_secret.db_credentials.arn
+    }
+  }
+
+  tags = local.common_tags
+
+  lifecycle {
+    ignore_changes = [
+      filename,
+      source_code_hash,
+      layers
+    ]
+  }
+
+  depends_on = [null_resource.trigger_schema_migration]
+}
+
+# Lambda function to extract prediction data from RDS to S3
+resource "aws_lambda_function" "extract_prediction_data" {
+  function_name = "${local.name_prefix}-extract-prediction-data"
+  role          = aws_iam_role.lambda_execution.arn
+  handler       = "src.lambdas.ml.extract_prediction_data.lambda_handler"
+  runtime       = var.lambda_runtime
+  timeout       = 300
+  memory_size   = 512
+
+  filename         = "placeholder.zip"
+  source_code_hash = filebase64sha256("placeholder.zip")
+
+  vpc_config {
+    subnet_ids         = [aws_subnet.private_a.id, aws_subnet.private_b.id]
+    security_group_ids = [aws_security_group.lambda.id]
+  }
+
+  environment {
+    variables = {
+      ENVIRONMENT   = var.environment
+      DATA_BUCKET   = aws_s3_bucket.data.bucket
+      DB_SECRET_ARN = aws_secretsmanager_secret.db_credentials.arn
+    }
+  }
+
+  tags = local.common_tags
+
+  lifecycle {
+    ignore_changes = [
+      filename,
+      source_code_hash,
+      layers
+    ]
+  }
+
+  depends_on = [null_resource.trigger_schema_migration]
+}
+
 # ============================================================================
 # EVENTBRIDGE SCHEDULES (ML Pipeline)
 # ============================================================================
@@ -1212,7 +1288,9 @@ resource "aws_iam_role_policy" "ml_pipeline_sfn" {
           "lambda:InvokeFunction"
         ]
         Resource = [
-          aws_lambda_function.load_predictions.arn
+          aws_lambda_function.load_predictions.arn,
+          aws_lambda_function.extract_training_data.arn,
+          aws_lambda_function.extract_prediction_data.arn
         ]
       },
       {
@@ -1268,12 +1346,13 @@ resource "aws_sfn_state_machine" "ml_training_pipeline" {
   role_arn = aws_iam_role.ml_pipeline_sfn.arn
 
   definition = templatefile("${path.module}/../step-functions/ml_training_pipeline.json", {
-    sagemaker_role_arn       = aws_iam_role.sagemaker_execution.arn
-    data_bucket              = aws_s3_bucket.data.bucket
-    rds_security_group_id    = aws_security_group.rds.id
-    private_subnet_ids       = jsonencode([aws_subnet.private_a.id, aws_subnet.private_b.id])
-    db_secret_arn            = aws_secretsmanager_secret.db_credentials.arn
-    sklearn_image_uri        = data.aws_sagemaker_prebuilt_ecr_image.sklearn.registry_path
+    sagemaker_role_arn              = aws_iam_role.sagemaker_execution.arn
+    data_bucket                     = aws_s3_bucket.data.bucket
+    rds_security_group_id           = aws_security_group.rds.id
+    private_subnet_ids              = jsonencode([aws_subnet.private_a.id, aws_subnet.private_b.id])
+    db_secret_arn                   = aws_secretsmanager_secret.db_credentials.arn
+    sklearn_image_uri               = data.aws_sagemaker_prebuilt_ecr_image.sklearn.registry_path
+    extract_training_data_lambda_arn = aws_lambda_function.extract_training_data.arn
   })
 
   tags = local.common_tags
@@ -1285,13 +1364,14 @@ resource "aws_sfn_state_machine" "ml_predictions_pipeline" {
   role_arn = aws_iam_role.ml_pipeline_sfn.arn
 
   definition = templatefile("${path.module}/../step-functions/ml_predictions_pipeline.json", {
-    sagemaker_role_arn          = aws_iam_role.sagemaker_execution.arn
-    data_bucket                 = aws_s3_bucket.data.bucket
-    load_predictions_lambda_arn = aws_lambda_function.load_predictions.arn
-    rds_security_group_id       = aws_security_group.rds.id
-    private_subnet_ids          = jsonencode([aws_subnet.private_a.id, aws_subnet.private_b.id])
-    db_secret_arn               = aws_secretsmanager_secret.db_credentials.arn
-    sklearn_image_uri           = data.aws_sagemaker_prebuilt_ecr_image.sklearn.registry_path
+    sagemaker_role_arn               = aws_iam_role.sagemaker_execution.arn
+    data_bucket                      = aws_s3_bucket.data.bucket
+    load_predictions_lambda_arn      = aws_lambda_function.load_predictions.arn
+    rds_security_group_id            = aws_security_group.rds.id
+    private_subnet_ids               = jsonencode([aws_subnet.private_a.id, aws_subnet.private_b.id])
+    db_secret_arn                    = aws_secretsmanager_secret.db_credentials.arn
+    sklearn_image_uri                = data.aws_sagemaker_prebuilt_ecr_image.sklearn.registry_path
+    extract_prediction_data_lambda_arn = aws_lambda_function.extract_prediction_data.arn
   })
 
   tags = local.common_tags
