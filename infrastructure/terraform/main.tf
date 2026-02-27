@@ -930,6 +930,12 @@ resource "aws_cloudwatch_metric_alarm" "etl_failures" {
 # SAGEMAKER (ML Training and Predictions)
 # ============================================================================
 
+# Get SageMaker scikit-learn container image URI dynamically
+data "aws_sagemaker_prebuilt_ecr_image" "sklearn" {
+  repository_name = "sagemaker-scikit-learn"
+  image_tag       = "1.2-1-cpu-py3"
+}
+
 # SageMaker execution role
 resource "aws_iam_role" "sagemaker_execution" {
   name = "${local.name_prefix}-sagemaker-execution"
@@ -1250,6 +1256,7 @@ resource "aws_sfn_state_machine" "ml_training_pipeline" {
     rds_security_group_id    = aws_security_group.rds.id
     private_subnet_ids       = jsonencode([aws_subnet.private_a.id, aws_subnet.private_b.id])
     db_secret_arn            = aws_secretsmanager_secret.db_credentials.arn
+    sklearn_image_uri        = data.aws_sagemaker_prebuilt_ecr_image.sklearn.registry_path
   })
 
   tags = local.common_tags
@@ -1267,6 +1274,7 @@ resource "aws_sfn_state_machine" "ml_predictions_pipeline" {
     rds_security_group_id       = aws_security_group.rds.id
     private_subnet_ids          = jsonencode([aws_subnet.private_a.id, aws_subnet.private_b.id])
     db_secret_arn               = aws_secretsmanager_secret.db_credentials.arn
+    sklearn_image_uri           = data.aws_sagemaker_prebuilt_ecr_image.sklearn.registry_path
   })
 
   tags = local.common_tags
