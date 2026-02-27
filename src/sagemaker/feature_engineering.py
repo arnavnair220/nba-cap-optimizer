@@ -13,26 +13,7 @@ Target variables:
 - log_salary_pct_of_max: Salary as % of personal max (Fair Market Value)
 """
 
-import subprocess
-import sys
-
-# Install dependencies at runtime for SageMaker Processing Jobs
-try:
-    subprocess.check_call(
-        [
-            sys.executable,
-            "-m",
-            "pip",
-            "install",
-            "-q",
-            "-r",
-            "/opt/ml/processing/input/code/requirements.txt",
-        ]
-    )
-except Exception as e:
-    print(f"Warning: Could not install requirements.txt: {e}")
-    print("Continuing anyway - dependencies may already be installed")
-
+import io
 import json
 import logging
 import os
@@ -41,7 +22,6 @@ from typing import List, Optional, Tuple
 import boto3
 import numpy as np
 import pandas as pd
-import psycopg2
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -72,130 +52,79 @@ def signed_log(x: float, epsilon: float = 1e-6) -> float:
         return 0.0
 
 
-def get_db_connection():
+def load_data_from_s3(s3_path: str) -> pd.DataFrame:
     """
-    Get database connection using credentials from environment or Secrets Manager.
-
-    Returns:
-        psycopg2 connection object
-    """
-    db_secret_arn = os.environ.get("DB_SECRET_ARN")
-
-    if db_secret_arn:
-        # Production: Load from Secrets Manager
-        secrets_client = boto3.client("secretsmanager")
-        secret_value = secrets_client.get_secret_value(SecretId=db_secret_arn)
-        credentials = json.loads(secret_value["SecretString"])
-
-        conn = psycopg2.connect(
-            host=credentials["host"],
-            port=credentials["port"],
-            database=credentials["dbname"],
-            user=credentials["username"],
-            password=credentials["password"],
-        )
-    else:
-        # Local: Use environment variables
-        conn = psycopg2.connect(
-            host=os.environ.get("DB_HOST", "localhost"),
-            port=os.environ.get("DB_PORT", 5432),
-            database=os.environ.get("DB_NAME", "nba_cap_optimizer"),
-            user=os.environ.get("DB_USER", "postgres"),
-            password=os.environ.get("DB_PASSWORD", ""),
-        )
-
-    return conn
-
-
-def load_training_data(seasons_before: str = "2025-26") -> pd.DataFrame:
-    """
-    Load player stats and salaries from database for all seasons before target season.
+    Load data from S3 CSV file.
 
     Args:
-        seasons_before: Exclude this season and later (default: "2025-26")
+        s3_path: S3 path in format s3://bucket/key
 
     Returns:
-        DataFrame with player stats and salaries joined
+        DataFrame with loaded data
     """
-    logger.info(f"Loading training data for seasons before {seasons_before}")
+    logger.info(f"Loading data from {s3_path}")
 
-    conn = get_db_connection()
+    # Parse S3 path
+    s3_path_parts = s3_path.replace("s3://", "").split("/", 1)
+    bucket = s3_path_parts[0]
+    key = s3_path_parts[1]
 
-    # Query to join player_stats with salaries
-    # Filters out seasons >= seasons_before
-    query = """
-    SELECT
-        ps.*,
-        s.annual_salary,
-        s.season as salary_season
-    FROM player_stats ps
-    INNER JOIN salaries s
-        ON ps.player_name = s.player_name
-        AND ps.season = s.season
-    WHERE ps.season < %s
-        AND s.annual_salary > 0
-        AND ps.minutes > 0
-        AND ps.games_played > 0
-    ORDER BY ps.season, ps.player_name
-    """
+    # Read from S3
+    s3_client = boto3.client("s3")
+    response = s3_client.get_object(Bucket=bucket, Key=key)
+    df = pd.read_csv(io.BytesIO(response["Body"].read()))
 
-    df = pd.read_sql(query, conn, params=(seasons_before,))
-    conn.close()
-
-    logger.info(f"Loaded {len(df)} player-season records")
-    logger.info(f"Seasons: {sorted(df['season'].unique())}")
-    logger.info(f"Date range: {df['season'].min()} to {df['season'].max()}")
-
+    logger.info(f"Loaded {len(df)} records from S3")
     return df
 
 
-def load_prediction_data() -> pd.DataFrame:
+def load_salary_cap_data_from_s3(data_bucket: str) -> pd.DataFrame:
     """
-    Load player stats from latest season and last 7 days for predictions.
+    Load salary cap history from S3.
 
-    Returns:
-        DataFrame with recent player stats (no salary data)
-    """
-    logger.info("Loading prediction data for latest season and last 7 days")
+    For now, we'll embed the salary cap data as it's small and static.
+    In production, this could be stored in S3 or queried from RDS.
 
-    conn = get_db_connection()
-
-    # Get latest season and filter by last 7 days
-    query = """
-    SELECT ps.*
-    FROM player_stats ps
-    WHERE ps.season = (SELECT MAX(season) FROM player_stats)
-        AND ps.created_at >= NOW() - INTERVAL '7 days'
-        AND ps.minutes > 0
-        AND ps.games_played > 0
-    ORDER BY ps.player_name
-    """
-
-    df = pd.read_sql(query, conn)
-    conn.close()
-
-    logger.info(f"Loaded {len(df)} player records for predictions")
-    if len(df) > 0:
-        logger.info(f"Season: {df['season'].iloc[0]}")
-        logger.info(f"Date range: {df['created_at'].min()} to {df['created_at'].max()}")
-
-    return df
-
-
-def load_salary_cap_data() -> pd.DataFrame:
-    """
-    Load salary cap history from database.
+    Args:
+        data_bucket: S3 bucket name (not used currently, for future extension)
 
     Returns:
         DataFrame with salary cap by season
     """
     logger.info("Loading salary cap history")
 
-    conn = get_db_connection()
-    query = "SELECT season, salary_cap FROM salary_cap_history ORDER BY season"
-    df = pd.read_sql(query, conn)
-    conn.close()
+    # Salary cap data (2015-2026)
+    # Source: Basketball Reference and NBA CBA
+    salary_cap_data = {
+        "season": [
+            "2015-16",
+            "2016-17",
+            "2017-18",
+            "2018-19",
+            "2019-20",
+            "2020-21",
+            "2021-22",
+            "2022-23",
+            "2023-24",
+            "2024-25",
+            "2025-26",
+        ],
+        "salary_cap": [
+            70000000,
+            94143000,
+            99093000,
+            101869000,
+            109140000,
+            109140000,
+            112414000,
+            123655000,
+            136021000,
+            140588000,
+            141000000,
+        ],
+    }
 
+    df = pd.DataFrame(salary_cap_data)
     logger.info(f"Loaded salary cap data for {len(df)} seasons")
     return df
 
@@ -612,30 +541,37 @@ def get_feature_columns() -> List[str]:
 
 def engineer_features(
     mode: str = "train",
-    seasons_before: str = "2025-26",
+    input_path: Optional[str] = None,
     output_path: Optional[str] = None,
+    data_bucket: Optional[str] = None,
 ) -> Tuple[pd.DataFrame, List[str]]:
     """
     Main feature engineering pipeline.
 
-    Loads data, calculates all features (and targets for training), saves to S3.
+    Loads data from S3, calculates all features (and targets for training), saves to S3.
 
     Args:
         mode: "train" or "predict"
-        seasons_before: Train on seasons before this (default: "2025-26", train mode only)
-        output_path: Optional S3 path to save features (e.g., "s3://bucket/features.csv")
+        input_path: S3 path to input CSV file (e.g., "s3://bucket/raw_data.csv")
+        output_path: S3 path to save features (e.g., "s3://bucket/features.csv")
+        data_bucket: S3 bucket name for loading salary cap data
 
     Returns:
         Tuple of (feature_df, feature_columns)
     """
     logger.info(f"Starting feature engineering pipeline in {mode} mode...")
 
-    # Load data based on mode
+    # Load data from S3
+    if not input_path:
+        raise ValueError("input_path is required")
+
+    df = load_data_from_s3(input_path)
+    logger.info(f"Loaded {len(df)} records from {input_path}")
+
+    # Load salary cap data (train mode only)
     if mode == "train":
-        df = load_training_data(seasons_before=seasons_before)
-        salary_cap_df = load_salary_cap_data()
+        salary_cap_df = load_salary_cap_data_from_s3(data_bucket)
     elif mode == "predict":
-        df = load_prediction_data()
         salary_cap_df = None
     else:
         raise ValueError(f"Invalid mode: {mode}. Must be 'train' or 'predict'")
@@ -716,10 +652,10 @@ if __name__ == "__main__":
         help="Mode: train (all historical data) or predict (latest season + week)",
     )
     parser.add_argument(
-        "--seasons-before",
+        "--input-path",
         type=str,
         default=None,
-        help="For train mode: exclude this season and later",
+        help="S3 path to input CSV file (e.g., s3://bucket/raw_data.csv)",
     )
     parser.add_argument(
         "--output-path",
@@ -727,15 +663,28 @@ if __name__ == "__main__":
         default=None,
         help="S3 path to save features (e.g., s3://bucket/features.csv)",
     )
+    parser.add_argument(
+        "--data-bucket",
+        type=str,
+        default=None,
+        help="S3 data bucket name",
+    )
 
     args = parser.parse_args()
 
-    # Use environment variable or CLI arg for output path and seasons_before
+    # Use environment variables or CLI args
+    input_path = args.input_path or os.environ.get("INPUT_PATH")
     output_path = args.output_path or os.environ.get("OUTPUT_PATH", "features.csv")
-    seasons_before = args.seasons_before or os.environ.get("SEASONS_BEFORE", "2025-26")
+    data_bucket = args.data_bucket or os.environ.get("DATA_BUCKET")
+
+    if not input_path:
+        raise ValueError("input_path is required (via --input-path or INPUT_PATH env var)")
 
     df, feature_cols = engineer_features(
-        mode=args.mode, seasons_before=seasons_before, output_path=output_path
+        mode=args.mode,
+        input_path=input_path,
+        output_path=output_path,
+        data_bucket=data_bucket,
     )
 
     print(f"\nFeature engineering complete ({args.mode} mode)!")
