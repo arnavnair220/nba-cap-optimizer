@@ -72,19 +72,19 @@ resource "aws_s3_object" "feature_engineering_code" {
   )
 }
 
-# Upload SageMaker requirements file
-resource "aws_s3_object" "sagemaker_requirements" {
+# Upload SageMaker training code
+resource "aws_s3_object" "train_code" {
   bucket       = aws_s3_bucket.data.id
-  key          = "ml/code/requirements.txt"
-  source       = "${path.module}/../../src/sagemaker/requirements.txt"
-  etag         = filemd5("${path.module}/../../src/sagemaker/requirements.txt")
-  content_type = "text/plain"
+  key          = "ml/code/train.py"
+  source       = "${path.module}/../../src/sagemaker/train.py"
+  etag         = filemd5("${path.module}/../../src/sagemaker/train.py")
+  content_type = "text/x-python"
 
   tags = merge(
     local.common_tags,
     {
-      Name        = "SageMaker Requirements"
-      Description = "Python dependencies for SageMaker jobs"
+      Name        = "SageMaker Training Code"
+      Description = "Training script for SageMaker Training Jobs"
     }
   )
 }
