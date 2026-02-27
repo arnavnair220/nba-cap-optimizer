@@ -14,7 +14,6 @@ Target variables:
 """
 
 import io
-import json
 import logging
 import os
 from typing import List, Optional, Tuple
@@ -570,6 +569,8 @@ def engineer_features(
 
     # Load salary cap data (train mode only)
     if mode == "train":
+        if not data_bucket:
+            raise ValueError("data_bucket is required in train mode")
         salary_cap_df = load_salary_cap_data_from_s3(data_bucket)
     elif mode == "predict":
         salary_cap_df = None
