@@ -40,7 +40,7 @@
           ]
         },
         "AppSpecification": {
-          "ImageUri": "public.ecr.aws/sagemaker/sagemaker-distribution:latest-cpu",
+          "ImageUri": "683313688378.dkr.ecr.us-east-1.amazonaws.com/sagemaker-scikit-learn:1.2-1-cpu-py3",
           "ContainerEntrypoint": [
             "python3",
             "/opt/ml/processing/input/code/feature_engineering.py",
@@ -87,7 +87,7 @@
       "Parameters": {
         "ModelName.$": "States.Format('salary-predictor-{}', $.execution_id)",
         "PrimaryContainer": {
-          "Image": "public.ecr.aws/sagemaker/sagemaker-distribution:latest-cpu",
+          "Image": "683313688378.dkr.ecr.us-east-1.amazonaws.com/sagemaker-scikit-learn:1.2-1-cpu-py3",
           "ModelDataUrl.$": "States.Format('s3://${data_bucket}/ml/models/{}/model.tar.gz', $.season)",
           "Environment": {
             "SAGEMAKER_PROGRAM": "inference.py",
