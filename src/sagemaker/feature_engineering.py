@@ -18,10 +18,17 @@ import sys
 
 # Install dependencies at runtime for SageMaker Processing Jobs
 try:
-    subprocess.check_call([
-        sys.executable, "-m", "pip", "install", "-q", "-r",
-        "/opt/ml/processing/input/code/requirements.txt"
-    ])
+    subprocess.check_call(
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "-q",
+            "-r",
+            "/opt/ml/processing/input/code/requirements.txt",
+        ]
+    )
 except Exception as e:
     print(f"Warning: Could not install requirements.txt: {e}")
     print("Continuing anyway - dependencies may already be installed")
