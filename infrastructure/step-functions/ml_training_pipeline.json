@@ -152,6 +152,8 @@
           "MaxRuntimeInSeconds": 3600
         },
         "HyperParameters": {
+          "sagemaker_program": "train.py",
+          "sagemaker_submit_directory": "s3://${data_bucket}/ml/code/",
           "n_estimators": "200",
           "max_depth": "20",
           "min_samples_split": "5",
