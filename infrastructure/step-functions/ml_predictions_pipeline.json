@@ -161,6 +161,7 @@
         },
         "TransformOutput": {
           "S3OutputPath.$": "States.Format('s3://${data_bucket}/ml/predictions/{}/', $.season)",
+          "Accept": "text/csv",
           "AssembleWith": "Line"
         },
         "TransformResources": {
@@ -187,10 +188,10 @@
       "Parameters": {
         "FunctionName": "${load_predictions_lambda_arn}",
         "Payload": {
-          "predictionsPath.$": "States.Format('s3://${data_bucket}/ml/predictions/{}/features.csv.out', $.season)",
+          "predictions_s3_key.$": "States.Format('ml/predictions/{}/features.csv.out', $.season)",
           "season.$": "$.season",
-          "modelVersion": "v1.0.0",
-          "etlRunId.$": "$.extractResult.etl_run_id"
+          "model_version": "v1.0.0",
+          "etl_run_id.$": "$.extractResult.etl_run_id"
         }
       },
       "ResultPath": "$.loadPredictionsResult",
