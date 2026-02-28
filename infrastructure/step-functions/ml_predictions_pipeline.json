@@ -103,8 +103,7 @@
       },
       "ResultPath": "$.featureEngineeringResult",
       "ResultSelector": {
-        "ProcessingJobName.$": "$.ProcessingJobName",
-        "featuresPath.$": "States.Format('s3://${data_bucket}/ml/features/{}/predict/features.csv', $.season)"
+        "ProcessingJobName.$": "$.ProcessingJobName"
       },
       "Next": "CreateModel",
       "Catch": [
@@ -153,7 +152,7 @@
           "DataSource": {
             "S3DataSource": {
               "S3DataType": "S3Prefix",
-              "S3Uri.$": "$.featureEngineeringResult.featuresPath"
+              "S3Uri.$": "States.Format('s3://${data_bucket}/ml/features/{}/predict/features.csv', $.season)"
             }
           },
           "ContentType": "text/csv",
@@ -170,8 +169,7 @@
       },
       "ResultPath": "$.batchTransformResult",
       "ResultSelector": {
-        "TransformJobName.$": "$.TransformJobName",
-        "predictionsPath.$": "States.Format('s3://${data_bucket}/ml/predictions/{}/features.csv.out', $.season)"
+        "TransformJobName.$": "$.TransformJobName"
       },
       "Next": "LoadPredictions",
       "Catch": [
@@ -188,7 +186,7 @@
       "Parameters": {
         "FunctionName": "${load_predictions_lambda_arn}",
         "Payload": {
-          "predictionsPath.$": "$.batchTransformResult.predictionsPath",
+          "predictionsPath.$": "States.Format('s3://${data_bucket}/ml/predictions/{}/features.csv.out', $.season)",
           "season.$": "$.season",
           "modelVersion": "v1.0.0",
           "etlRunId.$": "$.extractResult.etl_run_id"
