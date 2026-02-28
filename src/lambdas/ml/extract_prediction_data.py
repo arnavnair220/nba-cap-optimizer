@@ -56,18 +56,28 @@ def lambda_handler(event, context):
     try:
         data_bucket = os.environ["DATA_BUCKET"]
 
-        logger.info("Extracting prediction data for latest season (last 7 days)")
+        logger.info("Extracting prediction data for latest ETL run")
 
         # Connect to database
         conn = get_db_connection()
 
-        # Query for latest season and last 7 days
+        # Query for latest season and most recent ETL run
         query = """
+        WITH latest_run AS (
+            SELECT
+                season,
+                etl_run_id,
+                MAX(etl_run_id) OVER (PARTITION BY season) as max_etl_run_id
+            FROM player_stats
+            WHERE season = (SELECT MAX(season) FROM player_stats)
+            LIMIT 1
+        )
         SELECT ps.*
         FROM player_stats ps
-        WHERE ps.season = (SELECT MAX(season) FROM player_stats)
-            AND ps.created_at >= NOW() - INTERVAL '7 days'
-            AND ps.minutes > 0
+        INNER JOIN latest_run lr
+            ON ps.season = lr.season
+            AND ps.etl_run_id = lr.max_etl_run_id
+        WHERE ps.minutes > 0
             AND ps.games_played > 0
         ORDER BY ps.player_name
         """
@@ -79,7 +89,7 @@ def lambda_handler(event, context):
         logger.info(f"Extracted {len(df)} player records for predictions")
         if len(df) > 0:
             logger.info(f"Season: {df['season'].iloc[0]}")
-            logger.info(f"Date range: {df['created_at'].min()} to {df['created_at'].max()}")
+            logger.info(f"ETL Run ID: {df['etl_run_id'].iloc[0]}")
         else:
             logger.warning("No data found for predictions")
 
@@ -95,12 +105,16 @@ def lambda_handler(event, context):
 
         logger.info(f"Saved prediction data to {s3_path}")
 
+        # Extract ETL run ID from data if available
+        etl_run_id = df["etl_run_id"].iloc[0] if len(df) > 0 else None
+
         return {
             "statusCode": 200,
             "s3_path": s3_path,
             "s3_bucket": data_bucket,
             "s3_key": s3_key,
             "record_count": len(df),
+            "etl_run_id": etl_run_id,
         }
 
     except Exception as e:

@@ -175,7 +175,7 @@ def enrich_predictions_with_actuals(conn, predictions: List[Dict], season: str) 
     return enriched
 
 
-def load_predictions_to_db(conn, predictions: List[Dict], model_version: str):
+def load_predictions_to_db(conn, predictions: List[Dict], model_version: str, etl_run_id: str):
     """
     Load enriched predictions to database.
 
@@ -185,6 +185,7 @@ def load_predictions_to_db(conn, predictions: List[Dict], model_version: str):
         conn: Database connection
         predictions: List of enriched prediction dictionaries
         model_version: Model version identifier
+        etl_run_id: ETL run ID that sourced the player stats
     """
     logger.info(f"Loading {len(predictions)} predictions to database")
 
@@ -197,13 +198,13 @@ def load_predictions_to_db(conn, predictions: List[Dict], model_version: str):
         predicted_salary_cap_pct, predicted_salary_pct_of_max, predicted_fmv,
         actual_salary, actual_salary_cap_pct,
         value_over_replacement, inefficiency_score, value_category,
-        model_version, prediction_date
+        model_version, etl_run_id, prediction_date
     ) VALUES (
         %s, %s,
         %s, %s, %s,
         %s, %s,
         %s, %s, %s,
-        %s, %s
+        %s, %s, %s
     )
     ON CONFLICT (player_name, season, model_version)
     DO UPDATE SET
@@ -215,6 +216,7 @@ def load_predictions_to_db(conn, predictions: List[Dict], model_version: str):
         value_over_replacement = EXCLUDED.value_over_replacement,
         inefficiency_score = EXCLUDED.inefficiency_score,
         value_category = EXCLUDED.value_category,
+        etl_run_id = EXCLUDED.etl_run_id,
         prediction_date = EXCLUDED.prediction_date
     """
 
@@ -234,6 +236,7 @@ def load_predictions_to_db(conn, predictions: List[Dict], model_version: str):
             pred.get("inefficiency_score"),
             pred.get("value_category"),
             model_version,
+            etl_run_id,
             prediction_date,
         )
         for pred in predictions
@@ -299,9 +302,10 @@ def handler(event, context):
         }
 
     # Get parameters from event
-    predictions_s3_key = event.get("predictions_s3_key")
+    predictions_s3_key = event.get("predictions_s3_key") or event.get("predictionsPath")
     season = event.get("season", "2025-26")
-    model_version = event.get("model_version", "v1.0.0")
+    model_version = event.get("model_version") or event.get("modelVersion", "v1.0.0")
+    etl_run_id = event.get("etl_run_id") or event.get("etlRunId")
 
     if not predictions_s3_key:
         logger.error("Missing predictions_s3_key in event")
@@ -309,6 +313,10 @@ def handler(event, context):
             "statusCode": 400,
             "body": json.dumps({"error": "predictions_s3_key is required"}),
         }
+
+    if not etl_run_id:
+        logger.warning("Missing etl_run_id in event, using 'unknown'")
+        etl_run_id = "unknown"
 
     try:
         # Load predictions from S3
@@ -333,7 +341,7 @@ def handler(event, context):
         enriched_predictions = enrich_predictions_with_actuals(conn, predictions, season)
 
         # Load to database
-        load_predictions_to_db(conn, enriched_predictions, model_version)
+        load_predictions_to_db(conn, enriched_predictions, model_version, etl_run_id)
 
         conn.close()
 

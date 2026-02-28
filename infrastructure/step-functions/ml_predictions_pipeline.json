@@ -22,7 +22,8 @@
         "s3_path.$": "$.Payload.s3_path",
         "s3_bucket.$": "$.Payload.s3_bucket",
         "s3_key.$": "$.Payload.s3_key",
-        "record_count.$": "$.Payload.record_count"
+        "record_count.$": "$.Payload.record_count",
+        "etl_run_id.$": "$.Payload.etl_run_id"
       },
       "Next": "FeatureEngineering",
       "Catch": [
@@ -189,7 +190,8 @@
         "Payload": {
           "predictionsPath.$": "$.batchTransformResult.predictionsPath",
           "season.$": "$.season",
-          "modelVersion": "v1.0.0"
+          "modelVersion": "v1.0.0",
+          "etlRunId.$": "$.extractResult.etl_run_id"
         }
       },
       "ResultPath": "$.loadPredictionsResult",

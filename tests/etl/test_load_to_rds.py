@@ -80,10 +80,35 @@ class TestUpsertFunctions:
             }
         ]
 
-        count = load_to_rds.upsert_player_stats(mock_cursor, stats, "2025-26")
+        count = load_to_rds.upsert_player_stats(mock_cursor, stats, "2025-26", "20260228_143022")
 
         assert count == 1
         mock_execute_batch.assert_called_once()
+
+    @patch("src.lambdas.etl.load_to_rds.execute_batch")
+    def test_upsert_player_stats_includes_etl_run_id_in_sql(self, mock_execute_batch):
+        """Test that SQL and data include etl_run_id."""
+        mock_cursor = Mock()
+        stats = [{"player_name": "Test Player", "points": 10.0}]
+        test_etl_run_id = "20260228_143022"
+
+        load_to_rds.upsert_player_stats(mock_cursor, stats, "2025-26", test_etl_run_id)
+
+        # Verify execute_batch was called
+        assert mock_execute_batch.call_count == 1
+
+        # Inspect the SQL statement and data
+        call_args = mock_execute_batch.call_args
+        sql = call_args[0][1]  # Second positional argument is the SQL
+        data = call_args[0][2]  # Third positional argument is the data
+
+        # Verify SQL contains etl_run_id in INSERT columns
+        assert "etl_run_id" in sql
+        # Verify SQL contains etl_run_id in UPDATE clause
+        assert "etl_run_id = EXCLUDED.etl_run_id" in sql
+
+        # Verify data tuple ends with etl_run_id value
+        assert data[0][-1] == test_etl_run_id
 
     @patch("src.lambdas.etl.load_to_rds.execute_batch")
     def test_upsert_teams(self, mock_execute_batch):
@@ -216,6 +241,18 @@ class TestHandlerDataLoad:
         assert "salaries" in result["records_loaded"]
         assert "player_stats" in result["records_loaded"]
         assert "teams" in result["records_loaded"]
+
+        # Verify etl_run_id exists in response summary
+        body = json.loads(result["body"])
+        assert "summary" in body
+        assert "etl_run_id" in body["summary"]
+
+        # Verify etl_run_id format matches YYYYMMDD_HHMMSS
+        etl_run_id = body["summary"]["etl_run_id"]
+        assert len(etl_run_id) == 15  # YYYYMMDD_HHMMSS = 8 + 1 + 6 = 15 chars
+        assert etl_run_id[8] == "_"  # Underscore separator
+        assert etl_run_id[:8].isdigit()  # Date part is numeric
+        assert etl_run_id[9:].isdigit()  # Time part is numeric
 
         # Verify database operations (commit called for data)
         assert mock_conn.commit.call_count == 1  # Data loading only (schema managed by Terraform)

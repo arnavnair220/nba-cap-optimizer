@@ -157,7 +157,9 @@ def upsert_salaries(cursor, salaries_data: List[Dict[str, Any]]) -> int:
     return len(data)
 
 
-def upsert_player_stats(cursor, stats_data: List[Dict[str, Any]], season: str) -> int:
+def upsert_player_stats(
+    cursor, stats_data: List[Dict[str, Any]], season: str, etl_run_id: str
+) -> int:
     """
     Upsert player statistics into the player_stats table.
 
@@ -165,6 +167,7 @@ def upsert_player_stats(cursor, stats_data: List[Dict[str, Any]], season: str) -
         cursor: Database cursor
         stats_data: List of player stat dictionaries from enriched_player_stats.json
         season: NBA season (e.g., "2025-26", "2024-25")
+        etl_run_id: Unique identifier for this ETL run (e.g., "20260227_143022")
 
     Returns:
         Number of player stats upserted
@@ -184,7 +187,8 @@ def upsert_player_stats(cursor, stats_data: List[Dict[str, Any]], season: str) -
             per, ts_pct, efg_pct, usg_pct, ws, ws_per_48,
             bpm, obpm, dbpm, vorp,
             orb_pct, drb_pct, trb_pct, ast_pct, stl_pct, blk_pct, tov_pct,
-            ows, dws
+            ows, dws,
+            etl_run_id
         )
         VALUES (
             %s, %s, %s,
@@ -196,7 +200,8 @@ def upsert_player_stats(cursor, stats_data: List[Dict[str, Any]], season: str) -
             %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s,
-            %s, %s
+            %s, %s,
+            %s
         )
         ON CONFLICT (player_name, season, team_abbreviation) DO UPDATE
         SET
@@ -244,7 +249,8 @@ def upsert_player_stats(cursor, stats_data: List[Dict[str, Any]], season: str) -
             blk_pct = EXCLUDED.blk_pct,
             tov_pct = EXCLUDED.tov_pct,
             ows = EXCLUDED.ows,
-            dws = EXCLUDED.dws
+            dws = EXCLUDED.dws,
+            etl_run_id = EXCLUDED.etl_run_id
     """
 
     data = [
@@ -297,6 +303,7 @@ def upsert_player_stats(cursor, stats_data: List[Dict[str, Any]], season: str) -
             s.get("tov_pct"),
             s.get("ows"),
             s.get("dws"),
+            etl_run_id,
         )
         for s in stats_data
     ]
@@ -567,6 +574,12 @@ def handler(event, context):
     season = event.get("season", "2025-26")
     logger.info(f"Loading data for season: {season}")
 
+    # Generate unique ETL run ID (timestamp-based)
+    from datetime import datetime
+
+    etl_run_id = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    logger.info(f"ETL Run ID: {etl_run_id}")
+
     conn = None
     results = {
         "statusCode": 200,
@@ -609,7 +622,9 @@ def handler(event, context):
             try:
                 # Use season from stats metadata if available, otherwise from event
                 stats_season = stats_s3.get("season", season)
-                count = upsert_player_stats(cursor, stats_s3["player_stats"], stats_season)
+                count = upsert_player_stats(
+                    cursor, stats_s3["player_stats"], stats_season, etl_run_id
+                )
                 results["loaded"]["player_stats"] = count
             except Exception as e:
                 logger.error(f"Failed to upsert player stats: {e}")
@@ -666,6 +681,7 @@ def handler(event, context):
         results["summary"] = {
             "environment": ENVIRONMENT,
             "partition": partition,
+            "etl_run_id": etl_run_id,
             "records_loaded": sum(results["loaded"].values()),
             "tables_updated": len(results["loaded"]),
             "errors_count": len(results["errors"]),
