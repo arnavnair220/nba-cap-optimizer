@@ -1179,6 +1179,25 @@ resource "aws_s3_object" "schema_sql" {
   )
 }
 
+# Upload migration files to S3 for migration Lambda
+resource "aws_s3_object" "migration_files" {
+  for_each = fileset("${path.module}/../../infrastructure/db/migrations", "*.sql")
+
+  bucket       = aws_s3_bucket.data.id
+  key          = "db/migrations/${each.value}"
+  source       = "${path.module}/../../infrastructure/db/migrations/${each.value}"
+  etag         = filemd5("${path.module}/../../infrastructure/db/migrations/${each.value}")
+  content_type = "text/plain"
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name        = "Database Migration: ${each.value}"
+      Description = "Database migration script"
+    }
+  )
+}
+
 # Schema migration Lambda function
 resource "aws_lambda_function" "migrate_schema" {
   function_name = "${local.name_prefix}-migrate-schema"
@@ -1221,26 +1240,25 @@ resource "aws_lambda_function" "migrate_schema" {
 
 # Trigger schema migration after deployment (custom resource)
 resource "null_resource" "trigger_schema_migration" {
-  # Re-run if schema file changes
+  # Re-run if schema file or migration files change
   triggers = {
-    schema_hash = filemd5("${path.module}/../../infrastructure/db/schema.sql")
-    lambda_arn  = aws_lambda_function.migrate_schema.arn
+    schema_hash     = filemd5("${path.module}/../../infrastructure/db/schema.sql")
+    migrations_hash = md5(join("", [for f in fileset("${path.module}/../../infrastructure/db/migrations", "*.sql") : filemd5("${path.module}/../../infrastructure/db/migrations/${f}")]))
+    lambda_arn      = aws_lambda_function.migrate_schema.arn
   }
 
   provisioner "local-exec" {
     command = <<-EOT
-      aws lambda invoke \
-        --function-name ${aws_lambda_function.migrate_schema.function_name} \
-        --cli-binary-format raw-in-base64-out \
-        --payload '{"RequestType":"Create"}' \
-        /tmp/schema-migration-output.json
+      aws lambda invoke --function-name ${aws_lambda_function.migrate_schema.function_name} --cli-binary-format raw-in-base64-out --payload "{\"RequestType\":\"Create\"}" /tmp/schema-migration-output.json
       cat /tmp/schema-migration-output.json
     EOT
   }
 
   depends_on = [
     aws_lambda_function.migrate_schema,
-    aws_db_instance.main
+    aws_db_instance.main,
+    aws_s3_object.schema_sql,
+    aws_s3_object.migration_files
   ]
 }
 

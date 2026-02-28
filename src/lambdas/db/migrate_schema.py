@@ -98,6 +98,100 @@ def apply_schema(conn, schema_sql):
         cur.close()
 
 
+def apply_migrations(conn, s3_bucket):
+    """
+    Apply database migrations from S3.
+
+    Creates a tracking table to record which migrations have been applied,
+    then applies any pending migrations in alphabetical order.
+
+    Migrations use idempotent SQL (IF NOT EXISTS), so safe to run on both
+    fresh databases and existing databases.
+    """
+    logger.info("Checking for pending migrations...")
+
+    cur = conn.cursor()
+
+    try:
+        # Create migrations tracking table
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS schema_migrations (
+                version VARCHAR(255) PRIMARY KEY,
+                applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.commit()
+        logger.info("Schema migrations tracking table ready")
+
+        # Get list of applied migrations
+        cur.execute("SELECT version FROM schema_migrations ORDER BY version")
+        applied_migrations = {row[0] for row in cur.fetchall()}
+        logger.info(f"Already applied {len(applied_migrations)} migrations")
+
+        # List all migration files from S3
+        try:
+            response = s3_client.list_objects_v2(Bucket=s3_bucket, Prefix="db/migrations/")
+
+            if "Contents" not in response:
+                logger.info("No migration files found in S3")
+                return {"migrations_applied": 0, "migrations": []}
+
+            # Sort migrations by filename to ensure correct order
+            migration_keys = sorted(
+                [obj["Key"] for obj in response["Contents"] if obj["Key"].endswith(".sql")]
+            )
+
+            logger.info(f"Found {len(migration_keys)} migration files in S3")
+
+        except Exception as e:
+            logger.warning(f"Could not list migrations from S3: {e}")
+            return {"migrations_applied": 0, "migrations": []}
+
+        # Apply unapplied migrations
+        applied_count = 0
+        applied_list = []
+
+        for migration_key in migration_keys:
+            # Extract version from key (e.g., "db/migrations/001_add_column.sql" -> "001_add_column.sql")
+            version = migration_key.split("/")[-1]
+
+            if version in applied_migrations:
+                logger.info(f"Skipping already applied migration: {version}")
+                continue
+
+            logger.info(f"Applying migration: {version}")
+
+            # Fetch migration SQL from S3
+            migration_response = s3_client.get_object(Bucket=s3_bucket, Key=migration_key)
+            migration_sql = migration_response["Body"].read().decode("utf-8")
+
+            # Execute migration
+            cur.execute(migration_sql)
+
+            # Mark as applied
+            cur.execute("INSERT INTO schema_migrations (version) VALUES (%s)", (version,))
+
+            conn.commit()
+            applied_count += 1
+            applied_list.append(version)
+            logger.info(f"Successfully applied migration: {version}")
+
+        if applied_count > 0:
+            logger.info(f"Applied {applied_count} new migrations")
+        else:
+            logger.info("No new migrations to apply")
+
+        return {"migrations_applied": applied_count, "migrations": applied_list}
+
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"Error applying migrations: {e}")
+        raise
+
+    finally:
+        cur.close()
+
+
 def send_cfn_response(event, context, status, reason, physical_resource_id, data=None):
     """
     Send response to CloudFormation/Terraform custom resource.
@@ -172,10 +266,25 @@ def handler(event, context):
         # Connect to database
         conn = get_db_connection()
 
-        # Apply schema
-        result = apply_schema(conn, schema_sql)
+        # Apply base schema (creates tables if they don't exist)
+        schema_result = apply_schema(conn, schema_sql)
+
+        # Apply migrations (adds columns/indexes to existing tables)
+        migration_result = apply_migrations(conn, SCHEMA_S3_BUCKET)
 
         conn.close()
+
+        # Combine results
+        result = {
+            "status": "success",
+            "tables": schema_result["tables"],
+            "migrations_applied": migration_result["migrations_applied"],
+            "migrations": migration_result["migrations"],
+            "message": (
+                f"Schema applied. {len(schema_result['tables'])} tables exist. "
+                f"{migration_result['migrations_applied']} migrations applied."
+            ),
+        }
 
         # Send success response to CloudFormation if needed
         if is_cfn_event:
@@ -185,7 +294,10 @@ def handler(event, context):
                 "SUCCESS",
                 result["message"],
                 physical_resource_id,
-                data={"tables": result["tables"]},
+                data={
+                    "tables": result["tables"],
+                    "migrations_applied": result["migrations_applied"],
+                },
             )
 
         return {"statusCode": 200, "body": json.dumps(result)}
