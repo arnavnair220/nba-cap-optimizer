@@ -72,25 +72,9 @@ resource "aws_s3_object" "feature_engineering_code" {
   )
 }
 
-# Note: SageMaker training code (sourcedir.tar.gz) is now uploaded by CI/CD pipeline
-# CI/CD uploads to s3://nba-cap-{env}-data/ml/code/sourcedir.tar.gz
-
-# Upload SageMaker inference code
-resource "aws_s3_object" "inference_code" {
-  bucket       = aws_s3_bucket.data.id
-  key          = "ml/models/code/inference.py"
-  source       = "${path.module}/../../src/sagemaker/inference.py"
-  etag         = filemd5("${path.module}/../../src/sagemaker/inference.py")
-  content_type = "text/x-python"
-
-  tags = merge(
-    local.common_tags,
-    {
-      Name        = "SageMaker Inference Code"
-      Description = "Inference script for SageMaker Batch Transform"
-    }
-  )
-}
+# Note: SageMaker code is now uploaded by CI/CD pipeline
+# CI/CD uploads to s3://nba-cap-{env}-data/ml/code/sourcedir.tar.gz (training)
+# CI/CD uploads to s3://nba-cap-{env}-data/ml/models/code/inference.py (inference)
 
 # ============================================================================
 # VPC & NETWORKING (for RDS)
@@ -1124,6 +1108,36 @@ resource "aws_lambda_function" "extract_prediction_data" {
   depends_on = [null_resource.trigger_schema_migration]
 }
 
+# Lambda function to copy trained model to standard path
+resource "aws_lambda_function" "copy_trained_model" {
+  function_name = "${local.name_prefix}-copy-trained-model"
+  role          = aws_iam_role.lambda_execution.arn
+  handler       = "src.lambdas.ml.copy_trained_model.lambda_handler"
+  runtime       = var.lambda_runtime
+  timeout       = 300
+  memory_size   = 256
+
+  filename         = "placeholder.zip"
+  source_code_hash = filebase64sha256("placeholder.zip")
+
+  environment {
+    variables = {
+      ENVIRONMENT = var.environment
+      DATA_BUCKET = aws_s3_bucket.data.bucket
+    }
+  }
+
+  tags = local.common_tags
+
+  lifecycle {
+    ignore_changes = [
+      filename,
+      source_code_hash,
+      layers
+    ]
+  }
+}
+
 # ============================================================================
 # EVENTBRIDGE SCHEDULES (ML Pipeline)
 # ============================================================================
@@ -1276,7 +1290,8 @@ resource "aws_iam_role_policy" "ml_pipeline_sfn" {
         Resource = [
           aws_lambda_function.load_predictions.arn,
           aws_lambda_function.extract_training_data.arn,
-          aws_lambda_function.extract_prediction_data.arn
+          aws_lambda_function.extract_prediction_data.arn,
+          aws_lambda_function.copy_trained_model.arn
         ]
       },
       {
@@ -1332,13 +1347,14 @@ resource "aws_sfn_state_machine" "ml_training_pipeline" {
   role_arn = aws_iam_role.ml_pipeline_sfn.arn
 
   definition = templatefile("${path.module}/../step-functions/ml_training_pipeline.json", {
-    sagemaker_role_arn              = aws_iam_role.sagemaker_execution.arn
-    data_bucket                     = aws_s3_bucket.data.bucket
-    rds_security_group_id           = aws_security_group.rds.id
-    private_subnet_ids              = jsonencode([aws_subnet.private_a.id, aws_subnet.private_b.id])
-    db_secret_arn                   = aws_secretsmanager_secret.db_credentials.arn
-    sklearn_image_uri               = data.aws_sagemaker_prebuilt_ecr_image.sklearn.registry_path
+    sagemaker_role_arn               = aws_iam_role.sagemaker_execution.arn
+    data_bucket                      = aws_s3_bucket.data.bucket
+    rds_security_group_id            = aws_security_group.rds.id
+    private_subnet_ids               = jsonencode([aws_subnet.private_a.id, aws_subnet.private_b.id])
+    db_secret_arn                    = aws_secretsmanager_secret.db_credentials.arn
+    sklearn_image_uri                = data.aws_sagemaker_prebuilt_ecr_image.sklearn.registry_path
     extract_training_data_lambda_arn = aws_lambda_function.extract_training_data.arn
+    copy_trained_model_lambda_arn    = aws_lambda_function.copy_trained_model.arn
   })
 
   tags = local.common_tags
