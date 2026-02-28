@@ -130,9 +130,7 @@ def apply_migrations(conn, s3_bucket):
 
         # List all migration files from S3
         try:
-            response = s3_client.list_objects_v2(
-                Bucket=s3_bucket, Prefix="db/migrations/"
-            )
+            response = s3_client.list_objects_v2(Bucket=s3_bucket, Prefix="db/migrations/")
 
             if "Contents" not in response:
                 logger.info("No migration files found in S3")
@@ -171,9 +169,7 @@ def apply_migrations(conn, s3_bucket):
             cur.execute(migration_sql)
 
             # Mark as applied
-            cur.execute(
-                "INSERT INTO schema_migrations (version) VALUES (%s)", (version,)
-            )
+            cur.execute("INSERT INTO schema_migrations (version) VALUES (%s)", (version,))
 
             conn.commit()
             applied_count += 1
