@@ -76,16 +76,12 @@ CREATE TABLE IF NOT EXISTS player_stats (
     ows REAL,
     dws REAL,
 
-    -- ETL Metadata
-    etl_run_id VARCHAR(50),
-
     UNIQUE(player_name, season, team_abbreviation)
 );
 
 CREATE INDEX IF NOT EXISTS idx_player_stats_player_name ON player_stats(player_name);
 CREATE INDEX IF NOT EXISTS idx_player_stats_season ON player_stats(season);
 CREATE INDEX IF NOT EXISTS idx_player_stats_team ON player_stats(team_abbreviation);
-CREATE INDEX IF NOT EXISTS idx_player_stats_etl_run_id ON player_stats(etl_run_id);
 
 -- Teams table: Team data with aggregated metrics
 CREATE TABLE IF NOT EXISTS teams (
@@ -170,7 +166,6 @@ CREATE TABLE IF NOT EXISTS predictions (
 
     -- Model metadata
     model_version VARCHAR(50),
-    etl_run_id VARCHAR(50),
     prediction_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
     UNIQUE(player_name, season, model_version)
@@ -180,5 +175,3 @@ CREATE INDEX IF NOT EXISTS idx_predictions_player_name ON predictions(player_nam
 CREATE INDEX IF NOT EXISTS idx_predictions_season ON predictions(season);
 CREATE INDEX IF NOT EXISTS idx_predictions_value_category ON predictions(value_category);
 CREATE INDEX IF NOT EXISTS idx_predictions_inefficiency ON predictions(inefficiency_score);
-CREATE INDEX IF NOT EXISTS idx_predictions_prediction_date ON predictions(prediction_date);
-CREATE INDEX IF NOT EXISTS idx_predictions_etl_run_id ON predictions(etl_run_id);
