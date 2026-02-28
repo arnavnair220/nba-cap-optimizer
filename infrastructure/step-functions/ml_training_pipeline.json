@@ -167,6 +167,31 @@
         "TrainingJobArn.$": "$.TrainingJobArn",
         "ModelArtifacts.$": "$.ModelArtifacts"
       },
+      "Next": "CopyModelToStandardPath",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "TrainingFailed"
+        }
+      ]
+    },
+    "CopyModelToStandardPath": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${copy_trained_model_lambda_arn}",
+        "Payload": {
+          "season.$": "$.season",
+          "training_job_name.$": "$.modelTrainingResult.TrainingJobName",
+          "model_artifacts.$": "$.modelTrainingResult.ModelArtifacts"
+        }
+      },
+      "ResultPath": "$.copyModelResult",
+      "ResultSelector": {
+        "source.$": "$.Payload.source",
+        "destination.$": "$.Payload.destination"
+      },
       "Next": "TrainingSuccess",
       "Catch": [
         {
