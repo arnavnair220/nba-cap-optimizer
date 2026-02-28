@@ -244,17 +244,17 @@ def main():
     parser = argparse.ArgumentParser()
 
     # Data paths (set by SageMaker)
-    parser.add_argument("--train", type=str, default=os.environ.get("SM_CHANNEL_TRAIN"))
-    parser.add_argument("--model-dir", type=str, default=os.environ.get("SM_MODEL_DIR"))
+    parser.add_argument("--train", type=str, default=os.environ.get("SM_CHANNEL_TRAINING"))
+    parser.add_argument("--model_dir", type=str, default=os.environ.get("SM_MODEL_DIR"))
 
     # Hyperparameters
-    parser.add_argument("--n-estimators", type=int, default=200)
-    parser.add_argument("--max-depth", type=int, default=20)
-    parser.add_argument("--min-samples-split", type=int, default=5)
-    parser.add_argument("--min-samples-leaf", type=int, default=2)
-    parser.add_argument("--max-features", type=str, default="sqrt")
-    parser.add_argument("--test-size", type=float, default=0.2)
-    parser.add_argument("--random-state", type=int, default=42)
+    parser.add_argument("--n_estimators", type=int, default=200)
+    parser.add_argument("--max_depth", type=int, default=20)
+    parser.add_argument("--min_samples_split", type=int, default=5)
+    parser.add_argument("--min_samples_leaf", type=int, default=2)
+    parser.add_argument("--max_features", type=str, default="sqrt")
+    parser.add_argument("--test_size", type=float, default=0.2)
+    parser.add_argument("--random_state", type=int, default=42)
 
     args = parser.parse_args()
 
