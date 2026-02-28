@@ -153,7 +153,7 @@
         },
         "HyperParameters": {
           "sagemaker_program": "train.py",
-          "sagemaker_submit_directory": "s3://${data_bucket}/ml/code/",
+          "sagemaker_submit_directory": "s3://${data_bucket}/ml/code/sourcedir.zip",
           "n_estimators": "200",
           "max_depth": "20",
           "min_samples_split": "5",
