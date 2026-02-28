@@ -337,6 +337,10 @@ jobs:
         run: |
           aws s3 cp sagemaker-code.tar.gz s3://nba-cap-${{ env.ENV }}-data/ml/code/sourcedir.tar.gz
 
+      - name: Upload SageMaker inference code to S3
+        run: |
+          aws s3 cp src/sagemaker/inference.py s3://nba-cap-${{ env.ENV }}-data/ml/models/code/inference.py
+
       - name: Publish Lambda Layer Version
         id: publish-layer
         run: |

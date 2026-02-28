@@ -72,25 +72,9 @@ resource "aws_s3_object" "feature_engineering_code" {
   )
 }
 
-# Note: SageMaker training code (sourcedir.tar.gz) is now uploaded by CI/CD pipeline
-# CI/CD uploads to s3://nba-cap-{env}-data/ml/code/sourcedir.tar.gz
-
-# Upload SageMaker inference code
-resource "aws_s3_object" "inference_code" {
-  bucket       = aws_s3_bucket.data.id
-  key          = "ml/models/code/inference.py"
-  source       = "${path.module}/../../src/sagemaker/inference.py"
-  etag         = filemd5("${path.module}/../../src/sagemaker/inference.py")
-  content_type = "text/x-python"
-
-  tags = merge(
-    local.common_tags,
-    {
-      Name        = "SageMaker Inference Code"
-      Description = "Inference script for SageMaker Batch Transform"
-    }
-  )
-}
+# Note: SageMaker code is now uploaded by CI/CD pipeline
+# CI/CD uploads to s3://nba-cap-{env}-data/ml/code/sourcedir.tar.gz (training)
+# CI/CD uploads to s3://nba-cap-{env}-data/ml/models/code/inference.py (inference)
 
 # ============================================================================
 # VPC & NETWORKING (for RDS)
