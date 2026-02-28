@@ -72,8 +72,8 @@ resource "aws_s3_object" "feature_engineering_code" {
   )
 }
 
-# Note: SageMaker training code (sourcedir.zip) is now uploaded by CI/CD pipeline
-# CI/CD uploads to s3://nba-cap-{env}-data/ml/code/sourcedir.zip
+# Note: SageMaker training code (sourcedir.tar.gz) is now uploaded by CI/CD pipeline
+# CI/CD uploads to s3://nba-cap-{env}-data/ml/code/sourcedir.tar.gz
 
 # Upload SageMaker inference code
 resource "aws_s3_object" "inference_code" {

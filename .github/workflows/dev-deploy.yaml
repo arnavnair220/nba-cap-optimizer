@@ -139,7 +139,7 @@ jobs:
       - name: Build SageMaker Training Package
         run: |
           cd src/sagemaker
-          zip -r $GITHUB_WORKSPACE/sagemaker-code.zip .
+          tar -czf $GITHUB_WORKSPACE/sagemaker-code.tar.gz .
 
       - name: Upload Lambda layer artifact
         uses: actions/upload-artifact@v4
@@ -159,7 +159,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: sagemaker-code
-          path: sagemaker-code.zip
+          path: sagemaker-code.tar.gz
           retention-days: 7
 
   # Terraform Plan (only on PRs, validates before merge)
@@ -335,7 +335,7 @@ jobs:
 
       - name: Upload SageMaker code to S3
         run: |
-          aws s3 cp sagemaker-code.zip s3://nba-cap-${{ env.ENV }}-data/ml/code/sourcedir.zip
+          aws s3 cp sagemaker-code.tar.gz s3://nba-cap-${{ env.ENV }}-data/ml/code/sourcedir.tar.gz
 
       - name: Publish Lambda Layer Version
         id: publish-layer
