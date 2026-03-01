@@ -71,7 +71,7 @@ export default function DashboardStats({ players }: DashboardStatsProps) {
         }
         subtitle={
           bargainCount > 0
-            ? `${(players.find((p) => p.value_category === 'Bargain')?.inefficiency_score || 0) * 100}% undervalued`
+            ? `${((players.find((p) => p.value_category === 'Bargain')?.inefficiency_score || 0) * 100).toFixed(1)}% undervalued`
             : undefined
         }
         accent="green"

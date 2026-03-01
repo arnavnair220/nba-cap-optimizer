@@ -15,9 +15,11 @@ import {
 interface PlayerTableProps {
   players: PlayerPrediction[];
   showRank?: boolean;
+  showTeam?: boolean;
+  onPlayerClick?: (playerName: string) => void;
 }
 
-export default function PlayerTable({ players, showRank = true }: PlayerTableProps) {
+export default function PlayerTable({ players, showRank = true, showTeam = true, onPlayerClick }: PlayerTableProps) {
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full divide-y-4 divide-black">
@@ -36,9 +38,11 @@ export default function PlayerTable({ players, showRank = true }: PlayerTablePro
             <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-wider subhead-retro">
               Player
             </th>
-            <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-wider subhead-retro">
-              Team
-            </th>
+            {showTeam && (
+              <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-wider subhead-retro">
+                Team
+              </th>
+            )}
             <th className="px-3 py-3 text-left text-xs font-black uppercase tracking-wider subhead-retro">
               Pos
             </th>
@@ -96,24 +100,31 @@ export default function PlayerTable({ players, showRank = true }: PlayerTablePro
                   </>
                 )}
                 <td className="px-4 py-3 whitespace-nowrap">
-                  <div className="text-sm font-bold text-black dark:text-white uppercase">
+                  <div
+                    className={`text-sm font-bold text-black dark:text-white uppercase ${
+                      onPlayerClick ? 'cursor-pointer hover:text-retro-blue transition-colors' : ''
+                    }`}
+                    onClick={() => onPlayerClick?.(player.player_name)}
+                  >
                     {player.player_name}
                   </div>
                   <div className="text-xs font-semibold text-gray-600 dark:text-gray-400">
                     Age {player.age}
                   </div>
                 </td>
-                <td className="px-4 py-4 whitespace-nowrap">
-                  <div
-                    className="flex items-center justify-center w-14 px-2 py-1 font-black text-sm uppercase tracking-wide retro-border"
-                    style={{
-                      backgroundColor: teamColors.primary,
-                      color: teamColors.secondary
-                    }}
-                  >
-                    {player.team_abbreviation}
-                  </div>
-                </td>
+                {showTeam && (
+                  <td className="px-4 py-4 whitespace-nowrap">
+                    <div
+                      className="flex items-center justify-center w-14 px-2 py-1 font-black text-sm uppercase tracking-wide retro-border"
+                      style={{
+                        backgroundColor: teamColors.primary,
+                        color: teamColors.secondary
+                      }}
+                    >
+                      {player.team_abbreviation}
+                    </div>
+                  </td>
+                )}
                 <td className="px-3 py-3 whitespace-nowrap">
                   <div className="text-sm font-bold text-black dark:text-white uppercase">
                     {player.position}

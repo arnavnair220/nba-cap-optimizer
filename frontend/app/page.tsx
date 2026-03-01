@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { api, ApiError } from '@/lib/api';
-import { PlayerPrediction, PredictionsQueryParams } from '@/lib/types';
+import { PlayerPrediction, PredictionsQueryParams, TeamEfficiency, TeamDetail } from '@/lib/types';
 import PlayerTable from '@/components/PlayerTable';
 import PlayerFilters from '@/components/PlayerFilters';
 import LoadingSpinner from '@/components/LoadingSpinner';
@@ -10,6 +10,10 @@ import ErrorMessage from '@/components/ErrorMessage';
 import DashboardStats from '@/components/DashboardStats';
 import ValueDistributionChart from '@/components/ValueDistributionChart';
 import Tabs, { TabPanel } from '@/components/Tabs';
+import TeamRankings from '@/components/TeamRankings';
+import TeamFilters from '@/components/TeamFilters';
+import TeamDetailView from '@/components/TeamDetailView';
+import PlayerDetailView from '@/components/PlayerDetailView';
 
 export default function Home() {
   const [players, setPlayers] = useState<PlayerPrediction[]>([]);
@@ -22,13 +26,27 @@ export default function Home() {
   const [valueCategory, setValueCategory] = useState('');
   const [sortBy, setSortBy] = useState('inefficiency_score');
   const [filters, setFilters] = useState<PredictionsQueryParams>({
-    limit: 100,
+    limit: 500,
     offset: 0,
   });
+
+  const [teams, setTeams] = useState<TeamEfficiency[]>([]);
+  const [teamsLoading, setTeamsLoading] = useState(false);
+  const [teamsError, setTeamsError] = useState<string | null>(null);
+  const [teamSearchQuery, setTeamSearchQuery] = useState('');
+  const [teamSortBy, setTeamSortBy] = useState('avg_inefficiency');
+  const [selectedTeamAbbr, setSelectedTeamAbbr] = useState<string | null>(null);
+  const [selectedTeamDetail, setSelectedTeamDetail] = useState<TeamDetail | null>(null);
+  const [teamDetailLoading, setTeamDetailLoading] = useState(false);
+
+  const [selectedPlayerName, setSelectedPlayerName] = useState<string | null>(null);
+  const [selectedPlayerDetail, setSelectedPlayerDetail] = useState<PlayerPrediction | null>(null);
+  const [playerDetailLoading, setPlayerDetailLoading] = useState(false);
 
   const tabs = [
     { id: 'leaderboard', label: 'Leaderboard' },
     { id: 'pulse', label: 'League Pulse' },
+    { id: 'teams', label: 'Teams' },
   ];
 
   const fetchPlayers = async () => {
@@ -50,10 +68,92 @@ export default function Home() {
     }
   };
 
+  const fetchTeams = async () => {
+    try {
+      setTeamsLoading(true);
+      setTeamsError(null);
+      const response = await api.teams.getAll({ sort_by: teamSortBy as any });
+      setTeams(response.teams);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setTeamsError(`API Error: ${err.message}`);
+      } else if (err instanceof Error) {
+        setTeamsError(err.message);
+      } else {
+        setTeamsError('An unknown error occurred');
+      }
+    } finally {
+      setTeamsLoading(false);
+    }
+  };
+
+  const fetchTeamDetail = async (teamAbbr: string) => {
+    try {
+      setTeamDetailLoading(true);
+      const teamDetail = await api.teams.getTeam(teamAbbr);
+      setSelectedTeamDetail(teamDetail);
+      setSelectedTeamAbbr(teamAbbr);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setTeamsError(`API Error: ${err.message}`);
+      } else if (err instanceof Error) {
+        setTeamsError(err.message);
+      } else {
+        setTeamsError('An unknown error occurred');
+      }
+    } finally {
+      setTeamDetailLoading(false);
+    }
+  };
+
+  const handleTeamClick = (teamAbbr: string) => {
+    fetchTeamDetail(teamAbbr);
+  };
+
+  const handleBackToTeams = () => {
+    setSelectedTeamAbbr(null);
+    setSelectedTeamDetail(null);
+  };
+
+  const fetchPlayerDetail = async (playerName: string) => {
+    try {
+      setPlayerDetailLoading(true);
+      const playerDetail = await api.predictions.getPlayer(playerName);
+      setSelectedPlayerDetail(playerDetail);
+      setSelectedPlayerName(playerName);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(`API Error: ${err.message}`);
+      } else if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('An unknown error occurred');
+      }
+    } finally {
+      setPlayerDetailLoading(false);
+    }
+  };
+
+  const handlePlayerClick = (playerName: string) => {
+    fetchPlayerDetail(playerName);
+  };
+
+  const handleBackFromPlayer = () => {
+    setSelectedPlayerName(null);
+    setSelectedPlayerDetail(null);
+  };
+
   useEffect(() => {
     fetchPlayers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
+
+  useEffect(() => {
+    if (activeTab === 'teams') {
+      fetchTeams();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, teamSortBy]);
 
   const filteredPlayers = players.filter((player) => {
     const matchesSearch = player.player_name.toLowerCase().includes(searchQuery.toLowerCase());
@@ -68,6 +168,8 @@ export default function Home() {
     switch (sortBy) {
       case 'inefficiency_score':
         return a.inefficiency_score - b.inefficiency_score;
+      case 'worst_value':
+        return b.inefficiency_score - a.inefficiency_score;
       case 'predicted_fmv':
         return b.predicted_fmv - a.predicted_fmv;
       case 'actual_salary':
@@ -77,6 +179,13 @@ export default function Home() {
       default:
         return 0;
     }
+  });
+
+  const filteredTeams = teams.filter((team) => {
+    const matchesSearch =
+      team.team_abbreviation?.toLowerCase().includes(teamSearchQuery.toLowerCase()) ||
+      team.full_name?.toLowerCase().includes(teamSearchQuery.toLowerCase());
+    return matchesSearch;
   });
 
   return (
@@ -121,52 +230,75 @@ export default function Home() {
             <Tabs tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} />
 
             <TabPanel tabId="leaderboard" activeTab={activeTab}>
-              <PlayerFilters
-                filters={filters}
-                onFilterChange={setFilters}
-                searchQuery={searchQuery}
-                onSearchChange={setSearchQuery}
-                team={team}
-                onTeamChange={setTeam}
-                position={position}
-                onPositionChange={setPosition}
-                valueCategory={valueCategory}
-                onValueCategoryChange={setValueCategory}
-                sortBy={sortBy}
-                onSortByChange={setSortBy}
-              />
+              {selectedPlayerDetail && selectedPlayerName ? (
+                <>
+                  {playerDetailLoading ? (
+                    <LoadingSpinner />
+                  ) : (
+                    <PlayerDetailView player={selectedPlayerDetail} onBack={handleBackFromPlayer} />
+                  )}
+                </>
+              ) : (
+                <>
+                  <PlayerFilters
+                    filters={filters}
+                    onFilterChange={setFilters}
+                    searchQuery={searchQuery}
+                    onSearchChange={setSearchQuery}
+                    team={team}
+                    onTeamChange={setTeam}
+                    position={position}
+                    onPositionChange={setPosition}
+                    valueCategory={valueCategory}
+                    onValueCategoryChange={setValueCategory}
+                    sortBy={sortBy}
+                    onSortByChange={setSortBy}
+                    resultCount={sortedPlayers.length}
+                  />
 
-              <div className="bg-white dark:bg-gray-900 retro-border-thick shadow-retro-lg">
-                {sortedPlayers.length === 0 && (
-                  <div className="p-12 text-center">
-                    <div className="text-2xl font-black uppercase text-black dark:text-white headline-retro">
-                      No Players Found
-                    </div>
-                    <div className="text-sm font-bold text-gray-600 dark:text-gray-400 mt-2 uppercase">
-                      Try adjusting your filters
-                    </div>
-                  </div>
-                )}
-
-                {sortedPlayers.length > 0 && (
-                  <>
-                    <div className="p-6 bg-retro-blue border-b-4 border-black">
-                      <div className="subhead-retro text-lg text-white flex items-center justify-between">
-                        <span>PLAYER RANKINGS</span>
-                        <span className="bg-white text-black px-3 py-1 retro-border">
-                          {sortedPlayers.length} PLAYERS
-                        </span>
+                  <div className="bg-white dark:bg-gray-900 retro-border-thick shadow-retro-lg">
+                    {sortedPlayers.length === 0 && (
+                      <div className="p-12 text-center">
+                        <div className="text-2xl font-black uppercase text-black dark:text-white headline-retro">
+                          No Players Found
+                        </div>
+                        <div className="text-sm font-bold text-gray-600 dark:text-gray-400 mt-2 uppercase">
+                          Try adjusting your filters
+                        </div>
                       </div>
-                    </div>
-                    <PlayerTable players={sortedPlayers} showRank={true} />
-                  </>
-                )}
-              </div>
+                    )}
+
+                    {sortedPlayers.length > 0 && (
+                      <>
+                        <div className="p-6 bg-retro-blue border-b-4 border-black">
+                          <div className="subhead-retro text-lg text-white flex items-center justify-between">
+                            <span>PLAYER RANKINGS</span>
+                            <span className="bg-white text-black px-3 py-1 retro-border">
+                              {sortedPlayers.length} PLAYERS
+                            </span>
+                          </div>
+                        </div>
+                        <PlayerTable players={sortedPlayers} showRank={true} onPlayerClick={handlePlayerClick} />
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
             </TabPanel>
 
             <TabPanel tabId="pulse" activeTab={activeTab}>
-              {players.length > 0 && (
+              {selectedPlayerDetail && selectedPlayerName ? (
                 <>
+                  {playerDetailLoading ? (
+                    <LoadingSpinner />
+                  ) : (
+                    <PlayerDetailView player={selectedPlayerDetail} onBack={handleBackFromPlayer} />
+                  )}
+                </>
+              ) : (
+                <>
+                  {players.length > 0 && (
+                    <>
                   <div className="mb-8">
                     <div className="flex items-center gap-3 mb-6">
                       <div className="bg-retro-red text-white px-4 py-2 subhead-retro text-sm retro-border">
@@ -248,6 +380,64 @@ export default function Home() {
                       </div>
                     </div>
                   </div>
+                </>
+              )}
+                </>
+              )}
+            </TabPanel>
+
+            <TabPanel tabId="teams" activeTab={activeTab}>
+              {teamsLoading && <LoadingSpinner />}
+
+              {teamsError && !teamsLoading && (
+                <div className="p-6">
+                  <ErrorMessage message={teamsError} onRetry={fetchTeams} />
+                </div>
+              )}
+
+              {!teamsLoading && !teamsError && (
+                <>
+                  {selectedPlayerDetail && selectedPlayerName ? (
+                    <>
+                      {playerDetailLoading ? (
+                        <LoadingSpinner />
+                      ) : (
+                        <PlayerDetailView player={selectedPlayerDetail} onBack={handleBackFromPlayer} />
+                      )}
+                    </>
+                  ) : selectedTeamDetail && selectedTeamAbbr ? (
+                    <>
+                      {teamDetailLoading ? (
+                        <LoadingSpinner />
+                      ) : (
+                        <TeamDetailView team={selectedTeamDetail} onBack={handleBackToTeams} onPlayerClick={handlePlayerClick} />
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <TeamFilters
+                        sortBy={teamSortBy}
+                        onSortByChange={setTeamSortBy}
+                        searchQuery={teamSearchQuery}
+                        onSearchChange={setTeamSearchQuery}
+                      />
+
+                      {filteredTeams.length === 0 && teams.length > 0 && (
+                        <div className="bg-white dark:bg-gray-900 retro-border-thick shadow-retro-lg p-12 text-center">
+                          <div className="text-2xl font-black uppercase text-black dark:text-white headline-retro">
+                            No Teams Found
+                          </div>
+                          <div className="text-sm font-bold text-gray-600 dark:text-gray-400 mt-2 uppercase">
+                            Try adjusting your search
+                          </div>
+                        </div>
+                      )}
+
+                      {filteredTeams.length > 0 && (
+                        <TeamRankings teams={filteredTeams} onTeamClick={handleTeamClick} />
+                      )}
+                    </>
+                  )}
                 </>
               )}
             </TabPanel>

@@ -1,0 +1,126 @@
+'use client';
+
+import { TeamDetail } from '@/lib/types';
+import PlayerTable from './PlayerTable';
+
+interface TeamDetailViewProps {
+  team: TeamDetail;
+  onBack: () => void;
+  onPlayerClick?: (playerName: string) => void;
+}
+
+export default function TeamDetailView({ team, onBack, onPlayerClick }: TeamDetailViewProps) {
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(value);
+  };
+
+  const formatPercentage = (value: number) => {
+    return `${(value * 100).toFixed(1)}%`;
+  };
+
+  const getEfficiencyColor = (score: number) => {
+    if (score < -0.05) return 'text-green-700 dark:text-green-400';
+    if (score > 0.05) return 'text-red-700 dark:text-red-400';
+    return 'text-gray-700 dark:text-gray-400';
+  };
+
+  return (
+    <div className="space-y-8">
+      <div className="flex items-center justify-between">
+        <button
+          onClick={onBack}
+          className="bg-black text-white px-6 py-3 retro-border shadow-retro font-black uppercase text-sm hover:bg-gray-800 transition-colors"
+        >
+          ← Back to Teams
+        </button>
+      </div>
+
+      <div className="bg-white dark:bg-gray-900 retro-border-thick shadow-retro-lg overflow-hidden">
+        <div className="p-8 bg-gradient-to-r from-retro-blue to-retro-red">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="headline-retro text-4xl md:text-5xl text-white mb-2">
+                {team.team_abbreviation}
+              </h2>
+              <div className="subhead-retro text-xl text-white/90">
+                {team.full_name}
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="bg-white text-black px-6 py-3 retro-border shadow-retro">
+                <div className="text-3xl font-black">{team.player_count}</div>
+                <div className="text-xs uppercase tracking-widest font-black">Players</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6 bg-gray-50 dark:bg-gray-950">
+          <div className="bg-white dark:bg-gray-900 retro-border p-6">
+            <div className="text-xs font-black uppercase tracking-widest text-gray-600 dark:text-gray-400 mb-2">
+              Total Payroll
+            </div>
+            <div className="text-2xl font-black text-black dark:text-white">
+              {formatCurrency(team.total_payroll)}
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-gray-900 retro-border p-6">
+            <div className="text-xs font-black uppercase tracking-widest text-gray-600 dark:text-gray-400 mb-2">
+              Net Overspend
+            </div>
+            <div className={`text-2xl font-black ${getEfficiencyColor(team.net_efficiency / team.total_payroll)}`}>
+              {team.net_efficiency > 0 ? '+' : ''}{formatCurrency(team.net_efficiency)}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-4 p-6 border-t-4 border-black">
+          <div className="text-center p-4 bg-green-50 dark:bg-green-950 retro-border">
+            <div className="text-4xl font-black text-green-700 dark:text-green-400">
+              {team.bargain_count}
+            </div>
+            <div className="text-xs font-black uppercase tracking-widest text-gray-600 dark:text-gray-400 mt-2">
+              Bargain Contracts
+            </div>
+          </div>
+
+          <div className="text-center p-4 bg-yellow-50 dark:bg-yellow-950 retro-border">
+            <div className="text-4xl font-black text-yellow-700 dark:text-yellow-400">
+              {team.fair_count}
+            </div>
+            <div className="text-xs font-black uppercase tracking-widest text-gray-600 dark:text-gray-400 mt-2">
+              Fair Contracts
+            </div>
+          </div>
+
+          <div className="text-center p-4 bg-red-50 dark:bg-red-950 retro-border">
+            <div className="text-4xl font-black text-red-700 dark:text-red-400">
+              {team.overpaid_count}
+            </div>
+            <div className="text-xs font-black uppercase tracking-widest text-gray-600 dark:text-gray-400 mt-2">
+              Overpaid Contracts
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white dark:bg-gray-900 retro-border-thick shadow-retro-lg">
+        <div className="p-6 bg-retro-orange border-b-4 border-black">
+          <div className="subhead-retro text-lg text-white flex items-center justify-between">
+            <span>TEAM ROSTER</span>
+            <span className="bg-white text-black px-3 py-1 retro-border">
+              {team.players.length} PLAYERS
+            </span>
+          </div>
+        </div>
+        <PlayerTable players={team.players} showRank={false} showTeam={false} onPlayerClick={onPlayerClick} />
+      </div>
+    </div>
+  );
+}

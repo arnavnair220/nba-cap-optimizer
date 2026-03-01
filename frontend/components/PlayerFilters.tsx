@@ -15,6 +15,7 @@ interface PlayerFiltersProps {
   onValueCategoryChange: (category: string) => void;
   sortBy: string;
   onSortByChange: (sortBy: string) => void;
+  resultCount: number;
 }
 
 const POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C'];
@@ -28,6 +29,7 @@ const VALUE_CATEGORIES = [
 
 const SORT_OPTIONS = [
   { value: 'inefficiency_score', label: 'Best Value (Default)' },
+  { value: 'worst_value', label: 'Worst Value' },
   { value: 'predicted_fmv', label: 'Highest Predicted FMV' },
   { value: 'actual_salary', label: 'Highest Salary' },
   { value: 'player_name', label: 'Player Name (A-Z)' },
@@ -46,6 +48,7 @@ export default function PlayerFilters({
   onValueCategoryChange,
   sortBy,
   onSortByChange,
+  resultCount,
 }: PlayerFiltersProps) {
   const updateFilter = (key: keyof PredictionsQueryParams, value: any) => {
     const newFilters = { ...filters, [key]: value || undefined };
@@ -58,10 +61,10 @@ export default function PlayerFilters({
   return (
     <div className="bg-white dark:bg-gray-900 retro-border shadow-retro p-6 mb-8 halftone-bg">
       <div className="flex items-center gap-3 mb-6">
-        <div className="bg-black text-white px-4 py-2 subhead-retro text-sm">
+        <div className="bg-retro-orange text-white px-4 py-2 subhead-retro text-sm retro-border">
           FILTERS
         </div>
-        <div className="flex-1 h-1 bg-black"></div>
+        <div className="flex-1 h-1 bg-retro-orange"></div>
       </div>
 
       <div className="mb-4">
@@ -166,11 +169,11 @@ export default function PlayerFilters({
 
       <div className="mt-6 flex items-center justify-between">
         <div className="text-sm font-bold text-black dark:text-white uppercase">
-          Showing {filters.limit || 100} results
+          Showing {resultCount} results
         </div>
         <button
           onClick={() => {
-            onFilterChange({ limit: 100, offset: 0 });
+            onFilterChange({ limit: 500, offset: 0 });
             onSearchChange('');
             onTeamChange('');
             onPositionChange('');

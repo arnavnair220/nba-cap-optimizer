@@ -14,13 +14,13 @@ export function formatPercent(value: number, decimals: number = 1): string {
 }
 
 export function formatNumber(value: number, decimals: number = 1): string {
-  return value.toFixed(decimals);
+  return Number(value.toFixed(decimals)).toFixed(decimals);
 }
 
 export function getValueCategoryColor(category: 'Bargain' | 'Fair' | 'Overpaid'): string {
   const colors = {
     Bargain: 'text-white bg-green-600',
-    Fair: 'text-black bg-retro-yellow',
+    Fair: 'text-black bg-yellow-500',
     Overpaid: 'text-white bg-red-600',
   };
   return colors[category];
