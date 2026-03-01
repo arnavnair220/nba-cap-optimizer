@@ -105,8 +105,9 @@ def predict_fn(input_data, model):
     player_info["predicted_log_salary_pct_of_max"] = pred_fmv
 
     # Convert from log space to percentages
-    player_info["predicted_salary_cap_pct"] = np.exp(pred_cap) * 100
-    player_info["predicted_salary_pct_of_max"] = np.exp(pred_fmv) * 100
+    # Note: exp() already returns percentages since we took log of percentages during training
+    player_info["predicted_salary_cap_pct"] = np.exp(pred_cap)
+    player_info["predicted_salary_pct_of_max"] = np.exp(pred_fmv)
 
     logger.info("Predictions complete")
 
