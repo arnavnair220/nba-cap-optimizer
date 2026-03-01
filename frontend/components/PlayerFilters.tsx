@@ -5,6 +5,16 @@ import { PredictionsQueryParams } from '@/lib/types';
 interface PlayerFiltersProps {
   filters: PredictionsQueryParams;
   onFilterChange: (filters: PredictionsQueryParams) => void;
+  searchQuery: string;
+  onSearchChange: (query: string) => void;
+  team: string;
+  onTeamChange: (team: string) => void;
+  position: string;
+  onPositionChange: (position: string) => void;
+  valueCategory: string;
+  onValueCategoryChange: (category: string) => void;
+  sortBy: string;
+  onSortByChange: (sortBy: string) => void;
 }
 
 const POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C'];
@@ -18,13 +28,25 @@ const VALUE_CATEGORIES = [
 
 const SORT_OPTIONS = [
   { value: 'inefficiency_score', label: 'Best Value (Default)' },
-  { value: 'vorp', label: 'Highest VORP' },
   { value: 'predicted_fmv', label: 'Highest Predicted FMV' },
   { value: 'actual_salary', label: 'Highest Salary' },
   { value: 'player_name', label: 'Player Name (A-Z)' },
 ];
 
-export default function PlayerFilters({ filters, onFilterChange }: PlayerFiltersProps) {
+export default function PlayerFilters({
+  filters,
+  onFilterChange,
+  searchQuery,
+  onSearchChange,
+  team,
+  onTeamChange,
+  position,
+  onPositionChange,
+  valueCategory,
+  onValueCategoryChange,
+  sortBy,
+  onSortByChange,
+}: PlayerFiltersProps) {
   const updateFilter = (key: keyof PredictionsQueryParams, value: any) => {
     const newFilters = { ...filters, [key]: value || undefined };
     if (key !== 'offset') {
@@ -34,22 +56,44 @@ export default function PlayerFilters({ filters, onFilterChange }: PlayerFilters
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
-      <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Filters</h2>
+    <div className="bg-white dark:bg-gray-900 retro-border shadow-retro p-6 mb-8 halftone-bg">
+      <div className="flex items-center gap-3 mb-6">
+        <div className="bg-black text-white px-4 py-2 subhead-retro text-sm">
+          FILTERS
+        </div>
+        <div className="flex-1 h-1 bg-black"></div>
+      </div>
+
+      <div className="mb-4">
+        <label
+          htmlFor="player-search"
+          className="block text-xs font-bold text-black dark:text-white mb-2 uppercase tracking-wide"
+        >
+          Search Player
+        </label>
+        <input
+          id="player-search"
+          type="text"
+          placeholder="Enter player name..."
+          value={searchQuery}
+          onChange={(e) => onSearchChange(e.target.value)}
+          className="w-full px-3 py-2 retro-border bg-white dark:bg-gray-800 text-black dark:text-white font-bold placeholder:text-gray-500 focus:ring-2 focus:ring-retro-blue"
+        />
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div>
           <label
             htmlFor="value-category"
-            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            className="block text-xs font-bold text-black dark:text-white mb-2 uppercase tracking-wide"
           >
             Value Category
           </label>
           <select
             id="value-category"
-            value={filters.value_category || ''}
-            onChange={(e) => updateFilter('value_category', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+            value={valueCategory}
+            onChange={(e) => onValueCategoryChange(e.target.value)}
+            className="w-full px-3 py-2 retro-border bg-white dark:bg-gray-800 text-black dark:text-white font-bold focus:ring-2 focus:ring-retro-blue"
           >
             {VALUE_CATEGORIES.map((cat) => (
               <option key={cat.value} value={cat.value}>
@@ -62,15 +106,15 @@ export default function PlayerFilters({ filters, onFilterChange }: PlayerFilters
         <div>
           <label
             htmlFor="position"
-            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            className="block text-xs font-bold text-black dark:text-white mb-2 uppercase tracking-wide"
           >
             Position
           </label>
           <select
             id="position"
-            value={filters.position || ''}
-            onChange={(e) => updateFilter('position', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+            value={position}
+            onChange={(e) => onPositionChange(e.target.value)}
+            className="w-full px-3 py-2 retro-border bg-white dark:bg-gray-800 text-black dark:text-white font-bold focus:ring-2 focus:ring-retro-blue"
           >
             <option value="">All Positions</option>
             {POSITIONS.map((pos) => (
@@ -84,7 +128,7 @@ export default function PlayerFilters({ filters, onFilterChange }: PlayerFilters
         <div>
           <label
             htmlFor="team"
-            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            className="block text-xs font-bold text-black dark:text-white mb-2 uppercase tracking-wide"
           >
             Team
           </label>
@@ -92,24 +136,24 @@ export default function PlayerFilters({ filters, onFilterChange }: PlayerFilters
             id="team"
             type="text"
             placeholder="e.g., LAL, GSW"
-            value={filters.team || ''}
-            onChange={(e) => updateFilter('team', e.target.value.toUpperCase())}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+            value={team}
+            onChange={(e) => onTeamChange(e.target.value.toUpperCase())}
+            className="w-full px-3 py-2 retro-border bg-white dark:bg-gray-800 text-black dark:text-white font-bold placeholder:text-gray-500 focus:ring-2 focus:ring-retro-blue"
           />
         </div>
 
         <div>
           <label
             htmlFor="sort-by"
-            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            className="block text-xs font-bold text-black dark:text-white mb-2 uppercase tracking-wide"
           >
             Sort By
           </label>
           <select
             id="sort-by"
-            value={filters.sort_by || 'inefficiency_score'}
-            onChange={(e) => updateFilter('sort_by', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+            value={sortBy}
+            onChange={(e) => onSortByChange(e.target.value)}
+            className="w-full px-3 py-2 retro-border bg-white dark:bg-gray-800 text-black dark:text-white font-bold focus:ring-2 focus:ring-retro-blue"
           >
             {SORT_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -120,17 +164,22 @@ export default function PlayerFilters({ filters, onFilterChange }: PlayerFilters
         </div>
       </div>
 
-      <div className="mt-4 flex items-center justify-between">
-        <div className="text-sm text-gray-600 dark:text-gray-400">
+      <div className="mt-6 flex items-center justify-between">
+        <div className="text-sm font-bold text-black dark:text-white uppercase">
           Showing {filters.limit || 100} results
         </div>
         <button
-          onClick={() =>
-            onFilterChange({ sort_by: 'inefficiency_score', limit: 100, offset: 0 })
-          }
-          className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+          onClick={() => {
+            onFilterChange({ limit: 100, offset: 0 });
+            onSearchChange('');
+            onTeamChange('');
+            onPositionChange('');
+            onValueCategoryChange('');
+            onSortByChange('inefficiency_score');
+          }}
+          className="bg-black text-white px-4 py-2 retro-border font-bold uppercase text-sm hover:bg-gray-800 transition-colors"
         >
-          Clear Filters
+          Clear All
         </button>
       </div>
     </div>

@@ -14,42 +14,63 @@ export default function ValueDistributionChart({ players }: ValueDistributionCha
 
   const data = [
     {
-      category: 'Bargain',
+      category: 'BARGAIN',
       count: bargains,
       fill: '#16a34a',
     },
     {
-      category: 'Fair',
+      category: 'FAIR',
       count: fair,
-      fill: '#eab308',
+      fill: '#FFC72C',
     },
     {
-      category: 'Overpaid',
+      category: 'OVERPAID',
       count: overpaid,
-      fill: '#dc2626',
+      fill: '#E31837',
     },
   ];
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
-      <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-        Value Category Distribution
-      </h2>
-      <ResponsiveContainer width="100%" height={300}>
-        <BarChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-          <XAxis dataKey="category" stroke="#9ca3af" />
-          <YAxis stroke="#9ca3af" />
+    <div className="bg-white dark:bg-gray-900 retro-border shadow-retro p-6 mb-8 halftone-bg">
+      <div className="flex items-center gap-3 mb-6">
+        <div className="bg-black text-white px-4 py-2 subhead-retro text-sm">
+          VALUE BREAKDOWN
+        </div>
+        <div className="flex-1 h-1 bg-black"></div>
+      </div>
+      <ResponsiveContainer width="100%" height={350}>
+        <BarChart data={data} barSize={80}>
+          <CartesianGrid strokeDasharray="0" stroke="#000000" strokeWidth={2} />
+          <XAxis
+            dataKey="category"
+            stroke="#000000"
+            strokeWidth={2}
+            style={{
+              fontFamily: 'Arial Black, sans-serif',
+              fontWeight: 'bold',
+              fontSize: '14px'
+            }}
+          />
+          <YAxis
+            stroke="#000000"
+            strokeWidth={2}
+            style={{
+              fontFamily: 'Arial Black, sans-serif',
+              fontWeight: 'bold'
+            }}
+          />
           <Tooltip
             contentStyle={{
-              backgroundColor: '#1f2937',
-              border: '1px solid #374151',
-              borderRadius: '0.5rem',
+              backgroundColor: '#000000',
+              border: '4px solid #000000',
+              borderRadius: '0',
+              fontFamily: 'Arial Black, sans-serif',
+              fontWeight: 'bold'
             }}
-            labelStyle={{ color: '#f3f4f6' }}
+            labelStyle={{ color: '#FFC72C', fontWeight: 'bold', textTransform: 'uppercase' }}
+            itemStyle={{ color: '#FFFFFF', fontWeight: 'bold' }}
           />
-          <Legend />
-          <Bar dataKey="count" fill="#3b82f6" name="Player Count" />
+          <Bar dataKey="count" name="PLAYERS" radius={0} />
         </BarChart>
       </ResponsiveContainer>
     </div>

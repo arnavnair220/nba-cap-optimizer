@@ -19,9 +19,9 @@ export function formatNumber(value: number, decimals: number = 1): string {
 
 export function getValueCategoryColor(category: 'Bargain' | 'Fair' | 'Overpaid'): string {
   const colors = {
-    Bargain: 'text-green-700 bg-green-50 dark:text-green-400 dark:bg-green-950',
-    Fair: 'text-yellow-700 bg-yellow-50 dark:text-yellow-400 dark:bg-yellow-950',
-    Overpaid: 'text-red-700 bg-red-50 dark:text-red-400 dark:bg-red-950',
+    Bargain: 'text-white bg-green-600',
+    Fair: 'text-black bg-retro-yellow',
+    Overpaid: 'text-white bg-red-600',
   };
   return colors[category];
 }

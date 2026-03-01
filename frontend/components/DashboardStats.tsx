@@ -22,11 +22,12 @@ export default function DashboardStats({ players }: DashboardStatsProps) {
       : 0;
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
       <StatsCard
         title="Total Players"
         value={players.length}
         subtitle={`${bargainCount} bargains, ${overpaidCount} overpaid`}
+        accent="blue"
       />
 
       <StatsCard
@@ -38,6 +39,7 @@ export default function DashboardStats({ players }: DashboardStatsProps) {
             ? 'text-green-600 dark:text-green-400'
             : 'text-red-600 dark:text-red-400'
         }
+        accent={totalSavings < 0 ? 'green' : 'red'}
       />
 
       <StatsCard
@@ -57,6 +59,7 @@ export default function DashboardStats({ players }: DashboardStatsProps) {
               ? 'text-red-600 dark:text-red-400'
               : 'text-yellow-600 dark:text-yellow-400'
         }
+        accent="yellow"
       />
 
       <StatsCard
@@ -71,6 +74,7 @@ export default function DashboardStats({ players }: DashboardStatsProps) {
             ? `${(players.find((p) => p.value_category === 'Bargain')?.inefficiency_score || 0) * 100}% undervalued`
             : undefined
         }
+        accent="green"
       />
     </div>
   );

@@ -11,6 +11,9 @@ export interface PlayerPrediction {
   vorp: number;
   model_version?: string;
   prediction_date?: string;
+  rank?: number;
+  previous_rank?: number | null;
+  rank_change?: number | null;
   team_abbreviation: string;
   position: string;
   age: number;
