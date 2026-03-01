@@ -493,58 +493,52 @@ def handler(event, context):
 
     try:
         conn = get_db_connection()
+        try:
+            if path == "/predictions" and http_method == "GET":
+                results = get_all_predictions(conn, query_params)
+                return success_response({"predictions": results, "count": len(results)})
 
-        if path == "/predictions" and http_method == "GET":
-            results = get_all_predictions(conn, query_params)
+            elif path == "/predictions/undervalued" and http_method == "GET":
+                results = get_undervalued_predictions(conn, query_params)
+                return success_response({"predictions": results, "count": len(results)})
+
+            elif path == "/predictions/overvalued" and http_method == "GET":
+                results = get_overvalued_predictions(conn, query_params)
+                return success_response({"predictions": results, "count": len(results)})
+
+            elif path.startswith("/predictions/") and http_method == "GET":
+                player_name = unquote(path_params.get("player_name", ""))
+                if not player_name:
+                    return error_response("Player name required", 400)
+
+                result = get_player_prediction(conn, player_name)
+
+                if not result:
+                    return error_response(f"Player '{player_name}' not found", 404)
+
+                return success_response(result)
+
+            elif path == "/teams" and http_method == "GET":
+                results = get_all_teams(conn, query_params)
+                return success_response({"teams": results, "count": len(results)})
+
+            elif path.startswith("/teams/") and http_method == "GET":
+                team_abbr = path_params.get("team_abbreviation", "")
+                if not team_abbr:
+                    return error_response("Team abbreviation required", 400)
+
+                result = get_team_detail(conn, team_abbr)
+
+                if not result:
+                    return error_response(f"Team '{team_abbr}' not found", 404)
+
+                return success_response(result)
+
+            else:
+                return error_response(f"Route not found: {http_method} {path}", 404)
+
+        finally:
             conn.close()
-            return success_response({"predictions": results, "count": len(results)})
-
-        elif path == "/predictions/undervalued" and http_method == "GET":
-            results = get_undervalued_predictions(conn, query_params)
-            conn.close()
-            return success_response({"predictions": results, "count": len(results)})
-
-        elif path == "/predictions/overvalued" and http_method == "GET":
-            results = get_overvalued_predictions(conn, query_params)
-            conn.close()
-            return success_response({"predictions": results, "count": len(results)})
-
-        elif path.startswith("/predictions/") and http_method == "GET":
-            player_name = unquote(path_params.get("player_name", ""))
-            if not player_name:
-                conn.close()
-                return error_response("Player name required", 400)
-
-            result = get_player_prediction(conn, player_name)
-            conn.close()
-
-            if not result:
-                return error_response(f"Player '{player_name}' not found", 404)
-
-            return success_response(result)
-
-        elif path == "/teams" and http_method == "GET":
-            results = get_all_teams(conn, query_params)
-            conn.close()
-            return success_response({"teams": results, "count": len(results)})
-
-        elif path.startswith("/teams/") and http_method == "GET":
-            team_abbr = path_params.get("team_abbreviation", "")
-            if not team_abbr:
-                conn.close()
-                return error_response("Team abbreviation required", 400)
-
-            result = get_team_detail(conn, team_abbr)
-            conn.close()
-
-            if not result:
-                return error_response(f"Team '{team_abbr}' not found", 404)
-
-            return success_response(result)
-
-        else:
-            conn.close()
-            return error_response(f"Route not found: {http_method} {path}", 404)
 
     except Exception as e:
         logger.error(f"API error: {e}", exc_info=True)
