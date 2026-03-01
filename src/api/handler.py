@@ -285,7 +285,10 @@ def get_undervalued_predictions(conn, query_params: Dict) -> List[Dict]:
     """
 
     cur = conn.cursor()
-    cur.execute(query, [CURRENT_SEASON, CURRENT_SEASON, CURRENT_SEASON, CURRENT_SEASON, CURRENT_SEASON, limit])
+    cur.execute(
+        query,
+        [CURRENT_SEASON, CURRENT_SEASON, CURRENT_SEASON, CURRENT_SEASON, CURRENT_SEASON, limit],
+    )
     results = cur.fetchall()
     cur.close()
 
@@ -370,7 +373,10 @@ def get_overvalued_predictions(conn, query_params: Dict) -> List[Dict]:
     """
 
     cur = conn.cursor()
-    cur.execute(query, [CURRENT_SEASON, CURRENT_SEASON, CURRENT_SEASON, CURRENT_SEASON, CURRENT_SEASON, limit])
+    cur.execute(
+        query,
+        [CURRENT_SEASON, CURRENT_SEASON, CURRENT_SEASON, CURRENT_SEASON, CURRENT_SEASON, limit],
+    )
     results = cur.fetchall()
     cur.close()
 
@@ -465,7 +471,17 @@ def get_player_prediction(conn, player_name: str) -> Optional[Dict]:
     """
 
     cur = conn.cursor()
-    cur.execute(query, [CURRENT_SEASON, CURRENT_SEASON, CURRENT_SEASON, CURRENT_SEASON, player_name, CURRENT_SEASON])
+    cur.execute(
+        query,
+        [
+            CURRENT_SEASON,
+            CURRENT_SEASON,
+            CURRENT_SEASON,
+            CURRENT_SEASON,
+            player_name,
+            CURRENT_SEASON,
+        ],
+    )
     result = cur.fetchone()
     cur.close()
 
@@ -686,7 +702,10 @@ def get_team_detail(conn, team_abbreviation: str) -> Optional[Dict]:
         ORDER BY p.actual_salary DESC
     """
 
-    cur.execute(roster_query, [CURRENT_SEASON, CURRENT_SEASON, CURRENT_SEASON, CURRENT_SEASON, CURRENT_SEASON, team_abbr])
+    cur.execute(
+        roster_query,
+        [CURRENT_SEASON, CURRENT_SEASON, CURRENT_SEASON, CURRENT_SEASON, CURRENT_SEASON, team_abbr],
+    )
     roster_results = cur.fetchall()
     cur.close()
 
