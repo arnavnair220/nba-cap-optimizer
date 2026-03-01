@@ -175,7 +175,9 @@ def enrich_predictions_with_actuals(conn, predictions: List[Dict], season: str) 
     return enriched
 
 
-def load_predictions_to_db(conn, predictions: List[Dict], model_version: str, etl_run_id: str):
+def load_predictions_to_db(
+    conn, predictions: List[Dict], model_version: str, run_id: str, etl_run_id: str
+):
     """
     Load enriched predictions to database.
 
@@ -185,6 +187,7 @@ def load_predictions_to_db(conn, predictions: List[Dict], model_version: str, et
         conn: Database connection
         predictions: List of enriched prediction dictionaries
         model_version: Model version identifier
+        run_id: Unique identifier for this prediction run
         etl_run_id: ETL run ID that sourced the player stats
     """
     logger.info(f"Loading {len(predictions)} predictions to database")
@@ -198,15 +201,15 @@ def load_predictions_to_db(conn, predictions: List[Dict], model_version: str, et
         predicted_salary_cap_pct, predicted_salary_pct_of_max, predicted_fmv,
         actual_salary, actual_salary_cap_pct,
         value_over_replacement, inefficiency_score, value_category,
-        model_version, etl_run_id, prediction_date
+        model_version, run_id, etl_run_id, prediction_date
     ) VALUES (
         %s, %s,
         %s, %s, %s,
         %s, %s,
         %s, %s, %s,
-        %s, %s, %s
+        %s, %s, %s, %s
     )
-    ON CONFLICT (player_name, season, model_version)
+    ON CONFLICT (player_name, season, model_version, run_id)
     DO UPDATE SET
         predicted_salary_cap_pct = EXCLUDED.predicted_salary_cap_pct,
         predicted_salary_pct_of_max = EXCLUDED.predicted_salary_pct_of_max,
@@ -236,6 +239,7 @@ def load_predictions_to_db(conn, predictions: List[Dict], model_version: str, et
             pred.get("inefficiency_score"),
             pred.get("value_category"),
             model_version,
+            run_id,
             etl_run_id,
             prediction_date,
         )
@@ -280,7 +284,9 @@ def handler(event, context):
     {
         "predictions_s3_key": "predictions/2025-26/predictions.csv",
         "season": "2025-26",
-        "model_version": "v1.0.0"
+        "model_version": "v1.0.0",
+        "run_id": "predictions-run-2026-02-28-123456",
+        "etl_run_id": "etl-run-2026-02-28-123456"
     }
     """
     logger.info("Starting prediction load Lambda")
@@ -305,6 +311,7 @@ def handler(event, context):
     predictions_s3_key = event.get("predictions_s3_key") or event.get("predictionsPath")
     season = event.get("season", "2025-26")
     model_version = event.get("model_version") or event.get("modelVersion", "v1.0.0")
+    run_id = event.get("run_id") or event.get("runId")
     etl_run_id = event.get("etl_run_id") or event.get("etlRunId")
 
     if not predictions_s3_key:
@@ -312,6 +319,13 @@ def handler(event, context):
         return {
             "statusCode": 400,
             "body": json.dumps({"error": "predictions_s3_key is required"}),
+        }
+
+    if not run_id:
+        logger.error("Missing run_id in event")
+        return {
+            "statusCode": 400,
+            "body": json.dumps({"error": "run_id is required"}),
         }
 
     if not etl_run_id:
@@ -341,7 +355,7 @@ def handler(event, context):
         enriched_predictions = enrich_predictions_with_actuals(conn, predictions, season)
 
         # Load to database
-        load_predictions_to_db(conn, enriched_predictions, model_version, etl_run_id)
+        load_predictions_to_db(conn, enriched_predictions, model_version, run_id, etl_run_id)
 
         conn.close()
 
@@ -354,6 +368,7 @@ def handler(event, context):
                     "predictions_loaded": len(enriched_predictions),
                     "season": season,
                     "model_version": model_version,
+                    "run_id": run_id,
                 }
             ),
         }
@@ -377,6 +392,7 @@ if __name__ == "__main__":
         "predictions_s3_key": "predictions/2025-26/predictions.csv",
         "season": "2025-26",
         "model_version": "v1.0.0",
+        "run_id": "test-run-123",
     }
 
     class Context:

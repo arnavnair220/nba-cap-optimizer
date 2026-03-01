@@ -88,14 +88,14 @@ def get_all_predictions(conn, query_params: Dict) -> List[Dict]:
     - team: Filter by team abbreviation
     - position: Filter by player position
     - sort_by: Sort field (default: inefficiency_score)
-    - limit: Max results (default: 100)
+    - limit: Max results (default: 1000, enough for all NBA players)
     - offset: Pagination offset (default: 0)
     """
     value_category = query_params.get("value_category")
     team = query_params.get("team")
     position = query_params.get("position")
     sort_by = query_params.get("sort_by", "inefficiency_score")
-    limit = int(query_params.get("limit", 100))
+    limit = int(query_params.get("limit", 1000))
     offset = int(query_params.get("offset", 0))
 
     allowed_sorts = [
@@ -109,6 +109,36 @@ def get_all_predictions(conn, query_params: Dict) -> List[Dict]:
         sort_by = "inefficiency_score"
 
     query = """
+        WITH latest_run AS (
+            SELECT run_id, prediction_date
+            FROM predictions
+            WHERE season = %s
+            ORDER BY prediction_date DESC
+            LIMIT 1
+        ),
+        previous_run AS (
+            SELECT run_id
+            FROM predictions
+            WHERE season = %s
+            ORDER BY prediction_date DESC
+            LIMIT 1 OFFSET 1
+        ),
+        current_ranks AS (
+            SELECT
+                player_name,
+                ROW_NUMBER() OVER (ORDER BY inefficiency_score ASC) as current_rank
+            FROM predictions
+            WHERE season = %s
+              AND run_id = (SELECT run_id FROM latest_run)
+        ),
+        previous_ranks AS (
+            SELECT
+                player_name,
+                ROW_NUMBER() OVER (ORDER BY inefficiency_score ASC) as previous_rank
+            FROM predictions
+            WHERE season = %s
+              AND run_id = (SELECT run_id FROM previous_run)
+        )
         SELECT
             p.player_name,
             p.season,
@@ -120,7 +150,15 @@ def get_all_predictions(conn, query_params: Dict) -> List[Dict]:
             p.value_category,
             p.value_over_replacement as vorp,
             p.model_version,
+            p.run_id,
             p.prediction_date,
+            cr.current_rank as rank,
+            pr.previous_rank,
+            CASE
+                WHEN pr.previous_rank IS NOT NULL
+                THEN pr.previous_rank - cr.current_rank
+                ELSE NULL
+            END as rank_change,
             ps.team_abbreviation,
             ps.position,
             ps.age,
@@ -129,13 +167,22 @@ def get_all_predictions(conn, query_params: Dict) -> List[Dict]:
             ps.rebounds,
             ps.assists
         FROM predictions p
+        LEFT JOIN current_ranks cr ON p.player_name = cr.player_name
+        LEFT JOIN previous_ranks pr ON p.player_name = pr.player_name
         LEFT JOIN player_stats ps
             ON p.player_name = ps.player_name
             AND p.season = ps.season
         WHERE p.season = %s
+          AND p.run_id = (SELECT run_id FROM latest_run)
     """
 
-    params: List[Union[str, int]] = [CURRENT_SEASON]
+    params: List[Union[str, int]] = [
+        CURRENT_SEASON,
+        CURRENT_SEASON,
+        CURRENT_SEASON,
+        CURRENT_SEASON,
+        CURRENT_SEASON,
+    ]
 
     if value_category:
         query += " AND p.value_category = %s"
@@ -171,6 +218,36 @@ def get_undervalued_predictions(conn, query_params: Dict) -> List[Dict]:
     limit = int(query_params.get("limit", 25))
 
     query = """
+        WITH latest_run AS (
+            SELECT run_id
+            FROM predictions
+            WHERE season = %s
+            ORDER BY prediction_date DESC
+            LIMIT 1
+        ),
+        previous_run AS (
+            SELECT run_id
+            FROM predictions
+            WHERE season = %s
+            ORDER BY prediction_date DESC
+            LIMIT 1 OFFSET 1
+        ),
+        current_ranks AS (
+            SELECT
+                player_name,
+                ROW_NUMBER() OVER (ORDER BY inefficiency_score ASC) as current_rank
+            FROM predictions
+            WHERE season = %s
+              AND run_id = (SELECT run_id FROM latest_run)
+        ),
+        previous_ranks AS (
+            SELECT
+                player_name,
+                ROW_NUMBER() OVER (ORDER BY inefficiency_score ASC) as previous_rank
+            FROM predictions
+            WHERE season = %s
+              AND run_id = (SELECT run_id FROM previous_run)
+        )
         SELECT
             p.player_name,
             p.season,
@@ -181,6 +258,13 @@ def get_undervalued_predictions(conn, query_params: Dict) -> List[Dict]:
             p.inefficiency_score,
             p.value_category,
             p.value_over_replacement as vorp,
+            cr.current_rank as rank,
+            pr.previous_rank,
+            CASE
+                WHEN pr.previous_rank IS NOT NULL
+                THEN pr.previous_rank - cr.current_rank
+                ELSE NULL
+            END as rank_change,
             ps.team_abbreviation,
             ps.position,
             ps.age,
@@ -188,17 +272,20 @@ def get_undervalued_predictions(conn, query_params: Dict) -> List[Dict]:
             ps.rebounds,
             ps.assists
         FROM predictions p
+        LEFT JOIN current_ranks cr ON p.player_name = cr.player_name
+        LEFT JOIN previous_ranks pr ON p.player_name = pr.player_name
         LEFT JOIN player_stats ps
             ON p.player_name = ps.player_name
             AND p.season = ps.season
         WHERE p.season = %s
+          AND p.run_id = (SELECT run_id FROM latest_run)
           AND p.value_category = 'Bargain'
         ORDER BY p.inefficiency_score ASC
         LIMIT %s
     """
 
     cur = conn.cursor()
-    cur.execute(query, [CURRENT_SEASON, limit])
+    cur.execute(query, [CURRENT_SEASON, CURRENT_SEASON, CURRENT_SEASON, CURRENT_SEASON, CURRENT_SEASON, limit])
     results = cur.fetchall()
     cur.close()
 
@@ -216,6 +303,36 @@ def get_overvalued_predictions(conn, query_params: Dict) -> List[Dict]:
     limit = int(query_params.get("limit", 25))
 
     query = """
+        WITH latest_run AS (
+            SELECT run_id
+            FROM predictions
+            WHERE season = %s
+            ORDER BY prediction_date DESC
+            LIMIT 1
+        ),
+        previous_run AS (
+            SELECT run_id
+            FROM predictions
+            WHERE season = %s
+            ORDER BY prediction_date DESC
+            LIMIT 1 OFFSET 1
+        ),
+        current_ranks AS (
+            SELECT
+                player_name,
+                ROW_NUMBER() OVER (ORDER BY inefficiency_score ASC) as current_rank
+            FROM predictions
+            WHERE season = %s
+              AND run_id = (SELECT run_id FROM latest_run)
+        ),
+        previous_ranks AS (
+            SELECT
+                player_name,
+                ROW_NUMBER() OVER (ORDER BY inefficiency_score ASC) as previous_rank
+            FROM predictions
+            WHERE season = %s
+              AND run_id = (SELECT run_id FROM previous_run)
+        )
         SELECT
             p.player_name,
             p.season,
@@ -226,6 +343,13 @@ def get_overvalued_predictions(conn, query_params: Dict) -> List[Dict]:
             p.inefficiency_score,
             p.value_category,
             p.value_over_replacement as vorp,
+            cr.current_rank as rank,
+            pr.previous_rank,
+            CASE
+                WHEN pr.previous_rank IS NOT NULL
+                THEN pr.previous_rank - cr.current_rank
+                ELSE NULL
+            END as rank_change,
             ps.team_abbreviation,
             ps.position,
             ps.age,
@@ -233,17 +357,20 @@ def get_overvalued_predictions(conn, query_params: Dict) -> List[Dict]:
             ps.rebounds,
             ps.assists
         FROM predictions p
+        LEFT JOIN current_ranks cr ON p.player_name = cr.player_name
+        LEFT JOIN previous_ranks pr ON p.player_name = pr.player_name
         LEFT JOIN player_stats ps
             ON p.player_name = ps.player_name
             AND p.season = ps.season
         WHERE p.season = %s
+          AND p.run_id = (SELECT run_id FROM latest_run)
           AND p.value_category = 'Overpaid'
         ORDER BY p.inefficiency_score DESC
         LIMIT %s
     """
 
     cur = conn.cursor()
-    cur.execute(query, [CURRENT_SEASON, limit])
+    cur.execute(query, [CURRENT_SEASON, CURRENT_SEASON, CURRENT_SEASON, CURRENT_SEASON, CURRENT_SEASON, limit])
     results = cur.fetchall()
     cur.close()
 
@@ -256,6 +383,36 @@ def get_player_prediction(conn, player_name: str) -> Optional[Dict]:
     Get prediction for specific player in current season.
     """
     query = """
+        WITH latest_run AS (
+            SELECT run_id
+            FROM predictions
+            WHERE season = %s
+            ORDER BY prediction_date DESC
+            LIMIT 1
+        ),
+        previous_run AS (
+            SELECT run_id
+            FROM predictions
+            WHERE season = %s
+            ORDER BY prediction_date DESC
+            LIMIT 1 OFFSET 1
+        ),
+        current_ranks AS (
+            SELECT
+                player_name,
+                ROW_NUMBER() OVER (ORDER BY inefficiency_score ASC) as current_rank
+            FROM predictions
+            WHERE season = %s
+              AND run_id = (SELECT run_id FROM latest_run)
+        ),
+        previous_ranks AS (
+            SELECT
+                player_name,
+                ROW_NUMBER() OVER (ORDER BY inefficiency_score ASC) as previous_rank
+            FROM predictions
+            WHERE season = %s
+              AND run_id = (SELECT run_id FROM previous_run)
+        )
         SELECT
             p.player_name,
             p.season,
@@ -268,7 +425,15 @@ def get_player_prediction(conn, player_name: str) -> Optional[Dict]:
             p.value_category,
             p.value_over_replacement as vorp,
             p.model_version,
+            p.run_id,
             p.prediction_date,
+            cr.current_rank as rank,
+            pr.previous_rank,
+            CASE
+                WHEN pr.previous_rank IS NOT NULL
+                THEN pr.previous_rank - cr.current_rank
+                ELSE NULL
+            END as rank_change,
             ps.team_abbreviation,
             ps.position,
             ps.age,
@@ -289,15 +454,18 @@ def get_player_prediction(conn, player_name: str) -> Optional[Dict]:
             ps.ws,
             ps.bpm
         FROM predictions p
+        LEFT JOIN current_ranks cr ON p.player_name = cr.player_name
+        LEFT JOIN previous_ranks pr ON p.player_name = pr.player_name
         LEFT JOIN player_stats ps
             ON p.player_name = ps.player_name
             AND p.season = ps.season
         WHERE p.player_name = %s
           AND p.season = %s
+          AND p.run_id = (SELECT run_id FROM latest_run)
     """
 
     cur = conn.cursor()
-    cur.execute(query, [player_name, CURRENT_SEASON])
+    cur.execute(query, [CURRENT_SEASON, CURRENT_SEASON, CURRENT_SEASON, CURRENT_SEASON, player_name, CURRENT_SEASON])
     result = cur.fetchone()
     cur.close()
 
@@ -324,7 +492,14 @@ def get_all_teams(conn, query_params: Dict) -> List[Dict]:
     sort_column = sort_mapping.get(sort_by, "avg_inefficiency_score")
 
     query = f"""
-        WITH team_metrics AS (
+        WITH latest_run AS (
+            SELECT run_id
+            FROM predictions
+            WHERE season = %s
+            ORDER BY prediction_date DESC
+            LIMIT 1
+        ),
+        team_metrics AS (
             SELECT
                 ps.team_abbreviation,
                 COUNT(*) as player_count,
@@ -349,6 +524,7 @@ def get_all_teams(conn, query_params: Dict) -> List[Dict]:
                 ON p.player_name = ps.player_name
                 AND p.season = ps.season
             WHERE p.season = %s
+              AND p.run_id = (SELECT run_id FROM latest_run)
             GROUP BY ps.team_abbreviation
         )
         SELECT
@@ -369,7 +545,7 @@ def get_all_teams(conn, query_params: Dict) -> List[Dict]:
     """
 
     cur = conn.cursor()
-    cur.execute(query, [CURRENT_SEASON])
+    cur.execute(query, [CURRENT_SEASON, CURRENT_SEASON])
     results = cur.fetchall()
     cur.close()
 
@@ -384,7 +560,14 @@ def get_team_detail(conn, team_abbreviation: str) -> Optional[Dict]:
     team_abbr = team_abbreviation.upper()
 
     team_query = """
-        WITH team_metrics AS (
+        WITH latest_run AS (
+            SELECT run_id
+            FROM predictions
+            WHERE season = %s
+            ORDER BY prediction_date DESC
+            LIMIT 1
+        ),
+        team_metrics AS (
             SELECT
                 ps.team_abbreviation,
                 COUNT(*) as player_count,
@@ -409,6 +592,7 @@ def get_team_detail(conn, team_abbreviation: str) -> Optional[Dict]:
                 ON p.player_name = ps.player_name
                 AND p.season = ps.season
             WHERE p.season = %s
+              AND p.run_id = (SELECT run_id FROM latest_run)
               AND ps.team_abbreviation = %s
             GROUP BY ps.team_abbreviation
         )
@@ -429,7 +613,7 @@ def get_team_detail(conn, team_abbreviation: str) -> Optional[Dict]:
     """
 
     cur = conn.cursor()
-    cur.execute(team_query, [CURRENT_SEASON, team_abbr])
+    cur.execute(team_query, [CURRENT_SEASON, CURRENT_SEASON, team_abbr])
     team_result = cur.fetchone()
 
     if not team_result:
@@ -439,6 +623,36 @@ def get_team_detail(conn, team_abbreviation: str) -> Optional[Dict]:
     team_data = dict(team_result)
 
     roster_query = """
+        WITH latest_run AS (
+            SELECT run_id
+            FROM predictions
+            WHERE season = %s
+            ORDER BY prediction_date DESC
+            LIMIT 1
+        ),
+        previous_run AS (
+            SELECT run_id
+            FROM predictions
+            WHERE season = %s
+            ORDER BY prediction_date DESC
+            LIMIT 1 OFFSET 1
+        ),
+        current_ranks AS (
+            SELECT
+                player_name,
+                ROW_NUMBER() OVER (ORDER BY inefficiency_score ASC) as current_rank
+            FROM predictions
+            WHERE season = %s
+              AND run_id = (SELECT run_id FROM latest_run)
+        ),
+        previous_ranks AS (
+            SELECT
+                player_name,
+                ROW_NUMBER() OVER (ORDER BY inefficiency_score ASC) as previous_rank
+            FROM predictions
+            WHERE season = %s
+              AND run_id = (SELECT run_id FROM previous_run)
+        )
         SELECT
             p.player_name,
             p.predicted_fmv,
@@ -448,21 +662,31 @@ def get_team_detail(conn, team_abbreviation: str) -> Optional[Dict]:
             p.inefficiency_score,
             p.value_category,
             p.value_over_replacement as vorp,
+            cr.current_rank as rank,
+            pr.previous_rank,
+            CASE
+                WHEN pr.previous_rank IS NOT NULL
+                THEN pr.previous_rank - cr.current_rank
+                ELSE NULL
+            END as rank_change,
             ps.position,
             ps.age,
             ps.points,
             ps.rebounds,
             ps.assists
         FROM predictions p
+        LEFT JOIN current_ranks cr ON p.player_name = cr.player_name
+        LEFT JOIN previous_ranks pr ON p.player_name = pr.player_name
         INNER JOIN player_stats ps
             ON p.player_name = ps.player_name
             AND p.season = ps.season
         WHERE p.season = %s
+          AND p.run_id = (SELECT run_id FROM latest_run)
           AND ps.team_abbreviation = %s
         ORDER BY p.actual_salary DESC
     """
 
-    cur.execute(roster_query, [CURRENT_SEASON, team_abbr])
+    cur.execute(roster_query, [CURRENT_SEASON, CURRENT_SEASON, CURRENT_SEASON, CURRENT_SEASON, CURRENT_SEASON, team_abbr])
     roster_results = cur.fetchall()
     cur.close()
 
