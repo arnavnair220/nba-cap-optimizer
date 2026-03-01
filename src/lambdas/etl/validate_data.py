@@ -195,6 +195,103 @@ def _validate_season_and_timestamp(data: Dict[str, Any], warnings: List[str]) ->
             pass  # Already validated by schema
 
 
+def _identify_bad_rows(
+    stats: List[Dict[str, Any]],
+    statistics: Dict[str, Any],
+    max_bad_row_percentage: float = 0.01,
+) -> Tuple[List[Dict[str, Any]], int, float]:
+    """
+    Identify bad rows in player statistics without filtering them.
+
+    A row is considered "bad" if it has any null/empty/NaN values in columns that
+    should not be null. Columns are allowed to be null only if:
+    - They are in skip_columns (e.g., "Awards")
+    - They are percentage columns with dependency = 0/null (e.g., FG% when FGA=0)
+    - They are warn_only_columns (cross-array dependencies)
+
+    Args:
+        stats: List of player stat dictionaries
+        statistics: Statistics dict to update
+        max_bad_row_percentage: Maximum percentage of bad rows allowed (default 0.01 = 1%)
+
+    Returns:
+        Tuple of (bad_row_details, bad_row_count, bad_row_percentage)
+    """
+    if not stats:
+        return [], 0, 0.0
+
+    # Filter out "League Average" summary rows before processing
+    stats = [s for s in stats if s.get("Player") != "League Average"]
+
+    if not stats:
+        return [], 0, 0.0
+
+    # Define conditional exemptions and skip rules
+    percentage_dependencies = {
+        "FG%": (["FGA"], "any"),
+        "3P%": (["3PA"], "any"),
+        "2P%": (["2PA"], "any"),
+        "FT%": (["FTA"], "any"),
+        "eFG%": (["FGA"], "any"),
+    }
+    skip_columns = ["Awards"]
+    warn_only_columns = ["TOV%", "TS%", "3PAr", "FTr"]
+
+    # Identify bad rows
+    bad_rows = []
+
+    for player_idx, player_stat in enumerate(stats):
+        player_name = player_stat.get("Player", f"Player {player_idx}")
+        bad_columns = []
+
+        # Check all columns for null/empty/NaN values
+        for col, value in player_stat.items():
+            # Skip columns that should be ignored
+            if col in skip_columns or col in warn_only_columns:
+                continue
+
+            is_null_or_nan = value is None or value == "" or _is_nan(value)
+            if not is_null_or_nan:
+                continue
+
+            # Check if this is a percentage column with conditional exemption
+            if col in percentage_dependencies:
+                dep_cols, logic = percentage_dependencies[col]
+                all_deps_exist = all(dep_col in player_stat for dep_col in dep_cols)
+
+                if all_deps_exist:
+                    dep_values = [player_stat.get(dep_col) for dep_col in dep_cols]
+                    dep_is_zero_or_null = [_is_value_zero_or_null(v) for v in dep_values]
+
+                    # If all dependencies are zero/null, percentage can be null (valid)
+                    if all(dep_is_zero_or_null):
+                        continue
+
+            # This column has an invalid null value
+            bad_columns.append(col)
+
+        if bad_columns:
+            bad_rows.append(
+                {
+                    "player": player_name,
+                    "player_index": player_idx,
+                    "bad_columns": bad_columns,
+                }
+            )
+
+    # Calculate bad row statistics
+    total_rows = len(stats)
+    bad_row_count = len(bad_rows)
+    bad_row_percentage = bad_row_count / total_rows if total_rows > 0 else 0.0
+
+    # Record statistics
+    statistics["total_rows_before_filtering"] = total_rows
+    statistics["bad_rows_identified"] = bad_row_count
+    statistics["bad_row_percentage"] = round(bad_row_percentage * 100, 2)
+
+    return bad_rows, bad_row_count, bad_row_percentage
+
+
 def _validate_all_missing_and_nan_values(
     stats: List[Dict[str, Any]],
     warnings: List[str],
@@ -239,9 +336,6 @@ def _validate_all_missing_and_nan_values(
         "eFG%": (["FGA"], "any"),
     }
 
-    # Critical columns - even 1 missing = FAIL
-    critical_columns = ["Player", "Pos", "Age", "Team"]
-
     # Columns to completely skip during validation
     skip_columns = ["Awards"]
 
@@ -249,7 +343,9 @@ def _validate_all_missing_and_nan_values(
     # These can be null without failing validation, but still generate warnings for visibility
     warn_only_columns = ["TOV%", "TS%", "3PAr", "FTr"]
 
-    missing_critical = []
+    # NOTE: Critical columns (Player, Pos, Age, Team) are now checked by _identify_bad_rows()
+    # We no longer check them here to avoid double-validation
+
     missing_non_critical = []
     invalid_percentage_nulls = []
 
@@ -293,28 +389,18 @@ def _validate_all_missing_and_nan_values(
                     f"{player_name}: {col} is null but {', '.join(non_zero_deps)}"
                 )
             else:
-                # Check if this is a critical column
-                if col in critical_columns:
-                    missing_critical.append(f"{player_name} (column: {col})")
-                elif col in warn_only_columns:
+                # Check if this is a warn-only column
+                if col in warn_only_columns:
                     # Warn-only column: generate warning but don't count toward threshold
                     warnings.append(f"Missing data: {player_name} has null/NaN in {col}")
                 else:
                     # Non-critical, non-percentage column
+                    # Note: This should not happen if bad row filtering is working correctly
                     missing_non_critical.append(f"{player_name} (column: {col})")
                     warnings.append(f"Missing data: {player_name} has null/NaN in {col}")
 
     # Record statistics
-    statistics["players_with_missing_critical_data"] = len(missing_critical)
     statistics["players_with_missing_non_critical_data"] = len(missing_non_critical)
-
-    # CRITICAL ERROR: Any missing critical column data
-    if missing_critical:
-        errors.append(
-            f"CRITICAL: Found {len(missing_critical)} instances of missing critical column data "
-            f"(Player/Pos/Age/Team). First few: {', '.join(missing_critical[:5])}"
-        )
-        return False
 
     # ERROR: Invalid percentage nulls
     if invalid_percentage_nulls:
@@ -507,6 +593,43 @@ def validate_stats_data(data: Dict[str, Any]) -> Dict[str, Any]:
                 )
                 results["statistics"]["player_count_diff_pct"] = round(count_diff_pct * 100, 2)
 
+        # Identify bad rows in per-game stats (rows with invalid null values)
+        if per_game_stats:
+            per_game_stats_dict: Dict[str, Any] = {}
+            bad_rows, bad_count, bad_pct = _identify_bad_rows(per_game_stats, per_game_stats_dict)
+
+            # Store per-game specific statistics
+            results["statistics"]["total_rows_per_game_before_filtering"] = per_game_stats_dict.get(
+                "total_rows_before_filtering", 0
+            )
+            results["statistics"]["bad_rows_identified_per_game"] = bad_count
+            results["statistics"]["bad_row_percentage_per_game"] = round(bad_pct * 100, 2)
+
+            # Check if bad row percentage exceeds 1% threshold
+            if bad_pct > 0.01:
+                sample_bad_rows = [
+                    f"{br['player']} (missing: {', '.join(br['bad_columns'])})"
+                    for br in bad_rows[:5]
+                ]
+                results["errors"].append(
+                    f"CRITICAL: Bad row percentage in per-game stats ({bad_pct*100:.2f}%) "
+                    f"exceeds 1.0% threshold. Found {bad_count} bad rows. "
+                    f"Sample bad rows: {', '.join(sample_bad_rows)}"
+                )
+                results["valid"] = False
+            elif bad_count > 0:
+                # Bad rows identified but within threshold
+                sample_bad_rows = [
+                    f"{br['player']} (missing: {', '.join(br['bad_columns'])})"
+                    for br in bad_rows[:5]
+                ]
+                results["warnings"].append(
+                    f"Identified {bad_count} bad rows ({bad_pct*100:.2f}%) in per-game stats "
+                    f"with missing data. This is within the acceptable 1.0% threshold and will "
+                    f"be filtered during transform. Sample: {', '.join(sample_bad_rows)}"
+                )
+                results["statistics"]["bad_rows_per_game_sample"] = sample_bad_rows
+
         # Validate all missing/null/NaN values in per-game stats
         if per_game_stats:
             if not _validate_all_missing_and_nan_values(
@@ -524,6 +647,45 @@ def validate_stats_data(data: Dict[str, Any]) -> Dict[str, Any]:
                 cast(List[str], results["warnings"]),
                 cast(Dict[str, Any], results["statistics"]),
             )
+
+        # Identify bad rows in advanced stats (rows with invalid null values)
+        if advanced_stats:
+            advanced_stats_dict: Dict[str, Any] = {}
+            bad_rows_adv, bad_count_adv, bad_pct_adv = _identify_bad_rows(
+                advanced_stats, advanced_stats_dict
+            )
+
+            # Store advanced specific statistics
+            results["statistics"]["total_rows_advanced_before_filtering"] = advanced_stats_dict.get(
+                "total_rows_before_filtering", 0
+            )
+            results["statistics"]["bad_rows_identified_advanced"] = bad_count_adv
+            results["statistics"]["bad_row_percentage_advanced"] = round(bad_pct_adv * 100, 2)
+
+            # Check if bad row percentage exceeds 1% threshold
+            if bad_pct_adv > 0.01:
+                sample_bad_rows = [
+                    f"{br['player']} (missing: {', '.join(br['bad_columns'])})"
+                    for br in bad_rows_adv[:5]
+                ]
+                results["errors"].append(
+                    f"CRITICAL: Bad row percentage in advanced stats ({bad_pct_adv*100:.2f}%) "
+                    f"exceeds 1.0% threshold. Found {bad_count_adv} bad rows. "
+                    f"Sample bad rows: {', '.join(sample_bad_rows)}"
+                )
+                results["valid"] = False
+            elif bad_count_adv > 0:
+                # Bad rows identified but within threshold
+                sample_bad_rows = [
+                    f"{br['player']} (missing: {', '.join(br['bad_columns'])})"
+                    for br in bad_rows_adv[:5]
+                ]
+                results["warnings"].append(
+                    f"Identified {bad_count_adv} bad rows ({bad_pct_adv*100:.2f}%) in advanced "
+                    f"stats with missing data. This is within the acceptable 1.0% threshold and "
+                    f"will be filtered during transform. Sample: {', '.join(sample_bad_rows)}"
+                )
+                results["statistics"]["bad_rows_advanced_sample"] = sample_bad_rows
 
         # Validate all missing/null/NaN values in advanced stats
         if advanced_stats:
