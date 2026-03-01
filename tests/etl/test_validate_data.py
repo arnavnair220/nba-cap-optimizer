@@ -1925,3 +1925,245 @@ class TestContractLimitsValidation:
 
         assert result["valid"] is False
         assert any("must be positive" in e for e in result["errors"])
+
+
+class TestBadRowDetection:
+    """Test bad row detection and tolerance threshold."""
+
+    def test_identify_bad_rows_with_missing_critical_columns(self):
+        """Test that rows with missing critical columns are identified as bad."""
+        stats = [
+            {"Player": "Good Player", "Pos": "PG", "Age": 25, "Team": "LAL", "PTS": 20.0},
+            {"Player": None, "Pos": "SG", "Age": 28, "Team": "GSW", "PTS": 15.0},
+            {"Player": "Another Good", "Pos": "SF", "Age": 30, "Team": "BOS", "PTS": 18.0},
+        ]
+
+        statistics = {}
+        bad_rows, bad_count, bad_pct = validate_data._identify_bad_rows(stats, statistics)
+
+        assert bad_count == 1
+        assert abs(bad_pct - (1 / 3)) < 0.01
+        assert len(bad_rows) == 1
+        assert bad_rows[0]["player_index"] == 1
+        assert "Player" in bad_rows[0]["bad_columns"]
+
+    def test_identify_bad_rows_with_missing_non_critical_columns(self):
+        """Test that rows with missing non-critical stats are identified as bad."""
+        stats = [
+            {
+                "Player": "Good Player",
+                "Pos": "PG",
+                "Age": 25,
+                "Team": "LAL",
+                "PTS": 20.0,
+                "AST": 5.0,
+            },
+            {
+                "Player": "Bad Player",
+                "Pos": "SG",
+                "Age": 28,
+                "Team": "GSW",
+                "PTS": None,
+                "AST": 3.0,
+            },
+        ]
+
+        statistics = {}
+        bad_rows, bad_count, bad_pct = validate_data._identify_bad_rows(stats, statistics)
+
+        assert bad_count == 1
+        assert bad_pct == 0.5
+        assert "PTS" in bad_rows[0]["bad_columns"]
+
+    def test_identify_bad_rows_allows_null_percentage_when_attempts_zero(self):
+        """Test that null percentages are allowed when attempts = 0."""
+        stats = [
+            {
+                "Player": "Player 1",
+                "Pos": "PG",
+                "Age": 25,
+                "Team": "LAL",
+                "FG%": None,
+                "FGA": 0,
+            },
+            {
+                "Player": "Player 2",
+                "Pos": "SG",
+                "Age": 28,
+                "Team": "GSW",
+                "3P%": None,
+                "3PA": 0,
+            },
+        ]
+
+        statistics = {}
+        bad_rows, bad_count, bad_pct = validate_data._identify_bad_rows(stats, statistics)
+
+        assert bad_count == 0
+        assert bad_pct == 0.0
+
+    def test_identify_bad_rows_skips_warn_only_columns(self):
+        """Test that warn_only_columns (cross-array dependencies) are not marked as bad."""
+        stats = [
+            {
+                "Player": "Player 1",
+                "Pos": "PG",
+                "Age": 25,
+                "Team": "LAL",
+                "TOV%": None,
+                "TS%": None,
+            }
+        ]
+
+        statistics = {}
+        bad_rows, bad_count, bad_pct = validate_data._identify_bad_rows(stats, statistics)
+
+        assert bad_count == 0
+        assert bad_pct == 0.0
+
+    def test_validate_stats_passes_with_bad_rows_under_threshold(self):
+        """Test that validation passes when bad rows <= 1%."""
+        # Create 400 good rows (above 300 minimum) + 4 bad rows (exactly 1%)
+        good_row = {
+            "Player": "Good Player",
+            "Pos": "PG",
+            "Age": 25,
+            "Team": "LAL",
+            "G": 50,
+            "MP": 30.0,
+            "PTS": 20.0,
+            "TRB": 5.0,
+            "AST": 7.0,
+            "FG": 8.0,
+            "FGA": 15.0,
+            "FG%": 0.533,
+        }
+        bad_row = {
+            "Player": None,
+            "Pos": "SG",
+            "Age": 28,
+            "Team": "GSW",
+            "G": 45,
+            "MP": 25.0,
+            "PTS": 15.0,
+            "TRB": 4.0,
+            "AST": 6.0,
+        }
+
+        stats_data = {
+            "season": "2025-26",
+            "fetch_timestamp": datetime.utcnow().isoformat(),
+            "source": "basketball_reference",
+            "per_game_stats": [{**good_row, "Player": f"Player {i}"} for i in range(400)]
+            + [bad_row.copy() for _ in range(4)],
+            "advanced_stats": [
+                {
+                    "Player": f"Player {i}",
+                    "Pos": "PG",
+                    "Age": 25,
+                    "Team": "LAL",
+                    "G": 50,
+                    "MP": 30.0,
+                    "PER": 25.0,
+                }
+                for i in range(404)
+            ],
+            "per_game_columns": ["Player", "Pos", "Age", "Team", "G", "MP", "PTS", "TRB", "AST"],
+            "advanced_columns": ["Player", "Pos", "Age", "Team", "G", "MP", "PER"],
+        }
+
+        result = validate_data.validate_stats_data(stats_data)
+
+        assert result["valid"] is True
+        assert result["statistics"]["bad_rows_identified_per_game"] == 4
+        assert abs(result["statistics"]["bad_row_percentage_per_game"] - 1.0) < 0.1
+        assert any("Identified 4 bad rows" in w for w in result["warnings"])
+
+    def test_validate_stats_fails_with_bad_rows_over_threshold(self):
+        """Test that validation fails when bad rows > 1%."""
+        # Create 390 good rows + 10 bad rows (2.5% bad, over 1% threshold)
+        good_row = {
+            "Player": "Good Player",
+            "Pos": "PG",
+            "Age": 25,
+            "Team": "LAL",
+            "G": 50,
+            "MP": 30.0,
+            "PTS": 20.0,
+            "TRB": 5.0,
+            "AST": 7.0,
+        }
+        bad_row = {"Player": None, "Pos": "SG", "Age": 28, "Team": "GSW", "G": 45, "MP": 25.0}
+
+        stats_data = {
+            "season": "2025-26",
+            "fetch_timestamp": datetime.utcnow().isoformat(),
+            "source": "basketball_reference",
+            "per_game_stats": [{**good_row, "Player": f"Player {i}"} for i in range(390)]
+            + [bad_row.copy() for _ in range(10)],
+            "advanced_stats": [
+                {
+                    "Player": f"Player {i}",
+                    "Pos": "PG",
+                    "Age": 25,
+                    "Team": "LAL",
+                    "G": 50,
+                    "MP": 30.0,
+                    "PER": 25.0,
+                }
+                for i in range(400)
+            ],
+            "per_game_columns": ["Player", "Pos", "Age", "Team", "G", "MP", "PTS", "TRB", "AST"],
+            "advanced_columns": ["Player", "Pos", "Age", "Team", "G", "MP", "PER"],
+        }
+
+        result = validate_data.validate_stats_data(stats_data)
+
+        assert result["valid"] is False
+        assert result["statistics"]["bad_rows_identified_per_game"] == 10
+        assert result["statistics"]["bad_row_percentage_per_game"] == 2.5
+        assert any("exceeds 1.0% threshold" in e for e in result["errors"])
+
+    def test_validate_stats_edge_case_exactly_one_percent(self):
+        """Test edge case: exactly 1% bad rows should pass."""
+        # Create 399 good rows + 1 bad row (0.25% bad, under threshold)
+        good_row = {
+            "Player": "Good Player",
+            "Pos": "PG",
+            "Age": 25,
+            "Team": "LAL",
+            "G": 50,
+            "MP": 30.0,
+            "PTS": 20.0,
+            "TRB": 5.0,
+            "AST": 7.0,
+        }
+        bad_row = {"Player": None, "Pos": "SG", "Age": 28, "Team": "GSW", "G": 45, "MP": 25.0}
+
+        stats_data = {
+            "season": "2025-26",
+            "fetch_timestamp": datetime.utcnow().isoformat(),
+            "source": "basketball_reference",
+            "per_game_stats": [{**good_row, "Player": f"Player {i}"} for i in range(399)]
+            + [bad_row],
+            "advanced_stats": [
+                {
+                    "Player": f"Player {i}",
+                    "Pos": "PG",
+                    "Age": 25,
+                    "Team": "LAL",
+                    "G": 50,
+                    "MP": 30.0,
+                    "PER": 25.0,
+                }
+                for i in range(400)
+            ],
+            "per_game_columns": ["Player", "Pos", "Age", "Team", "G", "MP", "PTS", "TRB", "AST"],
+            "advanced_columns": ["Player", "Pos", "Age", "Team", "G", "MP", "PER"],
+        }
+
+        result = validate_data.validate_stats_data(stats_data)
+
+        assert result["valid"] is True
+        assert result["statistics"]["bad_rows_identified_per_game"] == 1
+        assert result["statistics"]["bad_row_percentage_per_game"] == 0.25

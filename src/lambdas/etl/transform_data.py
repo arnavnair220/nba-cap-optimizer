@@ -127,6 +127,132 @@ def save_to_s3(data: Dict[str, Any], s3_key: str) -> bool:
         return False
 
 
+def _is_nan(value: Any) -> bool:
+    """
+    Check if a value is NaN (Not a Number).
+
+    Handles multiple NaN representations: float('nan'), numpy.nan, pandas.NA, etc.
+
+    Args:
+        value: Value to check
+
+    Returns:
+        True if value is NaN
+    """
+    try:
+        return math.isnan(float(value))
+    except (ValueError, TypeError, OverflowError):
+        return False
+
+
+def _is_value_zero_or_null(value: Any) -> bool:
+    """
+    Check if a value is null, empty, zero, or NaN.
+
+    Args:
+        value: Value to check
+
+    Returns:
+        True if value is null, empty, zero, or NaN
+    """
+    if value is None or value == "":
+        return True
+    if _is_nan(value):
+        return True
+    try:
+        return float(value) == 0
+    except (ValueError, TypeError):
+        return False
+
+
+def _filter_bad_rows(stats: List[Dict[str, Any]], stat_type: str = "stats") -> List[Dict[str, Any]]:
+    """
+    Filter out bad rows from player statistics.
+
+    A row is considered "bad" if it has any null/empty/NaN values in columns that
+    should not be null. Columns are allowed to be null only if:
+    - They are in skip_columns (e.g., "Awards")
+    - They are percentage columns with dependency = 0/null (e.g., FG% when FGA=0)
+    - They are warn_only_columns (cross-array dependencies)
+
+    This mirrors the validation logic in validate_data.py._identify_bad_rows()
+
+    Args:
+        stats: List of player stat dictionaries
+        stat_type: Type of stats for logging ("per_game" or "advanced")
+
+    Returns:
+        List of clean player stat dictionaries with bad rows filtered out
+    """
+    if not stats:
+        return stats
+
+    # Filter out "League Average" summary rows
+    stats = [s for s in stats if s.get("Player") != "League Average"]
+
+    if not stats:
+        return stats
+
+    # Define conditional exemptions and skip rules (same as validation)
+    percentage_dependencies = {
+        "FG%": (["FGA"], "any"),
+        "3P%": (["3PA"], "any"),
+        "2P%": (["2PA"], "any"),
+        "FT%": (["FTA"], "any"),
+        "eFG%": (["FGA"], "any"),
+    }
+    skip_columns = ["Awards"]
+    warn_only_columns = ["TOV%", "TS%", "3PAr", "FTr"]
+
+    clean_rows = []
+    filtered_count = 0
+
+    for player_idx, player_stat in enumerate(stats):
+        player_name = player_stat.get("Player", f"Player {player_idx}")
+        is_bad = False
+
+        # Check all columns for null/empty/NaN values
+        for col, value in player_stat.items():
+            # Skip columns that should be ignored
+            if col in skip_columns or col in warn_only_columns:
+                continue
+
+            is_null_or_nan = value is None or value == "" or _is_nan(value)
+            if not is_null_or_nan:
+                continue
+
+            # Check if this is a percentage column with conditional exemption
+            if col in percentage_dependencies:
+                dep_cols, logic = percentage_dependencies[col]
+                all_deps_exist = all(dep_col in player_stat for dep_col in dep_cols)
+
+                if all_deps_exist:
+                    dep_values = [player_stat.get(dep_col) for dep_col in dep_cols]
+                    dep_is_zero_or_null = [_is_value_zero_or_null(v) for v in dep_values]
+
+                    # If all dependencies are zero/null, percentage can be null (valid)
+                    if all(dep_is_zero_or_null):
+                        continue
+
+            # This column has an invalid null value - mark row as bad
+            is_bad = True
+            break  # No need to check remaining columns
+
+        if not is_bad:
+            clean_rows.append(player_stat)
+        else:
+            filtered_count += 1
+            logger.debug(f"Filtered bad row from {stat_type}: {player_name}")
+
+    if filtered_count > 0:
+        logger.info(
+            f"Filtered {filtered_count} bad rows from {stat_type} "
+            f"({len(clean_rows)} clean rows remaining)"
+        )
+
+    return clean_rows
+
+
 def _build_stat_dict(pg_stat: Dict[str, Any], team_abbrev: Optional[str]) -> Dict[str, Any]:
     """
     Build a stat dictionary from a per-game stat row.
@@ -190,6 +316,11 @@ def enrich_player_stats(stats_data: Dict[str, Any]) -> List[Dict[str, Any]]:
         if not per_game_stats:
             logger.warning("No per-game stats found")
             return []
+
+        # Filter out bad rows (rows with invalid null values)
+        # This is identified during validation; we filter them here during transform
+        per_game_stats = _filter_bad_rows(per_game_stats, "per_game")
+        advanced_stats = _filter_bad_rows(advanced_stats, "advanced")
 
         # Create advanced stats lookup by player name
         advanced_lookup = {}
