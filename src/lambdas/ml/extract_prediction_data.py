@@ -62,6 +62,7 @@ def lambda_handler(event, context):
         conn = get_db_connection()
 
         # Query for latest season and most recent ETL run
+        # Only include players who have salary data
         query = """
         WITH latest_run AS (
             SELECT
@@ -77,7 +78,11 @@ def lambda_handler(event, context):
         INNER JOIN latest_run lr
             ON ps.season = lr.season
             AND ps.etl_run_id = lr.max_etl_run_id
-        WHERE ps.minutes > 0
+        INNER JOIN salaries s
+            ON ps.player_name = s.player_name
+            AND ps.season = s.season
+        WHERE s.annual_salary > 0
+            AND ps.minutes > 0
             AND ps.games_played > 0
         ORDER BY ps.player_name
         """
