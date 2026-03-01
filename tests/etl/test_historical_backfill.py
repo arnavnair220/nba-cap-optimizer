@@ -8,14 +8,14 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pandas as pd
 
-from src.etl import fetch_data
+from src.lambdas.etl import fetch_data
 
 
 class TestHistoricalSeasonURLConstruction:
     """Test URL construction for different seasons."""
 
-    @patch("src.etl.fetch_data.time.sleep")
-    @patch("src.etl.fetch_data.pd.read_html")
+    @patch("src.lambdas.etl.fetch_data.time.sleep")
+    @patch("src.lambdas.etl.fetch_data.pd.read_html")
     def test_basketball_reference_url_for_2022_23_season(self, mock_read_html, mock_sleep):
         """Test that 2022-23 season uses correct B-R URL (2023)."""
         mock_pergame_df = pd.DataFrame({"Player": ["Test"], "PTS": [20.0]})
@@ -38,8 +38,8 @@ class TestHistoricalSeasonURLConstruction:
         assert "NBA_2023" in advanced_url
         assert "advanced.html" in advanced_url
 
-    @patch("src.etl.fetch_data.time.sleep")
-    @patch("src.etl.fetch_data.pd.read_html")
+    @patch("src.lambdas.etl.fetch_data.time.sleep")
+    @patch("src.lambdas.etl.fetch_data.pd.read_html")
     def test_basketball_reference_url_for_2023_24_season(self, mock_read_html, mock_sleep):
         """Test that 2023-24 season uses correct B-R URL (2024)."""
         mock_pergame_df = pd.DataFrame({"Player": ["Test"], "PTS": [20.0]})
@@ -59,8 +59,8 @@ class TestHistoricalSeasonURLConstruction:
         assert "NBA_2024" in pergame_url
         assert "NBA_2024" in advanced_url
 
-    @patch("src.etl.fetch_data.time.sleep")
-    @patch("src.etl.fetch_data.pd.read_html")
+    @patch("src.lambdas.etl.fetch_data.time.sleep")
+    @patch("src.lambdas.etl.fetch_data.pd.read_html")
     def test_basketball_reference_url_for_2024_25_season(self, mock_read_html, mock_sleep):
         """Test that 2024-25 season uses correct B-R URL (2025)."""
         mock_pergame_df = pd.DataFrame({"Player": ["Test"], "PTS": [20.0]})
@@ -74,8 +74,8 @@ class TestHistoricalSeasonURLConstruction:
 
         assert "NBA_2025" in pergame_url
 
-    @patch("src.etl.fetch_data.time.sleep")
-    @patch("src.etl.fetch_data.requests.get")
+    @patch("src.lambdas.etl.fetch_data.time.sleep")
+    @patch("src.lambdas.etl.fetch_data.requests.get")
     def test_espn_salaries_url_for_historical_season_2022_23(self, mock_get, mock_sleep):
         """Test that ESPN uses historical URL format for 2022-23 season."""
         mock_response = Mock()
@@ -112,8 +112,8 @@ class TestHistoricalSeasonURLConstruction:
         assert "/year/2023" in first_call_url
         assert len(result) == 1
 
-    @patch("src.etl.fetch_data.time.sleep")
-    @patch("src.etl.fetch_data.requests.get")
+    @patch("src.lambdas.etl.fetch_data.time.sleep")
+    @patch("src.lambdas.etl.fetch_data.requests.get")
     def test_espn_salaries_url_for_historical_season_2023_24(self, mock_get, mock_sleep):
         """Test that ESPN uses historical URL format for 2023-24 season."""
         mock_response = Mock()
@@ -142,9 +142,9 @@ class TestHistoricalSeasonURLConstruction:
         first_call_url = mock_get.call_args_list[0][0][0]
         assert "/year/2024" in first_call_url
 
-    @patch("src.etl.fetch_data.time.sleep")
-    @patch("src.etl.fetch_data.requests.get")
-    @patch("src.etl.fetch_data.datetime")
+    @patch("src.lambdas.etl.fetch_data.time.sleep")
+    @patch("src.lambdas.etl.fetch_data.requests.get")
+    @patch("src.lambdas.etl.fetch_data.datetime")
     def test_espn_salaries_url_for_current_season(self, mock_datetime, mock_get, mock_sleep):
         """Test that ESPN uses year parameter even for current/future seasons."""
         # Mock current year as 2025
@@ -179,8 +179,8 @@ class TestHistoricalSeasonURLConstruction:
         first_call_url = mock_get.call_args_list[0][0][0]
         assert first_call_url == "https://www.espn.com/nba/salaries/_/year/2026"
 
-    @patch("src.etl.fetch_data.time.sleep")
-    @patch("src.etl.fetch_data.requests.get")
+    @patch("src.lambdas.etl.fetch_data.time.sleep")
+    @patch("src.lambdas.etl.fetch_data.requests.get")
     def test_espn_salaries_pagination_with_historical_year(self, mock_get, mock_sleep):
         """Test that pagination works correctly with historical year URLs."""
         # Page 1 with data
@@ -258,8 +258,8 @@ class TestHistoricalSeasonURLConstruction:
 class TestSeasonParameterInSalaryData:
     """Test that season parameter is correctly set in fetched salary data."""
 
-    @patch("src.etl.fetch_data.time.sleep")
-    @patch("src.etl.fetch_data.requests.get")
+    @patch("src.lambdas.etl.fetch_data.time.sleep")
+    @patch("src.lambdas.etl.fetch_data.requests.get")
     def test_salary_data_contains_correct_season(self, mock_get, mock_sleep):
         """Test that each salary entry has the correct season field."""
         mock_response = Mock()
@@ -304,10 +304,10 @@ class TestSeasonParameterInSalaryData:
 class TestHandlerSeasonParameter:
     """Test that handler correctly uses and passes season parameter."""
 
-    @patch("src.etl.fetch_data.fetch_player_stats")
-    @patch("src.etl.fetch_data.save_to_s3")
-    @patch("src.etl.fetch_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.fetch_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.fetch_data.fetch_player_stats")
+    @patch("src.lambdas.etl.fetch_data.save_to_s3")
+    @patch("src.lambdas.etl.fetch_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.fetch_data.ENVIRONMENT", "test")
     def test_handler_passes_season_to_fetch_functions(self, mock_save, mock_fetch_stats):
         """Test that handler passes custom season to fetch functions."""
         mock_fetch_stats.return_value = {
@@ -330,12 +330,12 @@ class TestHandlerSeasonParameter:
         assert result["statusCode"] == 200
         assert result["season"] == "2022-23"
 
-    @patch("src.etl.fetch_data.fetch_espn_salaries")
-    @patch("src.etl.fetch_data.teams.get_teams")
-    @patch("src.etl.fetch_data.fetch_player_stats")
-    @patch("src.etl.fetch_data.save_to_s3")
-    @patch("src.etl.fetch_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.fetch_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.fetch_data.fetch_espn_salaries")
+    @patch("src.lambdas.etl.fetch_data.teams.get_teams")
+    @patch("src.lambdas.etl.fetch_data.fetch_player_stats")
+    @patch("src.lambdas.etl.fetch_data.save_to_s3")
+    @patch("src.lambdas.etl.fetch_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.fetch_data.ENVIRONMENT", "test")
     def test_handler_monthly_passes_season_to_all_functions(
         self,
         mock_save,
@@ -366,10 +366,10 @@ class TestHandlerSeasonParameter:
         mock_fetch_salaries.assert_called_once_with("2023-24")
         assert result["season"] == "2023-24"
 
-    @patch("src.etl.fetch_data.fetch_player_stats")
-    @patch("src.etl.fetch_data.save_to_s3")
-    @patch("src.etl.fetch_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.fetch_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.fetch_data.fetch_player_stats")
+    @patch("src.lambdas.etl.fetch_data.save_to_s3")
+    @patch("src.lambdas.etl.fetch_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.fetch_data.ENVIRONMENT", "test")
     def test_handler_defaults_to_2025_26_when_no_season_provided(self, mock_save, mock_fetch_stats):
         """Test that handler defaults to 2025-26 when season not in event."""
         mock_fetch_stats.return_value = {
@@ -391,10 +391,10 @@ class TestHandlerSeasonParameter:
         mock_fetch_stats.assert_called_once_with("2025-26")
         assert result["season"] == "2025-26"
 
-    @patch("src.etl.fetch_data.fetch_player_stats")
-    @patch("src.etl.fetch_data.save_to_s3")
-    @patch("src.etl.fetch_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.fetch_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.fetch_data.fetch_player_stats")
+    @patch("src.lambdas.etl.fetch_data.save_to_s3")
+    @patch("src.lambdas.etl.fetch_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.fetch_data.ENVIRONMENT", "test")
     def test_handler_returns_season_in_response(self, mock_save, mock_fetch_stats):
         """Test that handler includes season in return value for next step."""
         mock_fetch_stats.return_value = {

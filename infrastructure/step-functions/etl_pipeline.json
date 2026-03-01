@@ -1,0 +1,48 @@
+{
+  "Comment": "Daily ETL pipeline for NBA stats",
+  "StartAt": "FetchData",
+  "States": {
+    "FetchData": {
+      "Type": "Task",
+      "Resource": "${fetch_data_lambda_arn}",
+      "Next": "ValidateData",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "HandleError"
+        }
+      ]
+    },
+    "ValidateData": {
+      "Type": "Task",
+      "Resource": "${validate_data_lambda_arn}",
+      "Next": "TransformData",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "HandleError"
+        }
+      ]
+    },
+    "TransformData": {
+      "Type": "Task",
+      "Resource": "${transform_data_lambda_arn}",
+      "Next": "LoadToRDS",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "HandleError"
+        }
+      ]
+    },
+    "LoadToRDS": {
+      "Type": "Task",
+      "Resource": "${load_to_rds_lambda_arn}",
+      "End": true
+    },
+    "HandleError": {
+      "Type": "Fail",
+      "Cause": "ETL Pipeline failed"
+    }
+  }
+}

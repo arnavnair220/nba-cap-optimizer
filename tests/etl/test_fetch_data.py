@@ -8,14 +8,14 @@ from unittest.mock import MagicMock, Mock, patch
 import pandas as pd
 import requests
 
-from src.etl import fetch_data
+from src.lambdas.etl import fetch_data
 
 
 class TestFetchPlayerStatsBasketballReference:
     """Test Basketball-Reference scraping for player stats."""
 
-    @patch("src.etl.fetch_data.pd.read_html")
-    @patch("src.etl.fetch_data.time.sleep")
+    @patch("src.lambdas.etl.fetch_data.pd.read_html")
+    @patch("src.lambdas.etl.fetch_data.time.sleep")
     def test_fetch_player_stats_success_first_attempt(self, mock_sleep, mock_read_html):
         """Test successful fetch from Basketball-Reference on first attempt."""
         # Mock per-game stats DataFrame
@@ -59,8 +59,8 @@ class TestFetchPlayerStatsBasketballReference:
         # Should sleep 1s initially, then 1s between requests
         assert mock_sleep.call_count == 2
 
-    @patch("src.etl.fetch_data.pd.read_html")
-    @patch("src.etl.fetch_data.time.sleep")
+    @patch("src.lambdas.etl.fetch_data.pd.read_html")
+    @patch("src.lambdas.etl.fetch_data.time.sleep")
     def test_fetch_player_stats_retry_on_error(self, mock_sleep, mock_read_html):
         """Test retry logic when first scraping attempt fails."""
         mock_pergame_df = pd.DataFrame({"Player": ["LeBron James"], "PTS": [25.0]})
@@ -81,8 +81,8 @@ class TestFetchPlayerStatsBasketballReference:
         # Should sleep: 1s (initial), 2s (backoff for retry 1), 1s (between requests)
         assert mock_sleep.call_count == 3
 
-    @patch("src.etl.fetch_data.pd.read_html")
-    @patch("src.etl.fetch_data.time.sleep")
+    @patch("src.lambdas.etl.fetch_data.pd.read_html")
+    @patch("src.lambdas.etl.fetch_data.time.sleep")
     def test_fetch_player_stats_all_retries_fail(self, mock_sleep, mock_read_html):
         """Test that function returns None after all retries fail."""
         mock_read_html.side_effect = requests.exceptions.ConnectionError("Network error")
@@ -92,8 +92,8 @@ class TestFetchPlayerStatsBasketballReference:
         assert result is None
         assert mock_read_html.call_count == 3
 
-    @patch("src.etl.fetch_data.pd.read_html")
-    @patch("src.etl.fetch_data.time.sleep")
+    @patch("src.lambdas.etl.fetch_data.pd.read_html")
+    @patch("src.lambdas.etl.fetch_data.time.sleep")
     def test_fetch_player_stats_exponential_backoff(self, mock_sleep, mock_read_html):
         """Test that retry delays use exponential backoff."""
         mock_read_html.side_effect = requests.exceptions.ConnectionError("Network error")
@@ -104,8 +104,8 @@ class TestFetchPlayerStatsBasketballReference:
         expected_calls = [((1,),), ((2,),), ((4,),)]
         assert mock_sleep.call_args_list == expected_calls
 
-    @patch("src.etl.fetch_data.pd.read_html")
-    @patch("src.etl.fetch_data.time.sleep")
+    @patch("src.lambdas.etl.fetch_data.pd.read_html")
+    @patch("src.lambdas.etl.fetch_data.time.sleep")
     def test_fetch_player_stats_filters_header_rows(self, mock_sleep, mock_read_html):
         """Test that duplicate header rows are filtered out."""
         # Mock DataFrame with header row in the middle (common in B-R tables)
@@ -133,8 +133,8 @@ class TestFetchPlayerStatsBasketballReference:
         player_names = [p["Player"] for p in result["per_game_stats"]]
         assert "Player" not in player_names
 
-    @patch("src.etl.fetch_data.pd.read_html")
-    @patch("src.etl.fetch_data.time.sleep")
+    @patch("src.lambdas.etl.fetch_data.pd.read_html")
+    @patch("src.lambdas.etl.fetch_data.time.sleep")
     def test_fetch_player_stats_season_format_conversion(self, mock_sleep, mock_read_html):
         """Test that season format is correctly converted for B-R URLs."""
         mock_pergame_df = pd.DataFrame({"Player": ["Test Player"], "PTS": [20.0]})
@@ -156,8 +156,8 @@ class TestFetchPlayerStatsBasketballReference:
 class TestFetchESPNSalariesHeaderFiltering:
     """Test header row filtering in ESPN salary scraping."""
 
-    @patch("src.etl.fetch_data.time.sleep")
-    @patch("src.etl.fetch_data.requests.get")
+    @patch("src.lambdas.etl.fetch_data.time.sleep")
+    @patch("src.lambdas.etl.fetch_data.requests.get")
     def test_fetch_espn_salaries_skips_header_rows(self, mock_get, mock_sleep):
         """Test that header rows with 'SALARY' text are skipped."""
         # First page has data, second page is empty to stop pagination
@@ -202,8 +202,8 @@ class TestFetchESPNSalariesHeaderFiltering:
         assert result[1]["player_name"] == "Nikola Jokic"
         assert result[1]["annual_salary"] == 51415938
 
-    @patch("src.etl.fetch_data.time.sleep")
-    @patch("src.etl.fetch_data.requests.get")
+    @patch("src.lambdas.etl.fetch_data.time.sleep")
+    @patch("src.lambdas.etl.fetch_data.requests.get")
     def test_fetch_espn_salaries_skips_empty_salary(self, mock_get, mock_sleep):
         """Test that rows with empty salary text are skipped."""
         mock_response_page1 = Mock()
@@ -244,8 +244,8 @@ class TestFetchESPNSalariesHeaderFiltering:
         assert len(result) == 1
         assert result[0]["player_name"] == "Valid Player"
 
-    @patch("src.etl.fetch_data.time.sleep")
-    @patch("src.etl.fetch_data.requests.get")
+    @patch("src.lambdas.etl.fetch_data.time.sleep")
+    @patch("src.lambdas.etl.fetch_data.requests.get")
     def test_fetch_espn_salaries_handles_invalid_format(self, mock_get, mock_sleep):
         """Test that invalid salary formats are logged and skipped."""
         mock_response_page1 = Mock()
@@ -281,7 +281,7 @@ class TestFetchESPNSalariesHeaderFiltering:
 
         mock_get.side_effect = [mock_response_page1, mock_response_page2]
 
-        with patch("src.etl.fetch_data.logger") as mock_logger:
+        with patch("src.lambdas.etl.fetch_data.logger") as mock_logger:
             result = fetch_data.fetch_espn_salaries("2025-26")
 
             assert len(result) == 1
@@ -296,8 +296,8 @@ class TestFetchESPNSalariesHeaderFiltering:
 class TestESPNSalariesPagination:
     """Test ESPN salary pagination URL construction."""
 
-    @patch("src.etl.fetch_data.time.sleep")
-    @patch("src.etl.fetch_data.requests.get")
+    @patch("src.lambdas.etl.fetch_data.time.sleep")
+    @patch("src.lambdas.etl.fetch_data.requests.get")
     def test_current_season_url_format(self, mock_get, mock_sleep):
         """Test URL construction for current season (2025-26 -> year 2026)."""
         mock_response = Mock()
@@ -311,8 +311,8 @@ class TestESPNSalariesPagination:
         first_call_url = mock_get.call_args_list[0][0][0]
         assert first_call_url == "https://www.espn.com/nba/salaries/_/year/2026"
 
-    @patch("src.etl.fetch_data.time.sleep")
-    @patch("src.etl.fetch_data.requests.get")
+    @patch("src.lambdas.etl.fetch_data.time.sleep")
+    @patch("src.lambdas.etl.fetch_data.requests.get")
     def test_historical_season_url_format(self, mock_get, mock_sleep):
         """Test URL construction for historical season (2023-24 -> year 2024)."""
         mock_response = Mock()
@@ -326,8 +326,8 @@ class TestESPNSalariesPagination:
         first_call_url = mock_get.call_args_list[0][0][0]
         assert first_call_url == "https://www.espn.com/nba/salaries/_/year/2024"
 
-    @patch("src.etl.fetch_data.time.sleep")
-    @patch("src.etl.fetch_data.requests.get")
+    @patch("src.lambdas.etl.fetch_data.time.sleep")
+    @patch("src.lambdas.etl.fetch_data.requests.get")
     def test_pagination_url_format_no_underscore_before_page(self, mock_get, mock_sleep):
         """Test that pagination URLs use /page/N format (no underscore before page)."""
         # Page 1 has data, trigger pagination to page 2
@@ -378,8 +378,8 @@ class TestESPNSalariesPagination:
         # Ensure it's NOT using the old broken format
         assert page2_url != "https://www.espn.com/nba/salaries/_/year/2025/_/page/2"
 
-    @patch("src.etl.fetch_data.time.sleep")
-    @patch("src.etl.fetch_data.requests.get")
+    @patch("src.lambdas.etl.fetch_data.time.sleep")
+    @patch("src.lambdas.etl.fetch_data.requests.get")
     def test_multi_page_scraping(self, mock_get, mock_sleep):
         """Test that multiple pages are fetched with correct URLs."""
 
@@ -432,8 +432,8 @@ class TestESPNSalariesPagination:
         assert urls[2] == "https://www.espn.com/nba/salaries/_/year/2025/page/3"
         assert urls[3] == "https://www.espn.com/nba/salaries/_/year/2025/page/4"
 
-    @patch("src.etl.fetch_data.time.sleep")
-    @patch("src.etl.fetch_data.requests.get")
+    @patch("src.lambdas.etl.fetch_data.time.sleep")
+    @patch("src.lambdas.etl.fetch_data.requests.get")
     def test_stops_pagination_on_empty_page(self, mock_get, mock_sleep):
         """Test that pagination stops when an empty page is encountered."""
         mock_response_page1 = Mock()
@@ -474,9 +474,9 @@ class TestESPNSalariesPagination:
 class TestFetchSalaryCapHistory:
     """Test salary cap history fetching from RealGM."""
 
-    @patch("src.etl.fetch_data.pd.read_html")
-    @patch("src.etl.fetch_data.requests.get")
-    @patch("src.etl.fetch_data.time.sleep")
+    @patch("src.lambdas.etl.fetch_data.pd.read_html")
+    @patch("src.lambdas.etl.fetch_data.requests.get")
+    @patch("src.lambdas.etl.fetch_data.time.sleep")
     def test_fetch_salary_cap_history_success(self, mock_sleep, mock_get, mock_read_html):
         """Test successful fetch of salary cap history from RealGM."""
         # Mock response
@@ -527,8 +527,8 @@ class TestFetchSalaryCapHistory:
         assert result["salary_cap_history"][0]["Season"] == "2025-2026"
         assert result["contract_limits"][0]["Season"] == "2025-2026"
 
-    @patch("src.etl.fetch_data.requests.get")
-    @patch("src.etl.fetch_data.time.sleep")
+    @patch("src.lambdas.etl.fetch_data.requests.get")
+    @patch("src.lambdas.etl.fetch_data.time.sleep")
     def test_fetch_salary_cap_history_retry_on_403(self, mock_sleep, mock_get):
         """Test retry logic when RealGM returns 403 (blocked)."""
         # First attempt returns 403, second succeeds
@@ -541,7 +541,7 @@ class TestFetchSalaryCapHistory:
 
         mock_get.side_effect = [mock_response_403, mock_response_200]
 
-        with patch("src.etl.fetch_data.pd.read_html") as mock_read_html:
+        with patch("src.lambdas.etl.fetch_data.pd.read_html") as mock_read_html:
             mock_df = pd.DataFrame({"Season": ["2025-2026"], "Salary Cap": ["$154,647,000"]})
             mock_read_html.return_value = [mock_df, pd.DataFrame()]
 
@@ -552,9 +552,9 @@ class TestFetchSalaryCapHistory:
             # Should sleep 1s initially, then 2s for retry
             assert mock_sleep.call_count == 2
 
-    @patch("src.etl.fetch_data.load_static_salary_cap_data")
-    @patch("src.etl.fetch_data.requests.get")
-    @patch("src.etl.fetch_data.time.sleep")
+    @patch("src.lambdas.etl.fetch_data.load_static_salary_cap_data")
+    @patch("src.lambdas.etl.fetch_data.requests.get")
+    @patch("src.lambdas.etl.fetch_data.time.sleep")
     def test_fetch_salary_cap_history_all_retries_fail_uses_fallback(
         self, mock_sleep, mock_get, mock_load_static
     ):
@@ -578,10 +578,10 @@ class TestFetchSalaryCapHistory:
         assert mock_get.call_count == 3
         assert mock_load_static.call_count == 1
 
-    @patch("src.etl.fetch_data.load_static_salary_cap_data")
-    @patch("src.etl.fetch_data.pd.read_html")
-    @patch("src.etl.fetch_data.requests.get")
-    @patch("src.etl.fetch_data.time.sleep")
+    @patch("src.lambdas.etl.fetch_data.load_static_salary_cap_data")
+    @patch("src.lambdas.etl.fetch_data.pd.read_html")
+    @patch("src.lambdas.etl.fetch_data.requests.get")
+    @patch("src.lambdas.etl.fetch_data.time.sleep")
     def test_fetch_salary_cap_history_handles_no_tables(
         self, mock_sleep, mock_get, mock_read_html, mock_load_static
     ):
@@ -605,7 +605,7 @@ class TestFetchSalaryCapHistory:
         assert result is not None
         assert result["source"] == "static_fallback"
 
-    @patch("src.etl.fetch_data.s3_client")
+    @patch("src.lambdas.etl.fetch_data.s3_client")
     def test_load_static_salary_cap_data_success(self, mock_s3):
         """Test successfully loading static salary cap data from S3."""
         # Mock S3 response with complete static data structure
@@ -661,7 +661,7 @@ class TestFetchSalaryCapHistory:
         assert "1st Apron" in result["salary_cap_history"][0]
         mock_s3.get_object.assert_called_once()
 
-    @patch("src.etl.fetch_data.s3_client")
+    @patch("src.lambdas.etl.fetch_data.s3_client")
     def test_load_static_salary_cap_data_file_not_found(self, mock_s3):
         """Test handling when static data file is missing from S3."""
         from botocore.exceptions import ClientError
@@ -673,7 +673,7 @@ class TestFetchSalaryCapHistory:
 
         assert result is None
 
-    @patch("src.etl.fetch_data.s3_client")
+    @patch("src.lambdas.etl.fetch_data.s3_client")
     def test_load_static_salary_cap_data_parse_error(self, mock_s3):
         """Test handling when static data JSON is malformed."""
         # Mock S3 returning invalid JSON
@@ -687,9 +687,9 @@ class TestFetchSalaryCapHistory:
 class TestHandlerEnvironmentValidation:
     """Test handler validates required environment variables."""
 
-    @patch("src.etl.fetch_data.ENVIRONMENT", None)
-    @patch("src.etl.fetch_data.S3_BUCKET", None)
-    @patch("src.etl.fetch_data.fetch_player_stats")
+    @patch("src.lambdas.etl.fetch_data.ENVIRONMENT", None)
+    @patch("src.lambdas.etl.fetch_data.S3_BUCKET", None)
+    @patch("src.lambdas.etl.fetch_data.fetch_player_stats")
     def test_handler_fails_without_data_bucket(self, mock_fetch):
         """Test handler returns error when DATA_BUCKET is not set."""
         event = {"fetch_type": "stats_only", "season": "2025-26"}
@@ -700,9 +700,9 @@ class TestHandlerEnvironmentValidation:
         assert "DATA_BUCKET" in result["body"]
         mock_fetch.assert_not_called()
 
-    @patch("src.etl.fetch_data.ENVIRONMENT", None)
-    @patch("src.etl.fetch_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.fetch_data.fetch_player_stats")
+    @patch("src.lambdas.etl.fetch_data.ENVIRONMENT", None)
+    @patch("src.lambdas.etl.fetch_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.fetch_data.fetch_player_stats")
     def test_handler_fails_without_environment(self, mock_fetch):
         """Test handler returns error when ENVIRONMENT is not set but DATA_BUCKET is."""
         event = {"fetch_type": "stats_only", "season": "2025-26"}

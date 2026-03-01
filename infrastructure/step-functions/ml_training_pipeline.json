@@ -1,0 +1,221 @@
+{
+  "Comment": "Monthly ML Model Training Pipeline - Trains new model with historical data",
+  "StartAt": "GenerateExecutionId",
+  "States": {
+    "GenerateExecutionId": {
+      "Type": "Pass",
+      "Parameters": {
+        "season.$": "$.season",
+        "execution_id.$": "$$.Execution.Name"
+      },
+      "Next": "ExtractTrainingData"
+    },
+    "ExtractTrainingData": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${extract_training_data_lambda_arn}",
+        "Payload": {
+          "seasons_before.$": "$.season"
+        }
+      },
+      "ResultPath": "$.extractResult",
+      "ResultSelector": {
+        "s3_path.$": "$.Payload.s3_path",
+        "s3_bucket.$": "$.Payload.s3_bucket",
+        "s3_key.$": "$.Payload.s3_key",
+        "record_count.$": "$.Payload.record_count"
+      },
+      "Next": "FeatureEngineering",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "TrainingFailed"
+        }
+      ]
+    },
+    "FeatureEngineering": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sagemaker:createProcessingJob.sync",
+      "Parameters": {
+        "ProcessingJobName.$": "States.Format('feature-eng-{}', $.execution_id)",
+        "RoleArn": "${sagemaker_role_arn}",
+        "ProcessingInputs": [
+          {
+            "InputName": "code",
+            "S3Input": {
+              "S3Uri": "s3://${data_bucket}/ml/code/",
+              "LocalPath": "/opt/ml/processing/input/code",
+              "S3DataType": "S3Prefix",
+              "S3InputMode": "File"
+            }
+          },
+          {
+            "InputName": "input-data",
+            "S3Input": {
+              "S3Uri.$": "$.extractResult.s3_path",
+              "LocalPath": "/opt/ml/processing/input/data",
+              "S3DataType": "S3Prefix",
+              "S3InputMode": "File"
+            }
+          }
+        ],
+        "ProcessingOutputConfig": {
+          "Outputs": [
+            {
+              "OutputName": "features",
+              "S3Output": {
+                "S3Uri.$": "States.Format('s3://${data_bucket}/ml/features/{}/train/', $.season)",
+                "LocalPath": "/opt/ml/processing/output",
+                "S3UploadMode": "EndOfJob"
+              }
+            }
+          ]
+        },
+        "AppSpecification": {
+          "ImageUri": "${sklearn_image_uri}",
+          "ContainerEntrypoint": [
+            "python3",
+            "/opt/ml/processing/input/code/feature_engineering.py",
+            "--mode",
+            "train",
+            "--output-path",
+            "/opt/ml/processing/output/features.csv"
+          ]
+        },
+        "ProcessingResources": {
+          "ClusterConfig": {
+            "InstanceCount": 1,
+            "InstanceType": "ml.m5.xlarge",
+            "VolumeSizeInGB": 30
+          }
+        },
+        "NetworkConfig": {
+          "VpcConfig": {
+            "SecurityGroupIds": ["${rds_security_group_id}"],
+            "Subnets": ${private_subnet_ids}
+          }
+        },
+        "Environment": {
+          "INPUT_PATH.$": "$.extractResult.s3_path",
+          "DATA_BUCKET": "${data_bucket}"
+        }
+      },
+      "ResultPath": "$.featureEngineeringResult",
+      "ResultSelector": {
+        "ProcessingJobName.$": "$.ProcessingJobName",
+        "ProcessingJobArn.$": "$.ProcessingJobArn"
+      },
+      "Next": "ModelTraining",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "TrainingFailed"
+        }
+      ]
+    },
+    "ModelTraining": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sagemaker:createTrainingJob.sync",
+      "Parameters": {
+        "TrainingJobName.$": "States.Format('train-{}', $.execution_id)",
+        "RoleArn": "${sagemaker_role_arn}",
+        "AlgorithmSpecification": {
+          "TrainingImage": "${sklearn_image_uri}",
+          "TrainingInputMode": "File",
+          "EnableSageMakerMetricsTimeSeries": true
+        },
+        "InputDataConfig": [
+          {
+            "ChannelName": "training",
+            "DataSource": {
+              "S3DataSource": {
+                "S3DataType": "S3Prefix",
+                "S3Uri.$": "States.Format('s3://${data_bucket}/ml/features/{}/train/features.csv', $.season)",
+                "S3DataDistributionType": "FullyReplicated"
+              }
+            },
+            "ContentType": "text/csv"
+          }
+        ],
+        "OutputDataConfig": {
+          "S3OutputPath.$": "States.Format('s3://${data_bucket}/ml/models/{}/', $.season)"
+        },
+        "ResourceConfig": {
+          "InstanceType": "ml.m5.xlarge",
+          "InstanceCount": 1,
+          "VolumeSizeInGB": 30
+        },
+        "StoppingCondition": {
+          "MaxRuntimeInSeconds": 3600
+        },
+        "HyperParameters": {
+          "sagemaker_program": "train.py",
+          "sagemaker_submit_directory": "s3://${data_bucket}/ml/code/sourcedir.tar.gz",
+          "n_estimators": "200",
+          "max_depth": "20",
+          "min_samples_split": "5",
+          "min_samples_leaf": "2",
+          "random_state": "42"
+        }
+      },
+      "ResultPath": "$.modelTrainingResult",
+      "ResultSelector": {
+        "TrainingJobName.$": "$.TrainingJobName",
+        "TrainingJobArn.$": "$.TrainingJobArn",
+        "ModelArtifacts.$": "$.ModelArtifacts"
+      },
+      "Next": "CopyModelToStandardPath",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "TrainingFailed"
+        }
+      ]
+    },
+    "CopyModelToStandardPath": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${copy_trained_model_lambda_arn}",
+        "Payload": {
+          "season.$": "$.season",
+          "training_job_name.$": "$.modelTrainingResult.TrainingJobName",
+          "model_artifacts.$": "$.modelTrainingResult.ModelArtifacts"
+        }
+      },
+      "ResultPath": "$.copyModelResult",
+      "ResultSelector": {
+        "source.$": "$.Payload.source",
+        "destination.$": "$.Payload.destination"
+      },
+      "Next": "TrainingSuccess",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "TrainingFailed"
+        }
+      ]
+    },
+    "TrainingSuccess": {
+      "Type": "Pass",
+      "Result": {
+        "status": "SUCCESS",
+        "message": "Model training completed successfully"
+      },
+      "End": true
+    },
+    "TrainingFailed": {
+      "Type": "Pass",
+      "Result": {
+        "status": "FAILED",
+        "message": "Model training pipeline failed"
+      },
+      "End": true
+    }
+  }
+}

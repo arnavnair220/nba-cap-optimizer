@@ -16,7 +16,7 @@ from unittest.mock import MagicMock, patch
 
 import pandas as pd
 
-from src.etl import fetch_data, validate_data
+from src.lambdas.etl import fetch_data, validate_data
 from tests.integration.conftest import (
     create_basketball_reference_advanced_stats,
     create_basketball_reference_player_stats,
@@ -27,16 +27,16 @@ from tests.integration.conftest import (
 class TestFetchValidateEventContract:
     """Test the event contract between fetch and validate lambdas."""
 
-    @patch("src.etl.fetch_data.requests.get")
-    @patch("src.etl.fetch_data.pd.read_html")
-    @patch("src.etl.fetch_data.time.sleep")
-    @patch("src.etl.fetch_data.save_to_s3")
-    @patch("src.etl.validate_data.load_from_s3")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.fetch_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.fetch_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.fetch_data.requests.get")
+    @patch("src.lambdas.etl.fetch_data.pd.read_html")
+    @patch("src.lambdas.etl.fetch_data.time.sleep")
+    @patch("src.lambdas.etl.fetch_data.save_to_s3")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.fetch_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.fetch_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
     def test_fetch_output_event_is_valid_validate_input(
         self,
         mock_save_report,
@@ -104,16 +104,16 @@ class TestFetchValidateEventContract:
         assert validate_result["statusCode"] == 200
         assert "validation_passed" in validate_result
 
-    @patch("src.etl.fetch_data.requests.get")
-    @patch("src.etl.fetch_data.pd.read_html")
-    @patch("src.etl.fetch_data.time.sleep")
-    @patch("src.etl.fetch_data.save_to_s3")
-    @patch("src.etl.validate_data.load_from_s3")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.fetch_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.fetch_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.fetch_data.requests.get")
+    @patch("src.lambdas.etl.fetch_data.pd.read_html")
+    @patch("src.lambdas.etl.fetch_data.time.sleep")
+    @patch("src.lambdas.etl.fetch_data.save_to_s3")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.fetch_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.fetch_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
     def test_partition_path_used_consistently(
         self,
         mock_save_report,
@@ -190,16 +190,16 @@ class TestFetchValidateEventContract:
 class TestEndToEndDataFlow:
     """Test complete data flow from fetch through validate."""
 
-    @patch("src.etl.fetch_data.requests.get")
-    @patch("src.etl.fetch_data.pd.read_html")
-    @patch("src.etl.fetch_data.time.sleep")
-    @patch("src.etl.fetch_data.save_to_s3")
-    @patch("src.etl.validate_data.load_from_s3")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.fetch_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.fetch_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.fetch_data.requests.get")
+    @patch("src.lambdas.etl.fetch_data.pd.read_html")
+    @patch("src.lambdas.etl.fetch_data.time.sleep")
+    @patch("src.lambdas.etl.fetch_data.save_to_s3")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.fetch_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.fetch_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
     def test_stats_only_pipeline_end_to_end(
         self,
         mock_save_report,
@@ -283,18 +283,18 @@ class TestEndToEndDataFlow:
         validate_body = json.loads(validate_result["body"])
         assert validate_body["valid"] is True
 
-    @patch("src.etl.fetch_data.fetch_espn_salaries")
-    @patch("src.etl.fetch_data.teams.get_teams")
-    @patch("src.etl.fetch_data.requests.get")
-    @patch("src.etl.fetch_data.pd.read_html")
-    @patch("src.etl.fetch_data.time.sleep")
-    @patch("src.etl.fetch_data.save_to_s3")
-    @patch("src.etl.validate_data.load_from_s3")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.fetch_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.fetch_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.fetch_data.fetch_espn_salaries")
+    @patch("src.lambdas.etl.fetch_data.teams.get_teams")
+    @patch("src.lambdas.etl.fetch_data.requests.get")
+    @patch("src.lambdas.etl.fetch_data.pd.read_html")
+    @patch("src.lambdas.etl.fetch_data.time.sleep")
+    @patch("src.lambdas.etl.fetch_data.save_to_s3")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.fetch_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.fetch_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
     def test_monthly_pipeline_all_data_types(
         self,
         mock_save_report,
@@ -395,16 +395,16 @@ class TestEndToEndDataFlow:
 class TestCrossLambdaErrorDetection:
     """Test that validate catches data quality issues from fetch."""
 
-    @patch("src.etl.fetch_data.requests.get")
-    @patch("src.etl.fetch_data.pd.read_html")
-    @patch("src.etl.fetch_data.time.sleep")
-    @patch("src.etl.fetch_data.save_to_s3")
-    @patch("src.etl.validate_data.load_from_s3")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.fetch_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.fetch_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.fetch_data.requests.get")
+    @patch("src.lambdas.etl.fetch_data.pd.read_html")
+    @patch("src.lambdas.etl.fetch_data.time.sleep")
+    @patch("src.lambdas.etl.fetch_data.save_to_s3")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.fetch_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.fetch_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
     def test_validate_rejects_incomplete_fetch_data(
         self,
         mock_save_report,
@@ -444,16 +444,16 @@ class TestCrossLambdaErrorDetection:
         assert validate_result["statusCode"] == 422
         assert validate_result["validation_passed"] is False
 
-    @patch("src.etl.fetch_data.requests.get")
-    @patch("src.etl.fetch_data.pd.read_html")
-    @patch("src.etl.fetch_data.time.sleep")
-    @patch("src.etl.fetch_data.save_to_s3")
-    @patch("src.etl.validate_data.load_from_s3")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.fetch_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.fetch_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.fetch_data.requests.get")
+    @patch("src.lambdas.etl.fetch_data.pd.read_html")
+    @patch("src.lambdas.etl.fetch_data.time.sleep")
+    @patch("src.lambdas.etl.fetch_data.save_to_s3")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.fetch_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.fetch_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
     def test_validate_handles_fetch_save_failure(
         self,
         mock_save_report,
@@ -493,20 +493,20 @@ class TestCrossLambdaErrorDetection:
 class TestCompletePipelineFlow:
     """Test complete 3-stage pipeline: fetch → validate → transform."""
 
-    @patch("src.etl.fetch_data.requests.get")
-    @patch("src.etl.fetch_data.pd.read_html")
-    @patch("src.etl.fetch_data.time.sleep")
-    @patch("src.etl.fetch_data.save_to_s3")
-    @patch("src.etl.validate_data.load_from_s3")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.transform_data.load_from_s3")
-    @patch("src.etl.transform_data.save_to_s3")
-    @patch("src.etl.fetch_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.fetch_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.transform_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.transform_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.fetch_data.requests.get")
+    @patch("src.lambdas.etl.fetch_data.pd.read_html")
+    @patch("src.lambdas.etl.fetch_data.time.sleep")
+    @patch("src.lambdas.etl.fetch_data.save_to_s3")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.transform_data.load_from_s3")
+    @patch("src.lambdas.etl.transform_data.save_to_s3")
+    @patch("src.lambdas.etl.fetch_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.fetch_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.transform_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.transform_data.ENVIRONMENT", "test")
     def test_stats_only_complete_pipeline(
         self,
         mock_transform_save,
@@ -582,7 +582,7 @@ class TestCompletePipelineFlow:
         mock_transform_save.side_effect = save_impl
 
         # Stage 1: Fetch data
-        from src.etl import fetch_data
+        from src.lambdas.etl import fetch_data
 
         fetch_result = fetch_data.handler(
             {"fetch_type": "stats_only", "season": "2025-26"}, MagicMock()
@@ -602,7 +602,7 @@ class TestCompletePipelineFlow:
         assert validate_result["validation_passed"] is True
 
         # Stage 3: Transform data
-        from src.etl import transform_data
+        from src.lambdas.etl import transform_data
 
         transform_result = transform_data.handler(
             {
@@ -632,22 +632,22 @@ class TestCompletePipelineFlow:
         assert lebron["points"] == 25.0
         assert lebron["per"] == 24.5
 
-    @patch("src.etl.fetch_data.fetch_espn_salaries")
-    @patch("src.etl.fetch_data.teams.get_teams")
-    @patch("src.etl.fetch_data.requests.get")
-    @patch("src.etl.fetch_data.pd.read_html")
-    @patch("src.etl.fetch_data.time.sleep")
-    @patch("src.etl.fetch_data.save_to_s3")
-    @patch("src.etl.validate_data.load_from_s3")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.transform_data.load_from_s3")
-    @patch("src.etl.transform_data.save_to_s3")
-    @patch("src.etl.fetch_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.fetch_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.transform_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.transform_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.fetch_data.fetch_espn_salaries")
+    @patch("src.lambdas.etl.fetch_data.teams.get_teams")
+    @patch("src.lambdas.etl.fetch_data.requests.get")
+    @patch("src.lambdas.etl.fetch_data.pd.read_html")
+    @patch("src.lambdas.etl.fetch_data.time.sleep")
+    @patch("src.lambdas.etl.fetch_data.save_to_s3")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.transform_data.load_from_s3")
+    @patch("src.lambdas.etl.transform_data.save_to_s3")
+    @patch("src.lambdas.etl.fetch_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.fetch_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.transform_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.transform_data.ENVIRONMENT", "test")
     def test_monthly_complete_pipeline(
         self,
         mock_transform_save,
@@ -757,7 +757,7 @@ class TestCompletePipelineFlow:
         mock_transform_save.side_effect = save_impl
 
         # Stage 1: Fetch all data
-        from src.etl import fetch_data
+        from src.lambdas.etl import fetch_data
 
         fetch_result = fetch_data.handler(
             {"fetch_type": "monthly", "season": "2025-26"}, MagicMock()
@@ -779,7 +779,7 @@ class TestCompletePipelineFlow:
         assert validate_result["validation_passed"] is True
 
         # Stage 3: Transform all data
-        from src.etl import transform_data
+        from src.lambdas.etl import transform_data
 
         transform_result = transform_data.handler(
             {
@@ -831,20 +831,20 @@ class TestCompletePipelineFlow:
         assert "roster_count" in lakers
         assert "roster_with_salary" in lakers
 
-    @patch("src.etl.fetch_data.requests.get")
-    @patch("src.etl.fetch_data.pd.read_html")
-    @patch("src.etl.fetch_data.time.sleep")
-    @patch("src.etl.fetch_data.save_to_s3")
-    @patch("src.etl.validate_data.load_from_s3")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.transform_data.load_from_s3")
-    @patch("src.etl.transform_data.save_to_s3")
-    @patch("src.etl.fetch_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.fetch_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.transform_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.transform_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.fetch_data.requests.get")
+    @patch("src.lambdas.etl.fetch_data.pd.read_html")
+    @patch("src.lambdas.etl.fetch_data.time.sleep")
+    @patch("src.lambdas.etl.fetch_data.save_to_s3")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.transform_data.load_from_s3")
+    @patch("src.lambdas.etl.transform_data.save_to_s3")
+    @patch("src.lambdas.etl.fetch_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.fetch_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.transform_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.transform_data.ENVIRONMENT", "test")
     def test_bad_fetch_data_rejected_by_validate_blocks_transform(
         self,
         mock_transform_save,
@@ -887,7 +887,7 @@ class TestCompletePipelineFlow:
         mock_transform_save.side_effect = save_impl
 
         # Stage 1: Fetch incomplete data
-        from src.etl import fetch_data
+        from src.lambdas.etl import fetch_data
 
         fetch_result = fetch_data.handler(
             {"fetch_type": "stats_only", "season": "2025-26"}, MagicMock()
@@ -905,7 +905,7 @@ class TestCompletePipelineFlow:
         assert validate_result["validation_passed"] is False
 
         # Stage 3: Transform should skip processing
-        from src.etl import transform_data
+        from src.lambdas.etl import transform_data
 
         transform_result = transform_data.handler(
             {
@@ -919,20 +919,20 @@ class TestCompletePipelineFlow:
         body = json.loads(transform_result["body"])
         assert "validation failed" in body["error"].lower()
 
-    @patch("src.etl.fetch_data.requests.get")
-    @patch("src.etl.fetch_data.pd.read_html")
-    @patch("src.etl.fetch_data.time.sleep")
-    @patch("src.etl.fetch_data.save_to_s3")
-    @patch("src.etl.validate_data.load_from_s3")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.transform_data.load_from_s3")
-    @patch("src.etl.transform_data.save_to_s3")
-    @patch("src.etl.fetch_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.fetch_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.transform_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.transform_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.fetch_data.requests.get")
+    @patch("src.lambdas.etl.fetch_data.pd.read_html")
+    @patch("src.lambdas.etl.fetch_data.time.sleep")
+    @patch("src.lambdas.etl.fetch_data.save_to_s3")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.transform_data.load_from_s3")
+    @patch("src.lambdas.etl.transform_data.save_to_s3")
+    @patch("src.lambdas.etl.fetch_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.fetch_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.transform_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.transform_data.ENVIRONMENT", "test")
     def test_data_statistics_consistent_across_all_stages(
         self,
         mock_transform_save,
@@ -997,7 +997,7 @@ class TestCompletePipelineFlow:
         mock_transform_save.side_effect = save_impl
 
         # Stage 1: Fetch
-        from src.etl import fetch_data
+        from src.lambdas.etl import fetch_data
 
         fetch_result = fetch_data.handler(
             {"fetch_type": "stats_only", "season": "2025-26"}, MagicMock()
@@ -1017,7 +1017,7 @@ class TestCompletePipelineFlow:
         assert validate_result["validation_passed"] is True
 
         # Stage 3: Transform
-        from src.etl import transform_data
+        from src.lambdas.etl import transform_data
 
         transform_result = transform_data.handler(
             {

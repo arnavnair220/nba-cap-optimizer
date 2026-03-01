@@ -5,7 +5,7 @@ Tests for transform_data Lambda function (Basketball Reference version).
 import json
 from unittest.mock import MagicMock, patch
 
-from src.etl import transform_data
+from src.lambdas.etl import transform_data
 
 
 class TestNormalizeToAscii:
@@ -493,8 +493,8 @@ class TestEnrichTeamData:
 class TestHandlerValidationCheck:
     """Test handler validation gate logic."""
 
-    @patch("src.etl.transform_data.ENVIRONMENT", "test")
-    @patch("src.etl.transform_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.transform_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.transform_data.S3_BUCKET", "test-bucket")
     def test_handler_skips_transformation_when_validation_fails(self):
         """Test handler returns 400 when validation_passed is false."""
         event = {
@@ -510,11 +510,11 @@ class TestHandlerValidationCheck:
 class TestHandlerNaNValidation:
     """Test handler NaN validation logic."""
 
-    @patch("src.etl.transform_data.ENVIRONMENT", "test")
-    @patch("src.etl.transform_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.transform_data.save_to_s3")
-    @patch("src.etl.transform_data.enrich_player_stats")
-    @patch("src.etl.transform_data.load_from_s3")
+    @patch("src.lambdas.etl.transform_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.transform_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.transform_data.save_to_s3")
+    @patch("src.lambdas.etl.transform_data.enrich_player_stats")
+    @patch("src.lambdas.etl.transform_data.load_from_s3")
     def test_handler_returns_400_when_nan_in_statistics(
         self, mock_load, mock_enrich_player_stats, mock_save
     ):
@@ -559,10 +559,10 @@ class TestHandlerNaNValidation:
 class TestHandlerTransformation:
     """Test handler transformation workflow."""
 
-    @patch("src.etl.transform_data.ENVIRONMENT", "test")
-    @patch("src.etl.transform_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.transform_data.save_to_s3")
-    @patch("src.etl.transform_data.load_from_s3")
+    @patch("src.lambdas.etl.transform_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.transform_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.transform_data.save_to_s3")
+    @patch("src.lambdas.etl.transform_data.load_from_s3")
     def test_handler_successful_transformation(self, mock_load, mock_save):
         """Test handler successfully transforms Basketball Reference data."""
 
@@ -892,3 +892,141 @@ class TestTransformContractLimits:
         result = transform_data.transform_contract_limits(cap_data, season="2022-23")
 
         assert result == []
+
+
+class TestBadRowFiltering:
+    """Test bad row filtering in transform_data."""
+
+    def test_filter_bad_rows_removes_rows_with_null_critical_columns(self):
+        """Test that rows with null critical columns are filtered out."""
+        stats = [
+            {"Player": "Good Player", "Pos": "PG", "Age": 25, "Team": "LAL", "PTS": 20.0},
+            {"Player": None, "Pos": "SG", "Age": 28, "Team": "GSW", "PTS": 15.0},
+            {"Player": "Another Good", "Pos": "SF", "Age": 30, "Team": "BOS", "PTS": 18.0},
+        ]
+
+        result = transform_data._filter_bad_rows(stats, "per_game")
+
+        assert len(result) == 2
+        assert result[0]["Player"] == "Good Player"
+        assert result[1]["Player"] == "Another Good"
+
+    def test_filter_bad_rows_removes_rows_with_null_stats(self):
+        """Test that rows with null stats (non-critical columns) are filtered out."""
+        stats = [
+            {
+                "Player": "Good Player",
+                "Pos": "PG",
+                "Age": 25,
+                "Team": "LAL",
+                "PTS": 20.0,
+                "AST": 5.0,
+            },
+            {
+                "Player": "Bad Player",
+                "Pos": "SG",
+                "Age": 28,
+                "Team": "GSW",
+                "PTS": None,
+                "AST": 3.0,
+            },
+        ]
+
+        result = transform_data._filter_bad_rows(stats, "per_game")
+
+        assert len(result) == 1
+        assert result[0]["Player"] == "Good Player"
+
+    def test_filter_bad_rows_allows_null_percentage_when_attempts_zero(self):
+        """Test that null percentages are allowed when attempts = 0."""
+        stats = [
+            {
+                "Player": "Player 1",
+                "Pos": "PG",
+                "Age": 25,
+                "Team": "LAL",
+                "FG%": None,
+                "FGA": 0,
+            },
+            {
+                "Player": "Player 2",
+                "Pos": "SG",
+                "Age": 28,
+                "Team": "GSW",
+                "3P%": None,
+                "3PA": 0,
+            },
+        ]
+
+        result = transform_data._filter_bad_rows(stats, "per_game")
+
+        assert len(result) == 2
+
+    def test_filter_bad_rows_skips_warn_only_columns(self):
+        """Test that warn_only_columns don't cause rows to be filtered."""
+        stats = [
+            {
+                "Player": "Player 1",
+                "Pos": "PG",
+                "Age": 25,
+                "Team": "LAL",
+                "TOV%": None,
+                "TS%": None,
+            }
+        ]
+
+        result = transform_data._filter_bad_rows(stats, "advanced")
+
+        assert len(result) == 1
+
+    def test_filter_bad_rows_filters_league_average(self):
+        """Test that League Average rows are filtered out."""
+        stats = [
+            {"Player": "LeBron James", "Pos": "PF", "Age": 39, "Team": "LAL", "PTS": 25.0},
+            {"Player": "League Average", "Pos": None, "Age": None, "Team": None, "PTS": 18.5},
+        ]
+
+        result = transform_data._filter_bad_rows(stats, "per_game")
+
+        assert len(result) == 1
+        assert result[0]["Player"] == "LeBron James"
+
+    def test_enrich_player_stats_applies_bad_row_filtering(self):
+        """Test that enrich_player_stats filters out bad rows."""
+        stats_data = {
+            "season": "2025-26",
+            "source": "basketball_reference",
+            "per_game_stats": [
+                {
+                    "Player": "Good Player",
+                    "Team": "LAL",
+                    "Pos": "PG",
+                    "Age": 25,
+                    "G": 50,
+                    "PTS": 25.8,
+                },
+                {
+                    "Player": None,
+                    "Team": "GSW",
+                    "Pos": "SG",
+                    "Age": 28,
+                    "G": 45,
+                    "PTS": 20.0,
+                },
+            ],
+            "advanced_stats": [
+                {
+                    "Player": "Good Player",
+                    "Team": "LAL",
+                    "Pos": "PG",
+                    "Age": 25,
+                    "G": 50,
+                    "PER": 28.5,
+                }
+            ],
+        }
+
+        result = transform_data.enrich_player_stats(stats_data)
+
+        assert len(result) == 1
+        assert result[0]["player_name"] == "Good Player"
