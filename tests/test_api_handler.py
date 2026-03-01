@@ -138,7 +138,7 @@ class TestDatabaseQueries:
         assert "WHERE p.season = %s" in sql_query
         assert "AND p.value_category = 'Bargain'" in sql_query
         assert "ORDER BY p.inefficiency_score ASC" in sql_query
-        assert params == ["2025-26", 25]
+        assert params == ["2025-26", "2025-26", "2025-26", "2025-26", "2025-26", 25]
 
     @patch.dict("os.environ", {"CURRENT_SEASON": "2025-26"})
     def test_get_overvalued_predictions(self):
@@ -157,7 +157,7 @@ class TestDatabaseQueries:
 
         assert "AND p.value_category = 'Overpaid'" in sql_query
         assert "ORDER BY p.inefficiency_score DESC" in sql_query
-        assert params == ["2025-26", 10]
+        assert params == ["2025-26", "2025-26", "2025-26", "2025-26", "2025-26", 10]
 
     @patch.dict("os.environ", {"CURRENT_SEASON": "2025-26"})
     def test_get_player_prediction(self):
@@ -181,7 +181,7 @@ class TestDatabaseQueries:
 
         call_args = mock_cursor.execute.call_args
         params = call_args[0][1]
-        assert params == ["LeBron James", "2025-26"]
+        assert params == ["2025-26", "2025-26", "2025-26", "2025-26", "LeBron James", "2025-26"]
 
     @patch.dict("os.environ", {"CURRENT_SEASON": "2025-26"})
     def test_get_player_prediction_not_found(self):
@@ -545,7 +545,7 @@ class TestQueryParameterParsing:
 
     @patch.dict("os.environ", {"CURRENT_SEASON": "2025-26"})
     def test_limit_default_value(self):
-        """Test limit defaults to 100."""
+        """Test limit defaults to 1000."""
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
         mock_conn.cursor.return_value = mock_cursor
@@ -555,7 +555,7 @@ class TestQueryParameterParsing:
 
         call_args = mock_cursor.execute.call_args
         params = call_args[0][1]
-        assert 100 in params
+        assert 1000 in params
 
     @patch.dict("os.environ", {"CURRENT_SEASON": "2025-26"})
     def test_limit_custom_value(self):
