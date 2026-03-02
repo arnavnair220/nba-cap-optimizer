@@ -195,11 +195,14 @@ export default function Home() {
   });
 
   return (
-    <main className="min-h-screen bg-[#D4C5B0]">
+    <main className="min-h-screen">
       <div className="max-w-7xl mx-auto px-6 pt-8 pb-6">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="headline-retro text-4xl md:text-5xl lg:text-6xl text-retro-blue leading-none" style={{WebkitTextStroke: '1.5px #FEF5E7'}}>
+            <h1 className="headline-retro text-4xl md:text-5xl lg:text-6xl text-retro-blue leading-none" style={{
+              WebkitTextStroke: '1.5px #FEF5E7',
+              textShadow: '-3px -3px 0 #000, 3px -3px 0 #000, -3px 3px 0 #000, 3px 3px 0 #000, -3px 0 0 #000, 3px 0 0 #000, 0 -3px 0 #000, 0 3px 0 #000'
+            }}>
               NBA CAP OPTIMIZER
             </h1>
           </div>
