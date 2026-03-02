@@ -110,23 +110,25 @@ def get_all_predictions(conn, query_params: Dict) -> List[Dict]:
 
     query = """
         WITH latest_run AS (
-            SELECT run_id, prediction_date
+            SELECT run_id, MAX(prediction_date) as prediction_date
             FROM predictions
             WHERE season = %s
-            ORDER BY prediction_date DESC
+            GROUP BY run_id
+            ORDER BY MAX(prediction_date) DESC
             LIMIT 1
         ),
         previous_run AS (
             SELECT run_id
             FROM predictions
             WHERE season = %s
-            ORDER BY prediction_date DESC
+            GROUP BY run_id
+            ORDER BY MAX(prediction_date) DESC
             LIMIT 1 OFFSET 1
         ),
         current_ranks AS (
             SELECT
                 player_name,
-                ROW_NUMBER() OVER (ORDER BY inefficiency_score ASC) as current_rank
+                ROW_NUMBER() OVER (ORDER BY inefficiency_score ASC, player_name ASC) as current_rank
             FROM predictions
             WHERE season = %s
               AND run_id = (SELECT run_id FROM latest_run)
@@ -222,20 +224,22 @@ def get_undervalued_predictions(conn, query_params: Dict) -> List[Dict]:
             SELECT run_id
             FROM predictions
             WHERE season = %s
-            ORDER BY prediction_date DESC
+            GROUP BY run_id
+            ORDER BY MAX(prediction_date) DESC
             LIMIT 1
         ),
         previous_run AS (
             SELECT run_id
             FROM predictions
             WHERE season = %s
-            ORDER BY prediction_date DESC
+            GROUP BY run_id
+            ORDER BY MAX(prediction_date) DESC
             LIMIT 1 OFFSET 1
         ),
         current_ranks AS (
             SELECT
                 player_name,
-                ROW_NUMBER() OVER (ORDER BY inefficiency_score ASC) as current_rank
+                ROW_NUMBER() OVER (ORDER BY inefficiency_score ASC, player_name ASC) as current_rank
             FROM predictions
             WHERE season = %s
               AND run_id = (SELECT run_id FROM latest_run)
@@ -310,20 +314,22 @@ def get_overvalued_predictions(conn, query_params: Dict) -> List[Dict]:
             SELECT run_id
             FROM predictions
             WHERE season = %s
-            ORDER BY prediction_date DESC
+            GROUP BY run_id
+            ORDER BY MAX(prediction_date) DESC
             LIMIT 1
         ),
         previous_run AS (
             SELECT run_id
             FROM predictions
             WHERE season = %s
-            ORDER BY prediction_date DESC
+            GROUP BY run_id
+            ORDER BY MAX(prediction_date) DESC
             LIMIT 1 OFFSET 1
         ),
         current_ranks AS (
             SELECT
                 player_name,
-                ROW_NUMBER() OVER (ORDER BY inefficiency_score ASC) as current_rank
+                ROW_NUMBER() OVER (ORDER BY inefficiency_score ASC, player_name ASC) as current_rank
             FROM predictions
             WHERE season = %s
               AND run_id = (SELECT run_id FROM latest_run)
@@ -393,20 +399,22 @@ def get_player_prediction(conn, player_name: str) -> Optional[Dict]:
             SELECT run_id
             FROM predictions
             WHERE season = %s
-            ORDER BY prediction_date DESC
+            GROUP BY run_id
+            ORDER BY MAX(prediction_date) DESC
             LIMIT 1
         ),
         previous_run AS (
             SELECT run_id
             FROM predictions
             WHERE season = %s
-            ORDER BY prediction_date DESC
+            GROUP BY run_id
+            ORDER BY MAX(prediction_date) DESC
             LIMIT 1 OFFSET 1
         ),
         current_ranks AS (
             SELECT
                 player_name,
-                ROW_NUMBER() OVER (ORDER BY inefficiency_score ASC) as current_rank
+                ROW_NUMBER() OVER (ORDER BY inefficiency_score ASC, player_name ASC) as current_rank
             FROM predictions
             WHERE season = %s
               AND run_id = (SELECT run_id FROM latest_run)
@@ -643,20 +651,22 @@ def get_team_detail(conn, team_abbreviation: str) -> Optional[Dict]:
             SELECT run_id
             FROM predictions
             WHERE season = %s
-            ORDER BY prediction_date DESC
+            GROUP BY run_id
+            ORDER BY MAX(prediction_date) DESC
             LIMIT 1
         ),
         previous_run AS (
             SELECT run_id
             FROM predictions
             WHERE season = %s
-            ORDER BY prediction_date DESC
+            GROUP BY run_id
+            ORDER BY MAX(prediction_date) DESC
             LIMIT 1 OFFSET 1
         ),
         current_ranks AS (
             SELECT
                 player_name,
-                ROW_NUMBER() OVER (ORDER BY inefficiency_score ASC) as current_rank
+                ROW_NUMBER() OVER (ORDER BY inefficiency_score ASC, player_name ASC) as current_rank
             FROM predictions
             WHERE season = %s
               AND run_id = (SELECT run_id FROM latest_run)
