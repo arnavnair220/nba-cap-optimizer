@@ -320,6 +320,7 @@ export default function Home() {
                       <div className="space-y-3">
                         {players
                           .filter((p) => p.value_category === 'Bargain')
+                          .sort((a, b) => a.inefficiency_score - b.inefficiency_score)
                           .slice(0, 5)
                           .map((player, idx) => (
                             <div
@@ -354,6 +355,7 @@ export default function Home() {
                       <div className="space-y-3">
                         {players
                           .filter((p) => p.value_category === 'Overpaid')
+                          .sort((a, b) => b.inefficiency_score - a.inefficiency_score)
                           .slice(0, 5)
                           .map((player, idx) => (
                             <div
