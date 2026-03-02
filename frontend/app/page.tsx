@@ -15,6 +15,7 @@ import TeamRankings from '@/components/TeamRankings';
 import TeamFilters from '@/components/TeamFilters';
 import TeamDetailView from '@/components/TeamDetailView';
 import PlayerDetailView from '@/components/PlayerDetailView';
+import DataFreshnessInfo from '@/components/DataFreshnessInfo';
 
 export default function Home() {
   const [players, setPlayers] = useState<PlayerPrediction[]>([]);
@@ -219,6 +220,7 @@ export default function Home() {
             <div className="text-right bg-retro-orange text-white px-6 py-3 retro-border shadow-retro">
               <div className="text-3xl font-bold">2025-26</div>
               <div className="text-xs uppercase tracking-widest font-black">Season</div>
+              <DataFreshnessInfo />
             </div>
           </div>
         </div>

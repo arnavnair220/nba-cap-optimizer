@@ -1,4 +1,5 @@
 import {
+  Metadata,
   PlayerPrediction,
   PredictionsQueryParams,
   PredictionsResponse,
@@ -77,6 +78,12 @@ export const api = {
 
     getTeam: async (teamAbbr: string): Promise<TeamDetail> => {
       return fetchApi<TeamDetail>(`/teams/${teamAbbr}`);
+    },
+  },
+
+  metadata: {
+    get: async (): Promise<Metadata> => {
+      return fetchApi<Metadata>('/metadata');
     },
   },
 };

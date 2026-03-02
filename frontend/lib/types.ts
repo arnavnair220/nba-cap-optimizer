@@ -75,3 +75,12 @@ export interface PredictionsQueryParams {
 export interface TeamsQueryParams {
   sort_by?: 'avg_inefficiency' | 'net_efficiency' | 'bargain_count' | 'overpaid_count';
 }
+
+export interface Metadata {
+  latest_prediction_date: string | null;
+  model_version: string | null;
+  latest_etl_run_id: string | null;
+  latest_run_id: string | null;
+  model_trained_at: string | null;
+  current_season: string;
+}

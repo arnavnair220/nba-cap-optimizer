@@ -39,6 +39,12 @@ export default function TeamRankings({ teams, onTeamClick }: TeamRankingsProps) 
     return 'bg-yellow-100';
   };
 
+  const getEfficiencyTextColor = (netEfficiency: number) => {
+    if (netEfficiency < -10000000) return 'text-green-700';
+    if (netEfficiency > 10000000) return 'text-red-700';
+    return 'text-yellow-500';
+  };
+
   const handleColumnClick = (column: SortColumn) => {
     if (sortColumn === column) {
       if (sortDirection === 'asc') {
@@ -210,7 +216,7 @@ export default function TeamRankings({ teams, onTeamClick }: TeamRankingsProps) 
                   </div>
                 </td>
                 <td className="px-6 py-4 text-right">
-                  <div className={`font-black text-sm ${getEfficiencyColor(team.net_efficiency / team.total_payroll)}`}>
+                  <div className={`font-black text-sm ${getEfficiencyTextColor(team.net_efficiency)}`}>
                     {team.net_efficiency > 0 ? '+' : ''}{formatCurrency(team.net_efficiency)}
                   </div>
                 </td>

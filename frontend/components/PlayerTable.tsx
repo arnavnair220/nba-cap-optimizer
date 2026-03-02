@@ -189,12 +189,12 @@ export default function PlayerTable({ players, showRank = true, showTeam = true,
                         <div className="text-gray-400 font-bold text-sm">—</div>
                       ) : player.rank_change > 0 ? (
                         <div className="text-green-600 font-black text-sm flex items-center justify-center gap-0.5">
-                          <span>↑</span>
+                          <span>▲</span>
                           <span>{player.rank_change}</span>
                         </div>
                       ) : (
                         <div className="text-red-600 font-black text-sm flex items-center justify-center gap-0.5">
-                          <span>↓</span>
+                          <span>▼</span>
                           <span>{Math.abs(player.rank_change)}</span>
                         </div>
                       )}
