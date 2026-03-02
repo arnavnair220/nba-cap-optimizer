@@ -105,7 +105,7 @@ export default function PlayerDetailView({ player, onBack }: PlayerDetailViewPro
 
           <div className="bg-white dark:bg-gray-900 retro-border p-6">
             <div className="text-xs font-black uppercase tracking-widest text-gray-600 dark:text-gray-400 mb-2">
-              Inefficiency Score
+              Overpay %
             </div>
             <div className={`text-2xl font-black ${getSavingsColor()}`}>
               {player.inefficiency_score > 0 ? '+' : ''}

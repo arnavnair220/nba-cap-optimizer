@@ -2,6 +2,7 @@
 
 import { TeamDetail } from '@/lib/types';
 import PlayerTable from './PlayerTable';
+import { getTeamColors } from '@/lib/teamColors';
 
 interface TeamDetailViewProps {
   team: TeamDetail;
@@ -10,6 +11,7 @@ interface TeamDetailViewProps {
 }
 
 export default function TeamDetailView({ team, onBack, onPlayerClick }: TeamDetailViewProps) {
+  const teamColors = getTeamColors(team.team_abbreviation);
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -41,18 +43,33 @@ export default function TeamDetailView({ team, onBack, onPlayerClick }: TeamDeta
       </div>
 
       <div className="bg-white dark:bg-gray-900 retro-border-thick shadow-retro-lg overflow-hidden">
-        <div className="p-8 bg-gradient-to-r from-retro-blue to-retro-red">
+        <div
+          className="p-8 border-b-4 border-black"
+          style={{ backgroundColor: teamColors.primary }}
+        >
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="headline-retro text-4xl md:text-5xl text-white mb-2">
+              <h2
+                className="headline-retro text-4xl md:text-5xl mb-2"
+                style={{ color: teamColors.secondary }}
+              >
                 {team.team_abbreviation}
               </h2>
-              <div className="subhead-retro text-xl text-white/90">
+              <div
+                className="subhead-retro text-xl"
+                style={{ color: teamColors.secondary, opacity: 0.9 }}
+              >
                 {team.full_name}
               </div>
             </div>
             <div className="text-right">
-              <div className="bg-white text-black px-6 py-3 retro-border shadow-retro">
+              <div
+                className="px-6 py-3 retro-border shadow-retro"
+                style={{
+                  backgroundColor: teamColors.secondary,
+                  color: teamColors.primary,
+                }}
+              >
                 <div className="text-3xl font-black">{team.player_count}</div>
                 <div className="text-xs uppercase tracking-widest font-black">Players</div>
               </div>

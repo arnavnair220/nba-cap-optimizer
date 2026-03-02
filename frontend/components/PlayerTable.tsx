@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { PlayerPrediction } from '@/lib/types';
 import { getTeamColors } from '@/lib/teamColors';
 import {
@@ -19,7 +20,78 @@ interface PlayerTableProps {
   onPlayerClick?: (playerName: string) => void;
 }
 
+type SortColumn = 'rank' | 'rank_change' | 'player' | 'team' | 'position' | 'predicted' | 'actual' | 'savings' | 'overpay' | 'value' | null;
+type SortDirection = 'asc' | 'desc' | null;
+
 export default function PlayerTable({ players, showRank = true, showTeam = true, onPlayerClick }: PlayerTableProps) {
+  const [sortColumn, setSortColumn] = useState<SortColumn>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>(null);
+
+  const handleColumnClick = (column: SortColumn) => {
+    if (sortColumn === column) {
+      if (sortDirection === 'asc') {
+        setSortDirection('desc');
+      } else if (sortDirection === 'desc') {
+        setSortColumn(null);
+        setSortDirection(null);
+      }
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
+  const getSortIndicator = (column: SortColumn) => {
+    if (sortColumn !== column) return null;
+    if (sortDirection === 'asc') return ' ↑';
+    if (sortDirection === 'desc') return ' ↓';
+    return null;
+  };
+
+  const sortedPlayers = [...players].sort((a, b) => {
+    if (!sortColumn || !sortDirection) return 0;
+
+    let compareValue = 0;
+    switch (sortColumn) {
+      case 'rank':
+        compareValue = players.indexOf(a) - players.indexOf(b);
+        break;
+      case 'rank_change':
+        const rankChangeA = a.rank_change ?? 0;
+        const rankChangeB = b.rank_change ?? 0;
+        compareValue = rankChangeB - rankChangeA;
+        break;
+      case 'player':
+        compareValue = a.player_name.localeCompare(b.player_name);
+        break;
+      case 'team':
+        compareValue = a.team_abbreviation.localeCompare(b.team_abbreviation);
+        break;
+      case 'position':
+        compareValue = a.position.localeCompare(b.position);
+        break;
+      case 'predicted':
+        compareValue = a.predicted_fmv - b.predicted_fmv;
+        break;
+      case 'actual':
+        compareValue = a.actual_salary - b.actual_salary;
+        break;
+      case 'savings':
+        const savingsA = calculateSavings(a);
+        const savingsB = calculateSavings(b);
+        compareValue = savingsA - savingsB;
+        break;
+      case 'overpay':
+        compareValue = a.inefficiency_score - b.inefficiency_score;
+        break;
+      case 'value':
+        const valueOrder = { 'Bargain': 1, 'Fair': 2, 'Overpaid': 3 };
+        compareValue = valueOrder[a.value_category] - valueOrder[b.value_category];
+        break;
+    }
+
+    return sortDirection === 'asc' ? compareValue : -compareValue;
+  });
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full divide-y-4 divide-black">
@@ -27,44 +99,74 @@ export default function PlayerTable({ players, showRank = true, showTeam = true,
           <tr>
             {showRank && (
               <>
-                <th className="px-3 py-3 text-left text-xs font-black text-retro-orange uppercase tracking-wider subhead-retro">
-                  #
+                <th
+                  className="px-3 py-3 text-left text-xs font-black text-retro-orange uppercase tracking-wider subhead-retro cursor-pointer hover:bg-gray-900 transition-colors"
+                  onClick={() => handleColumnClick('rank')}
+                >
+                  #{getSortIndicator('rank')}
                 </th>
-                <th className="px-2 py-3 text-center text-xs font-black text-retro-orange uppercase tracking-wider subhead-retro">
-                  ±
+                <th
+                  className="px-2 py-3 text-center text-xs font-black text-retro-orange uppercase tracking-wider subhead-retro cursor-pointer hover:bg-gray-900 transition-colors"
+                  onClick={() => handleColumnClick('rank_change')}
+                >
+                  ±{getSortIndicator('rank_change')}
                 </th>
               </>
             )}
-            <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-wider subhead-retro">
-              Player
+            <th
+              className="px-4 py-3 text-left text-xs font-black uppercase tracking-wider subhead-retro cursor-pointer hover:bg-gray-900 transition-colors"
+              onClick={() => handleColumnClick('player')}
+            >
+              Player{getSortIndicator('player')}
             </th>
             {showTeam && (
-              <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-wider subhead-retro">
-                Team
+              <th
+                className="px-4 py-3 text-left text-xs font-black uppercase tracking-wider subhead-retro cursor-pointer hover:bg-gray-900 transition-colors"
+                onClick={() => handleColumnClick('team')}
+              >
+                Team{getSortIndicator('team')}
               </th>
             )}
-            <th className="px-3 py-3 text-left text-xs font-black uppercase tracking-wider subhead-retro">
-              Pos
+            <th
+              className="px-3 py-3 text-left text-xs font-black uppercase tracking-wider subhead-retro cursor-pointer hover:bg-gray-900 transition-colors"
+              onClick={() => handleColumnClick('position')}
+            >
+              Pos{getSortIndicator('position')}
             </th>
-            <th className="px-3 py-3 text-right text-xs font-black uppercase tracking-wider subhead-retro">
-              Predicted
+            <th
+              className="px-3 py-3 text-right text-xs font-black uppercase tracking-wider subhead-retro cursor-pointer hover:bg-gray-900 transition-colors"
+              onClick={() => handleColumnClick('predicted')}
+            >
+              Predicted{getSortIndicator('predicted')}
             </th>
-            <th className="px-3 py-3 text-right text-xs font-black uppercase tracking-wider subhead-retro">
-              Actual
+            <th
+              className="px-3 py-3 text-right text-xs font-black uppercase tracking-wider subhead-retro cursor-pointer hover:bg-gray-900 transition-colors"
+              onClick={() => handleColumnClick('actual')}
+            >
+              Actual{getSortIndicator('actual')}
             </th>
-            <th className="px-3 py-3 text-right text-xs font-black uppercase tracking-wider subhead-retro">
-              Savings
+            <th
+              className="px-3 py-3 text-right text-xs font-black uppercase tracking-wider subhead-retro cursor-pointer hover:bg-gray-900 transition-colors"
+              onClick={() => handleColumnClick('savings')}
+            >
+              $ Diff{getSortIndicator('savings')}
             </th>
-            <th className="px-3 py-3 text-center text-xs font-black uppercase tracking-wider subhead-retro">
-              Inefficiency
+            <th
+              className="px-3 py-3 text-center text-xs font-black uppercase tracking-wider subhead-retro cursor-pointer hover:bg-gray-900 transition-colors"
+              onClick={() => handleColumnClick('overpay')}
+            >
+              Overpay %{getSortIndicator('overpay')}
             </th>
-            <th className="px-3 py-3 text-center text-xs font-black uppercase tracking-wider subhead-retro">
-              Value
+            <th
+              className="px-3 py-3 text-center text-xs font-black uppercase tracking-wider subhead-retro cursor-pointer hover:bg-gray-900 transition-colors"
+              onClick={() => handleColumnClick('value')}
+            >
+              Value{getSortIndicator('value')}
             </th>
           </tr>
         </thead>
         <tbody className="bg-white dark:bg-gray-900 divide-y-2 divide-gray-300 dark:divide-gray-700">
-          {players.map((player, index) => {
+          {sortedPlayers.map((player, index) => {
             const savings = calculateSavings(player);
             const teamColors = getTeamColors(player.team_abbreviation);
             return (

@@ -9,6 +9,7 @@ import LoadingSpinner from '@/components/LoadingSpinner';
 import ErrorMessage from '@/components/ErrorMessage';
 import DashboardStats from '@/components/DashboardStats';
 import ValueDistributionChart from '@/components/ValueDistributionChart';
+import SalaryScatterPlot from '@/components/SalaryScatterPlot';
 import Tabs, { TabPanel } from '@/components/Tabs';
 import TeamRankings from '@/components/TeamRankings';
 import TeamFilters from '@/components/TeamFilters';
@@ -34,7 +35,7 @@ export default function Home() {
   const [teamsLoading, setTeamsLoading] = useState(false);
   const [teamsError, setTeamsError] = useState<string | null>(null);
   const [teamSearchQuery, setTeamSearchQuery] = useState('');
-  const [teamSortBy, setTeamSortBy] = useState('avg_inefficiency');
+  const [teamSortBy, setTeamSortBy] = useState('net_efficiency');
   const [selectedTeamAbbr, setSelectedTeamAbbr] = useState<string | null>(null);
   const [selectedTeamDetail, setSelectedTeamDetail] = useState<TeamDetail | null>(null);
   const [teamDetailLoading, setTeamDetailLoading] = useState(false);
@@ -170,6 +171,10 @@ export default function Home() {
         return a.inefficiency_score - b.inefficiency_score;
       case 'worst_value':
         return b.inefficiency_score - a.inefficiency_score;
+      case 'dollar_savings':
+        return (b.predicted_fmv - b.actual_salary) - (a.predicted_fmv - a.actual_salary);
+      case 'dollar_overspend':
+        return (a.predicted_fmv - a.actual_salary) - (b.predicted_fmv - b.actual_salary);
       case 'predicted_fmv':
         return b.predicted_fmv - a.predicted_fmv;
       case 'actual_salary':
@@ -190,32 +195,20 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-gray-200 dark:bg-gray-900 bg-retro-bold-stripes">
-      {/* Retro Header Banner */}
-      <div className="bg-white dark:bg-gray-900 retro-border-thick border-b-0 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-retro-blue/10 via-retro-red/10 to-retro-orange/10"></div>
-        <div className="max-w-7xl mx-auto px-6 py-8 relative z-10">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="headline-retro text-6xl md:text-7xl lg:text-8xl text-black dark:text-white mb-2 leading-none">
-                CAP OPTIMIZER
-              </h1>
-              <div className="subhead-retro text-xl md:text-2xl flex items-center gap-4">
-                <span className="bg-retro-red text-white px-3 py-1 retro-border">PLAYER VALUE</span>
-                <span className="text-black dark:text-white font-black">/</span>
-                <span className="bg-retro-blue text-white px-3 py-1 retro-border">CONTRACT ANALYSIS</span>
-              </div>
-            </div>
-            <div className="hidden md:block">
-              <div className="text-right bg-retro-orange text-white px-6 py-3 retro-border shadow-retro">
-                <div className="text-4xl font-bold">2025-26</div>
-                <div className="text-sm uppercase tracking-widest font-black">Season</div>
-              </div>
+      <div className="max-w-7xl mx-auto px-6 pt-8 pb-6">
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="headline-retro text-4xl md:text-5xl lg:text-6xl text-black dark:text-white leading-none">
+              CAP OPTIMIZER
+            </h1>
+          </div>
+          <div className="hidden md:block">
+            <div className="text-right bg-retro-orange text-white px-6 py-3 retro-border shadow-retro">
+              <div className="text-3xl font-bold">2025-26</div>
+              <div className="text-xs uppercase tracking-widest font-black">Season</div>
             </div>
           </div>
         </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-6 py-8">
 
         {loading && <LoadingSpinner />}
 
@@ -309,7 +302,14 @@ export default function Home() {
                     <DashboardStats players={players} />
                   </div>
 
-                  <ValueDistributionChart players={players} />
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                    <div className="lg:col-span-1">
+                      <ValueDistributionChart players={players} />
+                    </div>
+                    <div className="lg:col-span-2">
+                      <SalaryScatterPlot players={players} />
+                    </div>
+                  </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
                     <div className="bg-white dark:bg-gray-900 retro-border shadow-retro p-6 halftone-bg">

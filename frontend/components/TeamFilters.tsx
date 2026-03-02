@@ -47,8 +47,8 @@ export default function TeamFilters({
             onChange={(e) => onSortByChange(e.target.value)}
             className="w-full px-4 py-3 retro-border bg-white dark:bg-gray-800 text-black dark:text-white font-bold focus:outline-none focus:ring-4 focus:ring-retro-blue"
           >
-            <option value="avg_inefficiency">Average Efficiency</option>
-            <option value="net_efficiency">Net Efficiency</option>
+            <option value="avg_inefficiency">Average Overpay %</option>
+            <option value="net_efficiency">Net Overspend</option>
             <option value="bargain_count">Most Bargains</option>
             <option value="overpaid_count">Most Overpaid</option>
           </select>

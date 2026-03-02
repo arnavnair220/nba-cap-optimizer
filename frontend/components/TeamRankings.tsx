@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { TeamEfficiency } from '@/lib/types';
 
 interface TeamRankingsProps {
@@ -7,7 +8,12 @@ interface TeamRankingsProps {
   onTeamClick: (teamAbbr: string) => void;
 }
 
+type SortColumn = 'rank' | 'team' | 'players' | 'payroll' | 'avg_overpay' | 'net_overspend' | 'bargains' | 'fair' | 'overpaid' | null;
+type SortDirection = 'asc' | 'desc' | null;
+
 export default function TeamRankings({ teams, onTeamClick }: TeamRankingsProps) {
+  const [sortColumn, setSortColumn] = useState<SortColumn>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>(null);
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -27,11 +33,69 @@ export default function TeamRankings({ teams, onTeamClick }: TeamRankingsProps) 
     return 'text-gray-700 dark:text-gray-400';
   };
 
-  const getEfficiencyBgColor = (score: number) => {
-    if (score < -0.05) return 'bg-green-50 dark:bg-green-950';
-    if (score > 0.05) return 'bg-red-50 dark:bg-red-950';
+  const getEfficiencyBgColor = (netEfficiency: number) => {
+    if (netEfficiency < -5000000) return 'bg-green-50 dark:bg-green-950';
+    if (netEfficiency > 5000000) return 'bg-red-50 dark:bg-red-950';
     return 'bg-gray-50 dark:bg-gray-950';
   };
+
+  const handleColumnClick = (column: SortColumn) => {
+    if (sortColumn === column) {
+      if (sortDirection === 'asc') {
+        setSortDirection('desc');
+      } else if (sortDirection === 'desc') {
+        setSortColumn(null);
+        setSortDirection(null);
+      }
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
+  const getSortIndicator = (column: SortColumn) => {
+    if (sortColumn !== column) return null;
+    if (sortDirection === 'asc') return ' ↑';
+    if (sortDirection === 'desc') return ' ↓';
+    return null;
+  };
+
+  const sortedTeams = [...teams].sort((a, b) => {
+    if (!sortColumn || !sortDirection) return 0;
+
+    let compareValue = 0;
+    switch (sortColumn) {
+      case 'rank':
+        compareValue = teams.indexOf(a) - teams.indexOf(b);
+        break;
+      case 'team':
+        compareValue = a.team_abbreviation.localeCompare(b.team_abbreviation);
+        break;
+      case 'players':
+        compareValue = a.player_count - b.player_count;
+        break;
+      case 'payroll':
+        compareValue = a.total_payroll - b.total_payroll;
+        break;
+      case 'avg_overpay':
+        compareValue = a.avg_inefficiency_score - b.avg_inefficiency_score;
+        break;
+      case 'net_overspend':
+        compareValue = a.net_efficiency - b.net_efficiency;
+        break;
+      case 'bargains':
+        compareValue = a.bargain_count - b.bargain_count;
+        break;
+      case 'fair':
+        compareValue = a.fair_count - b.fair_count;
+        break;
+      case 'overpaid':
+        compareValue = a.overpaid_count - b.overpaid_count;
+        break;
+    }
+
+    return sortDirection === 'asc' ? compareValue : -compareValue;
+  });
 
   return (
     <div className="bg-white dark:bg-gray-900 retro-border-thick shadow-retro-lg overflow-hidden">
@@ -48,44 +112,71 @@ export default function TeamRankings({ teams, onTeamClick }: TeamRankingsProps) 
         <table className="w-full">
           <thead className="bg-gray-900 text-white">
             <tr>
-              <th className="text-left px-6 py-4 font-black uppercase text-xs tracking-wider border-b-2 border-black">
-                Rank
+              <th
+                className="text-left px-6 py-4 font-black uppercase text-xs tracking-wider border-b-2 border-black cursor-pointer hover:bg-gray-800 transition-colors"
+                onClick={() => handleColumnClick('rank')}
+              >
+                Rank{getSortIndicator('rank')}
               </th>
-              <th className="text-left px-6 py-4 font-black uppercase text-xs tracking-wider border-b-2 border-black">
-                Team
+              <th
+                className="text-left px-6 py-4 font-black uppercase text-xs tracking-wider border-b-2 border-black cursor-pointer hover:bg-gray-800 transition-colors"
+                onClick={() => handleColumnClick('team')}
+              >
+                Team{getSortIndicator('team')}
               </th>
-              <th className="text-right px-6 py-4 font-black uppercase text-xs tracking-wider border-b-2 border-black">
-                Players
+              <th
+                className="text-right px-6 py-4 font-black uppercase text-xs tracking-wider border-b-2 border-black cursor-pointer hover:bg-gray-800 transition-colors"
+                onClick={() => handleColumnClick('players')}
+              >
+                Players{getSortIndicator('players')}
               </th>
-              <th className="text-right px-6 py-4 font-black uppercase text-xs tracking-wider border-b-2 border-black">
-                Total Payroll
+              <th
+                className="text-right px-6 py-4 font-black uppercase text-xs tracking-wider border-b-2 border-black cursor-pointer hover:bg-gray-800 transition-colors"
+                onClick={() => handleColumnClick('payroll')}
+              >
+                Total Payroll{getSortIndicator('payroll')}
               </th>
-              <th className="text-right px-6 py-4 font-black uppercase text-xs tracking-wider border-b-2 border-black">
-                Avg Efficiency
+              <th
+                className="text-right px-6 py-4 font-black uppercase text-xs tracking-wider border-b-2 border-black cursor-pointer hover:bg-gray-800 transition-colors"
+                onClick={() => handleColumnClick('avg_overpay')}
+              >
+                Avg Overpay %{getSortIndicator('avg_overpay')}
               </th>
-              <th className="text-right px-6 py-4 font-black uppercase text-xs tracking-wider border-b-2 border-black">
-                Net Overspend
+              <th
+                className="text-right px-6 py-4 font-black uppercase text-xs tracking-wider border-b-2 border-black cursor-pointer hover:bg-gray-800 transition-colors"
+                onClick={() => handleColumnClick('net_overspend')}
+              >
+                Net Overspend{getSortIndicator('net_overspend')}
               </th>
-              <th className="text-center px-6 py-4 font-black uppercase text-xs tracking-wider border-b-2 border-black">
-                Bargains
+              <th
+                className="text-center px-6 py-4 font-black uppercase text-xs tracking-wider border-b-2 border-black cursor-pointer hover:bg-gray-800 transition-colors"
+                onClick={() => handleColumnClick('bargains')}
+              >
+                Bargains{getSortIndicator('bargains')}
               </th>
-              <th className="text-center px-6 py-4 font-black uppercase text-xs tracking-wider border-b-2 border-black">
-                Fair
+              <th
+                className="text-center px-6 py-4 font-black uppercase text-xs tracking-wider border-b-2 border-black cursor-pointer hover:bg-gray-800 transition-colors"
+                onClick={() => handleColumnClick('fair')}
+              >
+                Fair{getSortIndicator('fair')}
               </th>
-              <th className="text-center px-6 py-4 font-black uppercase text-xs tracking-wider border-b-2 border-black">
-                Overpaid
+              <th
+                className="text-center px-6 py-4 font-black uppercase text-xs tracking-wider border-b-2 border-black cursor-pointer hover:bg-gray-800 transition-colors"
+                onClick={() => handleColumnClick('overpaid')}
+              >
+                Overpaid{getSortIndicator('overpaid')}
               </th>
             </tr>
           </thead>
           <tbody>
-            {teams.map((team, index) => (
+            {sortedTeams.map((team, index) => (
               <tr
                 key={team.team_abbreviation}
                 onClick={() => onTeamClick(team.team_abbreviation)}
                 className={`
                   border-b-2 border-gray-200 dark:border-gray-800 cursor-pointer
                   transition-all hover:bg-gray-100 dark:hover:bg-gray-800
-                  ${getEfficiencyBgColor(team.avg_inefficiency_score)}
+                  ${getEfficiencyBgColor(team.net_efficiency)}
                 `}
               >
                 <td className="px-6 py-4">

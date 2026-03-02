@@ -31,19 +31,19 @@ export default function DashboardStats({ players }: DashboardStatsProps) {
       />
 
       <StatsCard
-        title="Total Market Inefficiency"
+        title="Total Market Overspend"
         value={formatCurrency(Math.abs(totalSavings))}
-        subtitle={totalSavings < 0 ? 'Underspending' : 'Overspending'}
+        subtitle={totalSavings < 0 ? 'Overspending' : 'Underspending'}
         colorClass={
           totalSavings < 0
-            ? 'text-green-600 dark:text-green-400'
-            : 'text-red-600 dark:text-red-400'
+            ? 'text-red-600 dark:text-red-400'
+            : 'text-green-600 dark:text-green-400'
         }
-        accent={totalSavings < 0 ? 'green' : 'red'}
+        accent={totalSavings < 0 ? 'red' : 'green'}
       />
 
       <StatsCard
-        title="Avg Inefficiency Score"
+        title="Avg Overpay %"
         value={`${(avgInefficiency * 100).toFixed(1)}%`}
         subtitle={
           avgInefficiency < -0.05

@@ -30,6 +30,8 @@ const VALUE_CATEGORIES = [
 const SORT_OPTIONS = [
   { value: 'inefficiency_score', label: 'Best Value (Default)' },
   { value: 'worst_value', label: 'Worst Value' },
+  { value: 'dollar_savings', label: 'Highest $ Savings' },
+  { value: 'dollar_overspend', label: 'Highest $ Overspend' },
   { value: 'predicted_fmv', label: 'Highest Predicted FMV' },
   { value: 'actual_salary', label: 'Highest Salary' },
   { value: 'player_name', label: 'Player Name (A-Z)' },
