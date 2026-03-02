@@ -462,18 +462,18 @@ export default function Home() {
                     <div className="bg-blue-100 p-6 retro-border">
                       <h3 className="subhead-retro text-xl mb-3 text-retro-blue">What is This?</h3>
                       <p className="font-bold leading-relaxed">
-                        NBA Cap Optimizer analyzes player performance to predict what each player's salary should be worth. We then compare these predictions to what teams are actually paying to identify team-friendly bargains and overpaid contracts.
+                        NBA Cap Optimizer analyzes player performance to predict what each player&apos;s salary should be worth. We then compare these predictions to what teams are actually paying to identify team-friendly bargains and overpaid contracts.
                       </p>
                     </div>
 
                     <div className="bg-green-100 p-6 retro-border">
                       <h3 className="subhead-retro text-xl mb-3 text-green-700">How It Works</h3>
                       <p className="font-bold leading-relaxed mb-3">
-                        Our machine learning models analyze player performance metrics, team statistics, and market trends to calculate what a player's salary should be based on their production.
+                        Our machine learning models analyze player performance metrics, team statistics, and market trends to calculate what a player&apos;s salary should be based on their production.
                       </p>
                       <ul className="list-disc list-inside space-y-2 font-bold ml-4">
                         <li><span className="text-green-700 font-black">Bargain:</span> Player is producing more than their salary suggests (team-friendly deal)</li>
-                        <li><span className="text-yellow-600 font-black">Fair:</span> Player's salary aligns with their market value</li>
+                        <li><span className="text-yellow-600 font-black">Fair:</span> Player&apos;s salary aligns with their market value</li>
                         <li><span className="text-red-700 font-black">Overpaid:</span> Player is producing less than their salary suggests (team overspending)</li>
                       </ul>
                     </div>
