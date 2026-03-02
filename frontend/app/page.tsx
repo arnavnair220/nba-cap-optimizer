@@ -438,20 +438,20 @@ export default function Home() {
             </TabPanel>
 
             <TabPanel tabId="about" activeTab={activeTab}>
-              <div className="bg-white retro-border-thick shadow-retro-lg p-8 halftone-bg">
+              <div className="bg-cream retro-border-thick shadow-retro-lg p-8 halftone-bg">
                 <div className="max-w-4xl mx-auto">
                   <h2 className="headline-retro text-3xl text-black mb-6">ABOUT NBA CAP OPTIMIZER</h2>
 
                   <div className="space-y-6 text-black">
-                    <div className="bg-retro-blue bg-opacity-10 p-6 retro-border">
-                      <h3 className="subhead-retro text-xl mb-3">What is This?</h3>
+                    <div className="bg-blue-100 p-6 retro-border">
+                      <h3 className="subhead-retro text-xl mb-3 text-retro-blue">What is This?</h3>
                       <p className="font-bold leading-relaxed">
                         NBA Cap Optimizer is an MLOps platform that predicts Fair Market Value (FMV) for NBA players using machine learning models (XGBoost/LightGBM). We compare these predictions to actual salaries to identify undervalued and overvalued contracts.
                       </p>
                     </div>
 
-                    <div className="bg-retro-orange bg-opacity-10 p-6 retro-border">
-                      <h3 className="subhead-retro text-xl mb-3">How It Works</h3>
+                    <div className="bg-green-100 p-6 retro-border">
+                      <h3 className="subhead-retro text-xl mb-3 text-green-700">How It Works</h3>
                       <p className="font-bold leading-relaxed mb-3">
                         Our machine learning models analyze player performance metrics, team statistics, and market trends to calculate what a player's salary should be based on their production.
                       </p>
@@ -462,18 +462,33 @@ export default function Home() {
                       </ul>
                     </div>
 
-                    <div className="bg-retro-red bg-opacity-10 p-6 retro-border">
-                      <h3 className="subhead-retro text-xl mb-3">Technology Stack</h3>
+                    <div className="bg-red-100 p-6 retro-border">
+                      <h3 className="subhead-retro text-xl mb-3 text-retro-red">Technology Stack</h3>
                       <p className="font-bold leading-relaxed">
-                        Built with Python, AWS (Lambda, SageMaker, RDS), Terraform for infrastructure, and Next.js for the frontend. The platform uses advanced ML techniques to continuously improve predictions based on the latest player performance data.
+                        Built with Python, AWS (Lambda, SageMaker, RDS), Terraform for infrastructure, and Next.js for the frontend. The platform uses advanced ML techniques to continuously improve predictions based on the latest player performance and market conditions.
                       </p>
                     </div>
 
-                    <div className="bg-gray-100 p-6 retro-border">
-                      <h3 className="subhead-retro text-xl mb-3">Data Source</h3>
+                    <div className="bg-yellow-100 p-6 retro-border">
+                      <h3 className="subhead-retro text-xl mb-3 text-yellow-700">Data Source</h3>
                       <p className="font-bold leading-relaxed">
                         The ML models are trained on multiple years of historical NBA player statistics and salary data. Current predictions are for the 2025-26 season and are updated regularly to reflect the latest performance and market conditions.
                       </p>
+                    </div>
+
+                    <div className="bg-orange-100 p-6 retro-border">
+                      <h3 className="subhead-retro text-xl mb-3 text-retro-orange">Developer</h3>
+                      <p className="font-bold leading-relaxed mb-3">
+                        Created by <span className="text-2xl font-black text-black">Arnav Nair</span>
+                      </p>
+                      <a
+                        href="https://github.com/arnavnair220/nba-cap-optimizer"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-block bg-black text-white px-4 py-2 retro-border font-bold uppercase text-sm hover:bg-gray-800 transition-colors"
+                      >
+                        View on GitHub →
+                      </a>
                     </div>
                   </div>
                 </div>
