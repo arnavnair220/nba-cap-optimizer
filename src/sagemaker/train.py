@@ -138,6 +138,33 @@ def train_model(
     return model
 
 
+def calculate_smearing_factor(y_test: pd.Series, y_pred: np.ndarray) -> float:
+    """
+    Calculate smearing factor to correct retransformation bias.
+
+    When predictions are made in log space and converted back with exp(),
+    they are systematically biased downward (Jensen's inequality).
+    The smearing estimator corrects this bias.
+
+    Reference: Duan, N. (1983). "Smearing Estimate: A Nonparametric Retransformation Method"
+
+    Args:
+        y_test: Actual values in log space
+        y_pred: Predicted values in log space
+
+    Returns:
+        Smearing factor (float)
+    """
+    logger.info("Calculating smearing factor to correct retransformation bias...")
+
+    residuals = y_test - y_pred
+    smearing_factor = float(np.mean(np.exp(residuals)))
+
+    logger.info(f"  Smearing factor: {smearing_factor:.4f}")
+
+    return smearing_factor
+
+
 def evaluate_model(
     model: RandomForestRegressor, X_test: pd.DataFrame, y_test: pd.Series, target_name: str
 ) -> Dict:
@@ -170,20 +197,29 @@ def evaluate_model(
     percent_diff = np.abs((y_pred_actual - y_test_actual) / (y_test_actual + 1e-6)) * 100
     within_20pct = (percent_diff <= 20).mean() * 100
 
+    smearing_factor = calculate_smearing_factor(y_test, y_pred)
+
+    y_pred_smeared = y_pred_actual * smearing_factor
+    percent_diff_smeared = np.abs((y_pred_smeared - y_test_actual) / (y_test_actual + 1e-6)) * 100
+    within_20pct_smeared = (percent_diff_smeared <= 20).mean() * 100
+
     metrics = {
         "target": target_name,
         "rmse": float(rmse),
         "mae": float(mae),
         "r2": float(r2),
         "within_20pct": float(within_20pct),
+        "within_20pct_smeared": float(within_20pct_smeared),
         "test_samples": len(y_test),
+        "smearing_factor": smearing_factor,
     }
 
     logger.info(f"Metrics for {target_name}:")
     logger.info(f"  RMSE: {rmse:.4f}")
     logger.info(f"  MAE: {mae:.4f}")
     logger.info(f"  R²: {r2:.4f}")
-    logger.info(f"  Within ±20%: {within_20pct:.2f}%")
+    logger.info(f"  Within ±20% (naive): {within_20pct:.2f}%")
+    logger.info(f"  Within ±20% (smeared): {within_20pct_smeared:.2f}%")
 
     return metrics
 
@@ -218,6 +254,13 @@ def save_model(
     features_path = os.path.join(output_dir, f"{model_name}_features.json")
     with open(features_path, "w") as f:
         json.dump({"features": feature_cols}, f, indent=2)
+
+    # Save smearing factor (for retransformation bias correction)
+    if "smearing_factor" in metrics:
+        smearing_path = os.path.join(output_dir, f"{model_name}_smearing.json")
+        with open(smearing_path, "w") as f:
+            json.dump({"smearing_factor": metrics["smearing_factor"]}, f, indent=2)
+        logger.info(f"Saved smearing factor: {metrics['smearing_factor']:.4f}")
 
     # Save metrics
     metrics_path = os.path.join(output_dir, f"{model_name}_metrics.json")
