@@ -31,7 +31,7 @@ export default function ValueDistributionChart({ players }: ValueDistributionCha
   ];
 
   return (
-    <div className="bg-white dark:bg-gray-900 retro-border shadow-retro p-6 halftone-bg h-full">
+    <div className="bg-cream retro-border shadow-retro p-6 halftone-bg h-full">
       <div className="flex items-center gap-3 mb-6">
         <div className="bg-black text-white px-4 py-2 subhead-retro text-sm">
           VALUE BREAKDOWN
@@ -45,7 +45,7 @@ export default function ValueDistributionChart({ players }: ValueDistributionCha
             dataKey="category"
             stroke="#000000"
             strokeWidth={2}
-            tick={{ fill: '#FFFFFF' }}
+            tick={{ fill: '#000000' }}
             style={{
               fontFamily: 'Arial Black, sans-serif',
               fontWeight: 'bold',
@@ -55,7 +55,7 @@ export default function ValueDistributionChart({ players }: ValueDistributionCha
           <YAxis
             stroke="#000000"
             strokeWidth={2}
-            tick={{ fill: '#FFFFFF' }}
+            tick={{ fill: '#000000' }}
             style={{
               fontFamily: 'Arial Black, sans-serif',
               fontWeight: 'bold'

@@ -14,9 +14,9 @@ export default function PlayerDetailView({ player, onBack }: PlayerDetailViewPro
   const savings = player.predicted_fmv - player.actual_salary;
 
   const getSavingsColor = () => {
-    if (savings > 0) return 'text-green-700 dark:text-green-400';
-    if (savings < 0) return 'text-red-700 dark:text-red-400';
-    return 'text-gray-700 dark:text-gray-400';
+    if (savings > 0) return 'text-green-700';
+    if (savings < 0) return 'text-red-700';
+    return 'text-gray-700';
   };
 
   return (
@@ -30,7 +30,7 @@ export default function PlayerDetailView({ player, onBack }: PlayerDetailViewPro
         </button>
       </div>
 
-      <div className="bg-white dark:bg-gray-900 retro-border-thick shadow-retro-lg overflow-hidden">
+      <div className="bg-cream retro-border-thick shadow-retro-lg overflow-hidden">
         <div
           className="p-8 border-b-4 border-black"
           style={{
@@ -69,33 +69,33 @@ export default function PlayerDetailView({ player, onBack }: PlayerDetailViewPro
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 p-6 bg-gray-50 dark:bg-gray-950">
-          <div className="bg-white dark:bg-gray-900 retro-border p-6">
-            <div className="text-xs font-black uppercase tracking-widest text-gray-600 dark:text-gray-400 mb-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 p-6 bg-gray-50">
+          <div className="bg-cream retro-border p-6">
+            <div className="text-xs font-black uppercase tracking-widest text-gray-600 mb-2">
               Predicted FMV
             </div>
-            <div className="text-2xl font-black text-black dark:text-white">
+            <div className="text-2xl font-black text-black">
               {formatCurrency(player.predicted_fmv)}
             </div>
-            <div className="text-xs font-bold text-gray-600 dark:text-gray-400 mt-1">
+            <div className="text-xs font-bold text-gray-600 mt-1">
               {formatNumber(player.predicted_salary_cap_pct, 2)}% of cap
             </div>
           </div>
 
-          <div className="bg-white dark:bg-gray-900 retro-border p-6">
-            <div className="text-xs font-black uppercase tracking-widest text-gray-600 dark:text-gray-400 mb-2">
+          <div className="bg-cream retro-border p-6">
+            <div className="text-xs font-black uppercase tracking-widest text-gray-600 mb-2">
               Actual Salary
             </div>
-            <div className="text-2xl font-black text-black dark:text-white">
+            <div className="text-2xl font-black text-black">
               {formatCurrency(player.actual_salary)}
             </div>
-            <div className="text-xs font-bold text-gray-600 dark:text-gray-400 mt-1">
+            <div className="text-xs font-bold text-gray-600 mt-1">
               {formatNumber(player.actual_salary_cap_pct, 2)}% of cap
             </div>
           </div>
 
-          <div className="bg-white dark:bg-gray-900 retro-border p-6">
-            <div className="text-xs font-black uppercase tracking-widest text-gray-600 dark:text-gray-400 mb-2">
+          <div className="bg-cream retro-border p-6">
+            <div className="text-xs font-black uppercase tracking-widest text-gray-600 mb-2">
               {savings > 0 ? 'Savings' : 'Overspend'}
             </div>
             <div className={`text-2xl font-black ${getSavingsColor()}`}>
@@ -103,8 +103,8 @@ export default function PlayerDetailView({ player, onBack }: PlayerDetailViewPro
             </div>
           </div>
 
-          <div className="bg-white dark:bg-gray-900 retro-border p-6">
-            <div className="text-xs font-black uppercase tracking-widest text-gray-600 dark:text-gray-400 mb-2">
+          <div className="bg-cream retro-border p-6">
+            <div className="text-xs font-black uppercase tracking-widest text-gray-600 mb-2">
               Overpay %
             </div>
             <div className={`text-2xl font-black ${getSavingsColor()}`}>
@@ -116,7 +116,7 @@ export default function PlayerDetailView({ player, onBack }: PlayerDetailViewPro
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="bg-white dark:bg-gray-900 retro-border-thick shadow-retro-lg">
+        <div className="bg-cream retro-border-thick shadow-retro-lg">
           <div className="p-6 bg-retro-blue border-b-4 border-black">
             <div className="subhead-retro text-lg text-white">
               PERFORMANCE STATS
@@ -124,27 +124,27 @@ export default function PlayerDetailView({ player, onBack }: PlayerDetailViewPro
           </div>
           <div className="p-6 space-y-4">
             <div className="grid grid-cols-3 gap-4">
-              <div className="text-center p-4 bg-gray-50 dark:bg-gray-950 retro-border">
-                <div className="text-3xl font-black text-black dark:text-white">
+              <div className="text-center p-4 bg-gray-50 retro-border">
+                <div className="text-3xl font-black text-black">
                   {formatNumber(player.points, 1)}
                 </div>
-                <div className="text-xs font-black uppercase tracking-widest text-gray-600 dark:text-gray-400 mt-1">
+                <div className="text-xs font-black uppercase tracking-widest text-gray-600 mt-1">
                   PPG
                 </div>
               </div>
-              <div className="text-center p-4 bg-gray-50 dark:bg-gray-950 retro-border">
-                <div className="text-3xl font-black text-black dark:text-white">
+              <div className="text-center p-4 bg-gray-50 retro-border">
+                <div className="text-3xl font-black text-black">
                   {formatNumber(player.rebounds, 1)}
                 </div>
-                <div className="text-xs font-black uppercase tracking-widest text-gray-600 dark:text-gray-400 mt-1">
+                <div className="text-xs font-black uppercase tracking-widest text-gray-600 mt-1">
                   RPG
                 </div>
               </div>
-              <div className="text-center p-4 bg-gray-50 dark:bg-gray-950 retro-border">
-                <div className="text-3xl font-black text-black dark:text-white">
+              <div className="text-center p-4 bg-gray-50 retro-border">
+                <div className="text-3xl font-black text-black">
                   {formatNumber(player.assists, 1)}
                 </div>
-                <div className="text-xs font-black uppercase tracking-widest text-gray-600 dark:text-gray-400 mt-1">
+                <div className="text-xs font-black uppercase tracking-widest text-gray-600 mt-1">
                   APG
                 </div>
               </div>
@@ -152,20 +152,20 @@ export default function PlayerDetailView({ player, onBack }: PlayerDetailViewPro
 
             {player.games_played && (
               <div className="grid grid-cols-2 gap-4">
-                <div className="flex justify-between p-3 bg-gray-50 dark:bg-gray-950 retro-border">
-                  <span className="text-sm font-bold text-gray-600 dark:text-gray-400 uppercase">
+                <div className="flex justify-between p-3 bg-gray-50 retro-border">
+                  <span className="text-sm font-bold text-gray-600 uppercase">
                     Games Played
                   </span>
-                  <span className="text-sm font-black text-black dark:text-white">
+                  <span className="text-sm font-black text-black">
                     {player.games_played}
                   </span>
                 </div>
                 {player.games_started !== undefined && (
-                  <div className="flex justify-between p-3 bg-gray-50 dark:bg-gray-950 retro-border">
-                    <span className="text-sm font-bold text-gray-600 dark:text-gray-400 uppercase">
+                  <div className="flex justify-between p-3 bg-gray-50 retro-border">
+                    <span className="text-sm font-bold text-gray-600 uppercase">
                       Games Started
                     </span>
-                    <span className="text-sm font-black text-black dark:text-white">
+                    <span className="text-sm font-black text-black">
                       {player.games_started}
                     </span>
                   </div>
@@ -174,11 +174,11 @@ export default function PlayerDetailView({ player, onBack }: PlayerDetailViewPro
             )}
 
             {player.minutes !== undefined && (
-              <div className="flex justify-between p-3 bg-gray-50 dark:bg-gray-950 retro-border">
-                <span className="text-sm font-bold text-gray-600 dark:text-gray-400 uppercase">
+              <div className="flex justify-between p-3 bg-gray-50 retro-border">
+                <span className="text-sm font-bold text-gray-600 uppercase">
                   Minutes Per Game
                 </span>
-                <span className="text-sm font-black text-black dark:text-white">
+                <span className="text-sm font-black text-black">
                   {formatNumber(player.minutes, 1)}
                 </span>
               </div>
@@ -187,21 +187,21 @@ export default function PlayerDetailView({ player, onBack }: PlayerDetailViewPro
             {(player.steals !== undefined || player.blocks !== undefined) && (
               <div className="grid grid-cols-2 gap-4">
                 {player.steals !== undefined && (
-                  <div className="flex justify-between p-3 bg-gray-50 dark:bg-gray-950 retro-border">
-                    <span className="text-sm font-bold text-gray-600 dark:text-gray-400 uppercase">
+                  <div className="flex justify-between p-3 bg-gray-50 retro-border">
+                    <span className="text-sm font-bold text-gray-600 uppercase">
                       Steals
                     </span>
-                    <span className="text-sm font-black text-black dark:text-white">
+                    <span className="text-sm font-black text-black">
                       {formatNumber(player.steals, 1)}
                     </span>
                   </div>
                 )}
                 {player.blocks !== undefined && (
-                  <div className="flex justify-between p-3 bg-gray-50 dark:bg-gray-950 retro-border">
-                    <span className="text-sm font-bold text-gray-600 dark:text-gray-400 uppercase">
+                  <div className="flex justify-between p-3 bg-gray-50 retro-border">
+                    <span className="text-sm font-bold text-gray-600 uppercase">
                       Blocks
                     </span>
-                    <span className="text-sm font-black text-black dark:text-white">
+                    <span className="text-sm font-black text-black">
                       {formatNumber(player.blocks, 1)}
                     </span>
                   </div>
@@ -211,7 +211,7 @@ export default function PlayerDetailView({ player, onBack }: PlayerDetailViewPro
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-900 retro-border-thick shadow-retro-lg">
+        <div className="bg-cream retro-border-thick shadow-retro-lg">
           <div className="p-6 bg-retro-orange border-b-4 border-black">
             <div className="subhead-retro text-lg text-white">
               SHOOTING & ADVANCED METRICS
@@ -223,31 +223,31 @@ export default function PlayerDetailView({ player, onBack }: PlayerDetailViewPro
               player.ft_pct !== undefined) && (
               <div className="grid grid-cols-3 gap-4">
                 {player.fg_pct !== undefined && (
-                  <div className="text-center p-4 bg-gray-50 dark:bg-gray-950 retro-border">
-                    <div className="text-2xl font-black text-black dark:text-white">
+                  <div className="text-center p-4 bg-gray-50 retro-border">
+                    <div className="text-2xl font-black text-black">
                       {formatNumber(player.fg_pct * 100, 1)}%
                     </div>
-                    <div className="text-xs font-black uppercase tracking-widest text-gray-600 dark:text-gray-400 mt-1">
+                    <div className="text-xs font-black uppercase tracking-widest text-gray-600 mt-1">
                       FG%
                     </div>
                   </div>
                 )}
                 {player.fg3_pct !== undefined && (
-                  <div className="text-center p-4 bg-gray-50 dark:bg-gray-950 retro-border">
-                    <div className="text-2xl font-black text-black dark:text-white">
+                  <div className="text-center p-4 bg-gray-50 retro-border">
+                    <div className="text-2xl font-black text-black">
                       {formatNumber(player.fg3_pct * 100, 1)}%
                     </div>
-                    <div className="text-xs font-black uppercase tracking-widest text-gray-600 dark:text-gray-400 mt-1">
+                    <div className="text-xs font-black uppercase tracking-widest text-gray-600 mt-1">
                       3P%
                     </div>
                   </div>
                 )}
                 {player.ft_pct !== undefined && (
-                  <div className="text-center p-4 bg-gray-50 dark:bg-gray-950 retro-border">
-                    <div className="text-2xl font-black text-black dark:text-white">
+                  <div className="text-center p-4 bg-gray-50 retro-border">
+                    <div className="text-2xl font-black text-black">
                       {formatNumber(player.ft_pct * 100, 1)}%
                     </div>
-                    <div className="text-xs font-black uppercase tracking-widest text-gray-600 dark:text-gray-400 mt-1">
+                    <div className="text-xs font-black uppercase tracking-widest text-gray-600 mt-1">
                       FT%
                     </div>
                   </div>
@@ -257,62 +257,62 @@ export default function PlayerDetailView({ player, onBack }: PlayerDetailViewPro
 
             <div className="space-y-3">
               {player.per !== undefined && (
-                <div className="flex justify-between p-3 bg-gray-50 dark:bg-gray-950 retro-border">
-                  <span className="text-sm font-bold text-gray-600 dark:text-gray-400 uppercase">
+                <div className="flex justify-between p-3 bg-gray-50 retro-border">
+                  <span className="text-sm font-bold text-gray-600 uppercase">
                     PER (Player Efficiency)
                   </span>
-                  <span className="text-sm font-black text-black dark:text-white">
+                  <span className="text-sm font-black text-black">
                     {formatNumber(player.per, 1)}
                   </span>
                 </div>
               )}
               {player.ts_pct !== undefined && (
-                <div className="flex justify-between p-3 bg-gray-50 dark:bg-gray-950 retro-border">
-                  <span className="text-sm font-bold text-gray-600 dark:text-gray-400 uppercase">
+                <div className="flex justify-between p-3 bg-gray-50 retro-border">
+                  <span className="text-sm font-bold text-gray-600 uppercase">
                     TS% (True Shooting)
                   </span>
-                  <span className="text-sm font-black text-black dark:text-white">
+                  <span className="text-sm font-black text-black">
                     {formatNumber(player.ts_pct * 100, 1)}%
                   </span>
                 </div>
               )}
               {player.usg_pct !== undefined && (
-                <div className="flex justify-between p-3 bg-gray-50 dark:bg-gray-950 retro-border">
-                  <span className="text-sm font-bold text-gray-600 dark:text-gray-400 uppercase">
+                <div className="flex justify-between p-3 bg-gray-50 retro-border">
+                  <span className="text-sm font-bold text-gray-600 uppercase">
                     USG% (Usage Rate)
                   </span>
-                  <span className="text-sm font-black text-black dark:text-white">
+                  <span className="text-sm font-black text-black">
                     {formatNumber(player.usg_pct, 1)}%
                   </span>
                 </div>
               )}
               {player.ws !== undefined && (
-                <div className="flex justify-between p-3 bg-gray-50 dark:bg-gray-950 retro-border">
-                  <span className="text-sm font-bold text-gray-600 dark:text-gray-400 uppercase">
+                <div className="flex justify-between p-3 bg-gray-50 retro-border">
+                  <span className="text-sm font-bold text-gray-600 uppercase">
                     WS (Win Shares)
                   </span>
-                  <span className="text-sm font-black text-black dark:text-white">
+                  <span className="text-sm font-black text-black">
                     {formatNumber(player.ws, 1)}
                   </span>
                 </div>
               )}
               {player.bpm !== undefined && (
-                <div className="flex justify-between p-3 bg-gray-50 dark:bg-gray-950 retro-border">
-                  <span className="text-sm font-bold text-gray-600 dark:text-gray-400 uppercase">
+                <div className="flex justify-between p-3 bg-gray-50 retro-border">
+                  <span className="text-sm font-bold text-gray-600 uppercase">
                     BPM (Box Plus/Minus)
                   </span>
-                  <span className="text-sm font-black text-black dark:text-white">
+                  <span className="text-sm font-black text-black">
                     {player.bpm > 0 ? '+' : ''}
                     {formatNumber(player.bpm, 1)}
                   </span>
                 </div>
               )}
               {player.vorp !== undefined && (
-                <div className="flex justify-between p-3 bg-gray-50 dark:bg-gray-950 retro-border">
-                  <span className="text-sm font-bold text-gray-600 dark:text-gray-400 uppercase">
+                <div className="flex justify-between p-3 bg-gray-50 retro-border">
+                  <span className="text-sm font-bold text-gray-600 uppercase">
                     VORP (Value Over Replacement)
                   </span>
-                  <span className="text-sm font-black text-black dark:text-white">
+                  <span className="text-sm font-black text-black">
                     {formatNumber(player.vorp, 1)}
                   </span>
                 </div>

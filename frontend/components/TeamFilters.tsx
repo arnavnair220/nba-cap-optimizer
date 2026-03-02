@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { TeamsQueryParams } from '@/lib/types';
 
 interface TeamFiltersProps {
@@ -15,18 +16,25 @@ export default function TeamFilters({
   searchQuery,
   onSearchChange,
 }: TeamFiltersProps) {
+  const [isOpen, setIsOpen] = useState(false);
+
   return (
-    <div className="bg-white dark:bg-gray-900 retro-border shadow-retro p-6 mb-8 halftone-bg">
-      <div className="flex items-center gap-3 mb-6">
+    <div className="bg-cream retro-border shadow-retro p-6 mb-8 halftone-bg">
+      <div
+        className="flex items-center gap-3 mb-6 cursor-pointer hover:opacity-80 transition-opacity"
+        onClick={() => setIsOpen(!isOpen)}
+      >
         <div className="bg-retro-orange text-white px-4 py-2 subhead-retro text-sm retro-border">
-          FILTERS
+          FILTERS {isOpen ? '▼' : '▶'}
         </div>
         <div className="flex-1 h-1 bg-retro-orange"></div>
       </div>
 
+      {isOpen && (
+        <div className="animate-fadeIn">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <label className="block text-xs font-black uppercase tracking-wider text-gray-700 dark:text-gray-300 mb-2">
+          <label className="block text-xs font-black uppercase tracking-wider text-gray-700  mb-2">
             Search Team
           </label>
           <input
@@ -34,18 +42,18 @@ export default function TeamFilters({
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Search by team name or abbreviation..."
-            className="w-full px-4 py-3 retro-border bg-white dark:bg-gray-800 text-black dark:text-white font-bold focus:outline-none focus:ring-4 focus:ring-retro-blue"
+            className="w-full px-4 py-3 retro-border bg-white  text-black  font-bold focus:outline-none focus:ring-4 focus:ring-retro-blue"
           />
         </div>
 
         <div>
-          <label className="block text-xs font-black uppercase tracking-wider text-gray-700 dark:text-gray-300 mb-2">
+          <label className="block text-xs font-black uppercase tracking-wider text-gray-700  mb-2">
             Sort By
           </label>
           <select
             value={sortBy}
             onChange={(e) => onSortByChange(e.target.value)}
-            className="w-full px-4 py-3 retro-border bg-white dark:bg-gray-800 text-black dark:text-white font-bold focus:outline-none focus:ring-4 focus:ring-retro-blue"
+            className="w-full px-4 py-3 retro-border bg-white  text-black  font-bold focus:outline-none focus:ring-4 focus:ring-retro-blue"
           >
             <option value="avg_inefficiency">Average Overpay %</option>
             <option value="net_efficiency">Net Overspend</option>
@@ -54,6 +62,8 @@ export default function TeamFilters({
           </select>
         </div>
       </div>
+        </div>
+      )}
     </div>
   );
 }

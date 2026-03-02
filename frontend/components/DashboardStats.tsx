@@ -36,8 +36,8 @@ export default function DashboardStats({ players }: DashboardStatsProps) {
         subtitle={totalSavings < 0 ? 'Overspending' : 'Underspending'}
         colorClass={
           totalSavings < 0
-            ? 'text-red-600 dark:text-red-400'
-            : 'text-green-600 dark:text-green-400'
+            ? 'text-red-600'
+            : 'text-green-600'
         }
         accent={totalSavings < 0 ? 'red' : 'green'}
       />
@@ -54,10 +54,10 @@ export default function DashboardStats({ players }: DashboardStatsProps) {
         }
         colorClass={
           avgInefficiency < 0
-            ? 'text-green-600 dark:text-green-400'
+            ? 'text-green-600'
             : avgInefficiency > 0
-              ? 'text-red-600 dark:text-red-400'
-              : 'text-yellow-600 dark:text-yellow-400'
+              ? 'text-red-600'
+              : 'text-yellow-600'
         }
         accent="yellow"
       />

@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { PredictionsQueryParams } from '@/lib/types';
 
 interface PlayerFiltersProps {
@@ -52,6 +53,8 @@ export default function PlayerFilters({
   onSortByChange,
   resultCount,
 }: PlayerFiltersProps) {
+  const [isOpen, setIsOpen] = useState(false);
+
   const updateFilter = (key: keyof PredictionsQueryParams, value: any) => {
     const newFilters = { ...filters, [key]: value || undefined };
     if (key !== 'offset') {
@@ -61,18 +64,27 @@ export default function PlayerFilters({
   };
 
   return (
-    <div className="bg-white dark:bg-gray-900 retro-border shadow-retro p-6 mb-8 halftone-bg">
-      <div className="flex items-center gap-3 mb-6">
-        <div className="bg-retro-orange text-white px-4 py-2 subhead-retro text-sm retro-border">
-          FILTERS
+    <div className="bg-cream retro-border shadow-retro p-4 mb-6 halftone-bg">
+      <div
+        className="flex items-center gap-3 mb-4 cursor-pointer hover:opacity-80 transition-opacity"
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <div className="bg-retro-orange text-white px-3 py-1.5 subhead-retro text-sm retro-border">
+          FILTERS {isOpen ? '▼' : '▶'}
         </div>
         <div className="flex-1 h-1 bg-retro-orange"></div>
+        <div className="text-sm font-bold text-black uppercase">
+          {resultCount} results
+        </div>
       </div>
+
+      {isOpen && (
+        <div className="animate-fadeIn">
 
       <div className="mb-4">
         <label
           htmlFor="player-search"
-          className="block text-xs font-bold text-black dark:text-white mb-2 uppercase tracking-wide"
+          className="block text-xs font-bold text-black mb-2 uppercase tracking-wide"
         >
           Search Player
         </label>
@@ -82,7 +94,7 @@ export default function PlayerFilters({
           placeholder="Enter player name..."
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
-          className="w-full px-3 py-2 retro-border bg-white dark:bg-gray-800 text-black dark:text-white font-bold placeholder:text-gray-500 focus:ring-2 focus:ring-retro-blue"
+          className="w-full px-3 py-2 retro-border bg-white text-black font-bold placeholder:text-gray-500 focus:ring-2 focus:ring-retro-blue text-sm"
         />
       </div>
 
@@ -90,7 +102,7 @@ export default function PlayerFilters({
         <div>
           <label
             htmlFor="value-category"
-            className="block text-xs font-bold text-black dark:text-white mb-2 uppercase tracking-wide"
+            className="block text-xs font-bold text-black mb-2 uppercase tracking-wide"
           >
             Value Category
           </label>
@@ -98,7 +110,7 @@ export default function PlayerFilters({
             id="value-category"
             value={valueCategory}
             onChange={(e) => onValueCategoryChange(e.target.value)}
-            className="w-full px-3 py-2 retro-border bg-white dark:bg-gray-800 text-black dark:text-white font-bold focus:ring-2 focus:ring-retro-blue"
+            className="w-full px-3 py-2 retro-border bg-white text-black font-bold focus:ring-2 focus:ring-retro-blue text-sm"
           >
             {VALUE_CATEGORIES.map((cat) => (
               <option key={cat.value} value={cat.value}>
@@ -111,7 +123,7 @@ export default function PlayerFilters({
         <div>
           <label
             htmlFor="position"
-            className="block text-xs font-bold text-black dark:text-white mb-2 uppercase tracking-wide"
+            className="block text-xs font-bold text-black mb-2 uppercase tracking-wide"
           >
             Position
           </label>
@@ -119,7 +131,7 @@ export default function PlayerFilters({
             id="position"
             value={position}
             onChange={(e) => onPositionChange(e.target.value)}
-            className="w-full px-3 py-2 retro-border bg-white dark:bg-gray-800 text-black dark:text-white font-bold focus:ring-2 focus:ring-retro-blue"
+            className="w-full px-3 py-2 retro-border bg-white text-black font-bold focus:ring-2 focus:ring-retro-blue text-sm"
           >
             <option value="">All Positions</option>
             {POSITIONS.map((pos) => (
@@ -133,7 +145,7 @@ export default function PlayerFilters({
         <div>
           <label
             htmlFor="team"
-            className="block text-xs font-bold text-black dark:text-white mb-2 uppercase tracking-wide"
+            className="block text-xs font-bold text-black mb-2 uppercase tracking-wide"
           >
             Team
           </label>
@@ -143,14 +155,14 @@ export default function PlayerFilters({
             placeholder="e.g., LAL, GSW"
             value={team}
             onChange={(e) => onTeamChange(e.target.value.toUpperCase())}
-            className="w-full px-3 py-2 retro-border bg-white dark:bg-gray-800 text-black dark:text-white font-bold placeholder:text-gray-500 focus:ring-2 focus:ring-retro-blue"
+            className="w-full px-3 py-2 retro-border bg-white text-black font-bold placeholder:text-gray-500 focus:ring-2 focus:ring-retro-blue text-sm"
           />
         </div>
 
         <div>
           <label
             htmlFor="sort-by"
-            className="block text-xs font-bold text-black dark:text-white mb-2 uppercase tracking-wide"
+            className="block text-xs font-bold text-black mb-2 uppercase tracking-wide"
           >
             Sort By
           </label>
@@ -158,7 +170,7 @@ export default function PlayerFilters({
             id="sort-by"
             value={sortBy}
             onChange={(e) => onSortByChange(e.target.value)}
-            className="w-full px-3 py-2 retro-border bg-white dark:bg-gray-800 text-black dark:text-white font-bold focus:ring-2 focus:ring-retro-blue"
+            className="w-full px-3 py-2 retro-border bg-white text-black font-bold focus:ring-2 focus:ring-retro-blue text-sm"
           >
             {SORT_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -169,12 +181,10 @@ export default function PlayerFilters({
         </div>
       </div>
 
-      <div className="mt-6 flex items-center justify-between">
-        <div className="text-sm font-bold text-black dark:text-white uppercase">
-          Showing {resultCount} results
-        </div>
+      <div className="mt-4 flex items-center justify-end">
         <button
-          onClick={() => {
+          onClick={(e) => {
+            e.stopPropagation();
             onFilterChange({ limit: 500, offset: 0 });
             onSearchChange('');
             onTeamChange('');
@@ -182,11 +192,13 @@ export default function PlayerFilters({
             onValueCategoryChange('');
             onSortByChange('inefficiency_score');
           }}
-          className="bg-black text-white px-4 py-2 retro-border font-bold uppercase text-sm hover:bg-gray-800 transition-colors"
+          className="bg-black text-white px-3 py-2 retro-border font-bold uppercase text-sm hover:bg-gray-800 transition-colors"
         >
           Clear All
         </button>
       </div>
+        </div>
+      )}
     </div>
   );
 }

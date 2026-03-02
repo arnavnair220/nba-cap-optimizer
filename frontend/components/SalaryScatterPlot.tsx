@@ -33,7 +33,7 @@ export default function SalaryScatterPlot({ players }: SalaryScatterPlotProps) {
   };
 
   return (
-    <div className="bg-white dark:bg-gray-900 retro-border shadow-retro p-6 halftone-bg h-full">
+    <div className="bg-cream retro-border shadow-retro p-6 halftone-bg h-full">
       <div className="flex items-center gap-3 mb-6">
         <div className="bg-black text-white px-4 py-2 subhead-retro text-sm">
           MARKET EFFICIENCY
@@ -49,7 +49,7 @@ export default function SalaryScatterPlot({ players }: SalaryScatterPlotProps) {
             name="Predicted FMV"
             stroke="#000000"
             strokeWidth={2}
-            tick={{ fill: '#FFFFFF' }}
+            tick={{ fill: '#000000' }}
             tickFormatter={formatCurrency}
             style={{
               fontFamily: 'Arial Black, sans-serif',
@@ -61,7 +61,7 @@ export default function SalaryScatterPlot({ players }: SalaryScatterPlotProps) {
               value="PREDICTED FMV"
               position="bottom"
               style={{
-                fill: '#FFFFFF',
+                fill: '#000000',
                 fontFamily: 'Arial Black, sans-serif',
                 fontWeight: 'bold',
                 fontSize: '12px'
@@ -74,7 +74,7 @@ export default function SalaryScatterPlot({ players }: SalaryScatterPlotProps) {
             name="Actual Salary"
             stroke="#000000"
             strokeWidth={2}
-            tick={{ fill: '#FFFFFF' }}
+            tick={{ fill: '#000000' }}
             tickFormatter={formatCurrency}
             style={{
               fontFamily: 'Arial Black, sans-serif',
@@ -87,7 +87,7 @@ export default function SalaryScatterPlot({ players }: SalaryScatterPlotProps) {
               angle={-90}
               position="left"
               style={{
-                fill: '#FFFFFF',
+                fill: '#000000',
                 fontFamily: 'Arial Black, sans-serif',
                 fontWeight: 'bold',
                 fontSize: '12px',
@@ -109,7 +109,7 @@ export default function SalaryScatterPlot({ players }: SalaryScatterPlotProps) {
             cursor={{ strokeDasharray: '3 3' }}
           />
           <ReferenceLine
-            stroke="#FFFFFF"
+            stroke="#000000"
             strokeWidth={3}
             strokeDasharray="5 5"
             segment={[{ x: 0, y: 0 }, { x: 60000000, y: 60000000 }]}
@@ -136,16 +136,16 @@ export default function SalaryScatterPlot({ players }: SalaryScatterPlotProps) {
       </ResponsiveContainer>
       <div className="flex justify-center gap-6 mt-4">
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 bg-green-600 retro-border"></div>
-          <span className="text-xs font-black text-black dark:text-white uppercase">Bargain</span>
+          <div className="w-3 h-3 rounded-full bg-green-600 border-2 border-black"></div>
+          <span className="text-xs font-black text-black uppercase">Bargain</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 retro-border" style={{ backgroundColor: '#FFC72C' }}></div>
-          <span className="text-xs font-black text-black dark:text-white uppercase">Fair</span>
+          <div className="w-3 h-3 rounded-full border-2 border-black" style={{ backgroundColor: '#FFC72C' }}></div>
+          <span className="text-xs font-black text-black uppercase">Fair</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 retro-border" style={{ backgroundColor: '#E31837' }}></div>
-          <span className="text-xs font-black text-black dark:text-white uppercase">Overpaid</span>
+          <div className="w-3 h-3 rounded-full border-2 border-black" style={{ backgroundColor: '#E31837' }}></div>
+          <span className="text-xs font-black text-black uppercase">Overpaid</span>
         </div>
       </div>
     </div>

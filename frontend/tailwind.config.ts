@@ -1,6 +1,7 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
+  darkMode: undefined,
   content: [
     "./pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
@@ -24,14 +25,22 @@ const config: Config = {
           yellow: "#FFC72C",
           orange: "#FF6B35",
         },
+        'fair-yellow': {
+          light: '#fffbeb',
+          dark: '#4a4000',
+        },
+        cream: {
+          light: '#FFFBF5',
+          DEFAULT: '#FEF5E7',
+        },
       },
       fontFamily: {
         display: ["Impact", "Arial Black", "sans-serif"],
         sport: ["Arial Black", "Arial", "sans-serif"],
       },
       boxShadow: {
-        retro: "4px 4px 0px 0px rgba(0, 0, 0, 1)",
-        "retro-lg": "8px 8px 0px 0px rgba(0, 0, 0, 1)",
+        retro: "4px 4px 0px 0px rgba(0, 0, 0, 0.8)",
+        "retro-lg": "6px 6px 0px 0px rgba(0, 0, 0, 0.8)",
       },
       backgroundImage: {
         'retro-stripes': "repeating-linear-gradient(45deg, rgba(0,0,0,0.03) 0px, rgba(0,0,0,0.03) 2px, transparent 2px, transparent 4px)",

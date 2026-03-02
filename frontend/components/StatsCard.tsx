@@ -12,9 +12,9 @@ interface StatsCardProps {
 
 export default function StatsCard({ title, value, subtitle, trend, colorClass, accent = 'red' }: StatsCardProps) {
   const getTrendColor = (value: number) => {
-    if (value > 0) return 'text-green-600 dark:text-green-400';
-    if (value < 0) return 'text-red-600 dark:text-red-400';
-    return 'text-gray-600 dark:text-gray-400';
+    if (value > 0) return 'text-green-600';
+    if (value < 0) return 'text-red-600';
+    return 'text-gray-600';
   };
 
   const accentColors = {
@@ -25,17 +25,17 @@ export default function StatsCard({ title, value, subtitle, trend, colorClass, a
   };
 
   return (
-    <div className="bg-white dark:bg-gray-900 retro-border shadow-retro halftone-bg overflow-hidden">
+    <div className="bg-cream retro-border shadow-retro halftone-bg overflow-hidden">
       <div className={`${accentColors[accent]} h-2`}></div>
       <div className="p-6">
-        <div className="subhead-retro text-xs text-gray-600 dark:text-gray-400 mb-3">
+        <div className="subhead-retro text-xs text-gray-600 mb-3">
           {title}
         </div>
-        <div className={`text-4xl md:text-5xl font-black ${colorClass || 'text-black dark:text-white'} mb-2 headline-retro`}>
+        <div className={`text-4xl md:text-5xl font-black ${colorClass || 'text-black'} mb-2 headline-retro`}>
           {value}
         </div>
         {subtitle && (
-          <div className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wide">
+          <div className="text-sm font-bold text-gray-700 uppercase tracking-wide">
             {subtitle}
           </div>
         )}

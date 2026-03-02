@@ -28,15 +28,15 @@ export default function TeamRankings({ teams, onTeamClick }: TeamRankingsProps) 
   };
 
   const getEfficiencyColor = (score: number) => {
-    if (score < -0.05) return 'text-green-700 dark:text-green-400';
-    if (score > 0.05) return 'text-red-700 dark:text-red-400';
-    return 'text-gray-700 dark:text-gray-400';
+    if (score < -0.05) return 'text-green-700';
+    if (score > 0.05) return 'text-red-700';
+    return 'text-gray-700';
   };
 
   const getEfficiencyBgColor = (netEfficiency: number) => {
-    if (netEfficiency < -5000000) return 'bg-green-50 dark:bg-green-950';
-    if (netEfficiency > 5000000) return 'bg-red-50 dark:bg-red-950';
-    return 'bg-gray-50 dark:bg-gray-950';
+    if (netEfficiency < -5000000) return 'bg-green-200';
+    if (netEfficiency > 5000000) return 'bg-red-200';
+    return 'bg-yellow-200';
   };
 
   const handleColumnClick = (column: SortColumn) => {
@@ -98,7 +98,7 @@ export default function TeamRankings({ teams, onTeamClick }: TeamRankingsProps) 
   });
 
   return (
-    <div className="bg-white dark:bg-gray-900 retro-border-thick shadow-retro-lg overflow-hidden">
+    <div className="bg-cream retro-border-thick shadow-retro-lg overflow-hidden">
       <div className="p-6 bg-retro-blue border-b-4 border-black">
         <div className="subhead-retro text-lg text-white flex items-center justify-between">
           <span>TEAM EFFICIENCY RANKINGS</span>
@@ -174,8 +174,8 @@ export default function TeamRankings({ teams, onTeamClick }: TeamRankingsProps) 
                 key={team.team_abbreviation}
                 onClick={() => onTeamClick(team.team_abbreviation)}
                 className={`
-                  border-b-2 border-gray-200 dark:border-gray-800 cursor-pointer
-                  transition-all hover:bg-gray-100 dark:hover:bg-gray-800
+                  border-b-2 border-gray-200 cursor-pointer
+                  transition-all hover:bg-gray-100
                   ${getEfficiencyBgColor(team.net_efficiency)}
                 `}
               >
@@ -186,21 +186,21 @@ export default function TeamRankings({ teams, onTeamClick }: TeamRankingsProps) 
                 </td>
                 <td className="px-6 py-4">
                   <div>
-                    <div className="font-black text-sm uppercase text-black dark:text-white">
+                    <div className="font-black text-sm uppercase text-black">
                       {team.team_abbreviation}
                     </div>
-                    <div className="text-xs font-bold text-gray-600 dark:text-gray-400">
+                    <div className="text-xs font-bold text-gray-600">
                       {team.full_name}
                     </div>
                   </div>
                 </td>
                 <td className="px-6 py-4 text-right">
-                  <div className="font-black text-sm text-black dark:text-white">
+                  <div className="font-black text-sm text-black">
                     {team.player_count}
                   </div>
                 </td>
                 <td className="px-6 py-4 text-right">
-                  <div className="font-black text-sm text-black dark:text-white">
+                  <div className="font-black text-sm text-black">
                     {formatCurrency(team.total_payroll)}
                   </div>
                 </td>

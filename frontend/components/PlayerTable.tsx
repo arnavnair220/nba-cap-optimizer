@@ -94,19 +94,19 @@ export default function PlayerTable({ players, showRank = true, showTeam = true,
   });
   return (
     <div className="overflow-x-auto">
-      <table className="min-w-full divide-y-4 divide-black">
+      <table className="min-w-full divide-y-4 divide-black border-collapse">
         <thead className="bg-black text-white">
-          <tr>
+          <tr className="border-l-4 border-black">
             {showRank && (
               <>
                 <th
-                  className="px-3 py-3 text-left text-xs font-black text-retro-orange uppercase tracking-wider subhead-retro cursor-pointer hover:bg-gray-900 transition-colors"
+                  className="px-3 py-3 text-left text-xs font-black text-retro-yellow uppercase tracking-wider subhead-retro cursor-pointer hover:bg-gray-900 transition-colors"
                   onClick={() => handleColumnClick('rank')}
                 >
                   #{getSortIndicator('rank')}
                 </th>
                 <th
-                  className="px-2 py-3 text-center text-xs font-black text-retro-orange uppercase tracking-wider subhead-retro cursor-pointer hover:bg-gray-900 transition-colors"
+                  className="px-3 py-3 text-center text-xs font-black text-retro-yellow uppercase tracking-wider subhead-retro cursor-pointer hover:bg-gray-900 transition-colors"
                   onClick={() => handleColumnClick('rank_change')}
                 >
                   ±{getSortIndicator('rank_change')}
@@ -165,35 +165,35 @@ export default function PlayerTable({ players, showRank = true, showTeam = true,
             </th>
           </tr>
         </thead>
-        <tbody className="bg-white dark:bg-gray-900 divide-y-2 divide-gray-300 dark:divide-gray-700">
+        <tbody className="bg-cream divide-y-2 divide-gray-300">
           {sortedPlayers.map((player, index) => {
             const savings = calculateSavings(player);
             const teamColors = getTeamColors(player.team_abbreviation);
             return (
               <tr
                 key={`${player.player_name}-${player.season}`}
-                className="hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors border-l-4"
+                className="hover:bg-gray-100 transition-colors border-l-4"
                 style={{ borderLeftColor: teamColors.primary }}
               >
                 {showRank && (
                   <>
                     <td className="px-3 py-3 whitespace-nowrap">
-                      <div className="text-xl font-black text-black dark:text-white headline-retro">
+                      <div className="text-xl font-black text-black headline-retro">
                         {index + 1}
                       </div>
                     </td>
-                    <td className="px-2 py-3 whitespace-nowrap text-center">
+                    <td className="px-3 py-3 whitespace-nowrap text-center">
                       {player.rank_change === null || player.rank_change === undefined ? (
-                        <div className="text-gray-400 dark:text-gray-600 font-bold text-sm">—</div>
+                        <div className="text-gray-400 font-bold text-sm">—</div>
                       ) : player.rank_change === 0 ? (
-                        <div className="text-gray-400 dark:text-gray-600 font-bold text-sm">—</div>
+                        <div className="text-gray-400 font-bold text-sm">—</div>
                       ) : player.rank_change > 0 ? (
-                        <div className="text-green-600 dark:text-green-400 font-black text-sm flex items-center justify-center gap-0.5">
+                        <div className="text-green-600 font-black text-sm flex items-center justify-center gap-0.5">
                           <span>↑</span>
                           <span>{player.rank_change}</span>
                         </div>
                       ) : (
-                        <div className="text-red-600 dark:text-red-400 font-black text-sm flex items-center justify-center gap-0.5">
+                        <div className="text-red-600 font-black text-sm flex items-center justify-center gap-0.5">
                           <span>↓</span>
                           <span>{Math.abs(player.rank_change)}</span>
                         </div>
@@ -203,14 +203,14 @@ export default function PlayerTable({ players, showRank = true, showTeam = true,
                 )}
                 <td className="px-4 py-3 whitespace-nowrap">
                   <div
-                    className={`text-sm font-bold text-black dark:text-white uppercase ${
+                    className={`text-sm font-bold text-black uppercase ${
                       onPlayerClick ? 'cursor-pointer hover:text-retro-blue transition-colors' : ''
                     }`}
                     onClick={() => onPlayerClick?.(player.player_name)}
                   >
                     {player.player_name}
                   </div>
-                  <div className="text-xs font-semibold text-gray-600 dark:text-gray-400">
+                  <div className="text-xs font-semibold text-gray-600">
                     Age {player.age}
                   </div>
                 </td>
@@ -228,17 +228,17 @@ export default function PlayerTable({ players, showRank = true, showTeam = true,
                   </td>
                 )}
                 <td className="px-3 py-3 whitespace-nowrap">
-                  <div className="text-sm font-bold text-black dark:text-white uppercase">
+                  <div className="text-sm font-bold text-black uppercase">
                     {player.position}
                   </div>
                 </td>
                 <td className="px-3 py-3 whitespace-nowrap text-right">
-                  <div className="text-sm font-bold text-black dark:text-white">
+                  <div className="text-sm font-bold text-black">
                     {formatCurrency(player.predicted_fmv)}
                   </div>
                 </td>
                 <td className="px-3 py-3 whitespace-nowrap text-right">
-                  <div className="text-sm font-bold text-black dark:text-white">
+                  <div className="text-sm font-bold text-black">
                     {formatCurrency(player.actual_salary)}
                   </div>
                 </td>

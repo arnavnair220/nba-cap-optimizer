@@ -26,9 +26,9 @@ export default function TeamDetailView({ team, onBack, onPlayerClick }: TeamDeta
   };
 
   const getEfficiencyColor = (score: number) => {
-    if (score < -0.05) return 'text-green-700 dark:text-green-400';
-    if (score > 0.05) return 'text-red-700 dark:text-red-400';
-    return 'text-gray-700 dark:text-gray-400';
+    if (score < -0.05) return 'text-green-700';
+    if (score > 0.05) return 'text-red-700';
+    return 'text-gray-700';
   };
 
   return (
@@ -42,7 +42,7 @@ export default function TeamDetailView({ team, onBack, onPlayerClick }: TeamDeta
         </button>
       </div>
 
-      <div className="bg-white dark:bg-gray-900 retro-border-thick shadow-retro-lg overflow-hidden">
+      <div className="bg-cream retro-border-thick shadow-retro-lg overflow-hidden">
         <div
           className="p-8 border-b-4 border-black"
           style={{ backgroundColor: teamColors.primary }}
@@ -77,18 +77,18 @@ export default function TeamDetailView({ team, onBack, onPlayerClick }: TeamDeta
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6 bg-gray-50 dark:bg-gray-950">
-          <div className="bg-white dark:bg-gray-900 retro-border p-6">
-            <div className="text-xs font-black uppercase tracking-widest text-gray-600 dark:text-gray-400 mb-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6 bg-gray-50">
+          <div className="bg-cream retro-border p-6">
+            <div className="text-xs font-black uppercase tracking-widest text-gray-600 mb-2">
               Total Payroll
             </div>
-            <div className="text-2xl font-black text-black dark:text-white">
+            <div className="text-2xl font-black text-black">
               {formatCurrency(team.total_payroll)}
             </div>
           </div>
 
-          <div className="bg-white dark:bg-gray-900 retro-border p-6">
-            <div className="text-xs font-black uppercase tracking-widest text-gray-600 dark:text-gray-400 mb-2">
+          <div className="bg-cream retro-border p-6">
+            <div className="text-xs font-black uppercase tracking-widest text-gray-600 mb-2">
               Net Overspend
             </div>
             <div className={`text-2xl font-black ${getEfficiencyColor(team.net_efficiency / team.total_payroll)}`}>
@@ -98,36 +98,36 @@ export default function TeamDetailView({ team, onBack, onPlayerClick }: TeamDeta
         </div>
 
         <div className="grid grid-cols-3 gap-4 p-6 border-t-4 border-black">
-          <div className="text-center p-4 bg-green-50 dark:bg-green-950 retro-border">
-            <div className="text-4xl font-black text-green-700 dark:text-green-400">
+          <div className="text-center p-4 bg-green-50 retro-border">
+            <div className="text-4xl font-black text-green-700">
               {team.bargain_count}
             </div>
-            <div className="text-xs font-black uppercase tracking-widest text-gray-600 dark:text-gray-400 mt-2">
+            <div className="text-xs font-black uppercase tracking-widest text-gray-600 mt-2">
               Bargain Contracts
             </div>
           </div>
 
-          <div className="text-center p-4 bg-yellow-50 dark:bg-yellow-950 retro-border">
-            <div className="text-4xl font-black text-yellow-700 dark:text-yellow-400">
+          <div className="text-center p-4 bg-yellow-50 retro-border">
+            <div className="text-4xl font-black text-yellow-700">
               {team.fair_count}
             </div>
-            <div className="text-xs font-black uppercase tracking-widest text-gray-600 dark:text-gray-400 mt-2">
+            <div className="text-xs font-black uppercase tracking-widest text-gray-600 mt-2">
               Fair Contracts
             </div>
           </div>
 
-          <div className="text-center p-4 bg-red-50 dark:bg-red-950 retro-border">
-            <div className="text-4xl font-black text-red-700 dark:text-red-400">
+          <div className="text-center p-4 bg-red-50 retro-border">
+            <div className="text-4xl font-black text-red-700">
               {team.overpaid_count}
             </div>
-            <div className="text-xs font-black uppercase tracking-widest text-gray-600 dark:text-gray-400 mt-2">
+            <div className="text-xs font-black uppercase tracking-widest text-gray-600 mt-2">
               Overpaid Contracts
             </div>
           </div>
         </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-900 retro-border-thick shadow-retro-lg">
+      <div className="bg-cream retro-border-thick shadow-retro-lg">
         <div className="p-6 bg-retro-orange border-b-4 border-black">
           <div className="subhead-retro text-lg text-white flex items-center justify-between">
             <span>TEAM ROSTER</span>

@@ -46,8 +46,9 @@ export default function Home() {
 
   const tabs = [
     { id: 'leaderboard', label: 'Leaderboard' },
-    { id: 'pulse', label: 'League Pulse' },
+    { id: 'pulse', label: 'League Overview' },
     { id: 'teams', label: 'Teams' },
+    { id: 'about', label: 'About' },
   ];
 
   const fetchPlayers = async () => {
@@ -194,12 +195,12 @@ export default function Home() {
   });
 
   return (
-    <main className="min-h-screen bg-gray-200 dark:bg-gray-900 bg-retro-bold-stripes">
+    <main className="min-h-screen bg-[#D4C5B0]">
       <div className="max-w-7xl mx-auto px-6 pt-8 pb-6">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="headline-retro text-4xl md:text-5xl lg:text-6xl text-black dark:text-white leading-none">
-              CAP OPTIMIZER
+            <h1 className="headline-retro text-4xl md:text-5xl lg:text-6xl text-retro-blue leading-none" style={{WebkitTextStroke: '1.5px #FEF5E7'}}>
+              NBA CAP OPTIMIZER
             </h1>
           </div>
           <div className="hidden md:block">
@@ -249,13 +250,13 @@ export default function Home() {
                     resultCount={sortedPlayers.length}
                   />
 
-                  <div className="bg-white dark:bg-gray-900 retro-border-thick shadow-retro-lg">
+                  <div className="bg-cream retro-border-thick shadow-retro-lg">
                     {sortedPlayers.length === 0 && (
                       <div className="p-12 text-center">
-                        <div className="text-2xl font-black uppercase text-black dark:text-white headline-retro">
+                        <div className="text-2xl font-black uppercase text-black headline-retro">
                           No Players Found
                         </div>
-                        <div className="text-sm font-bold text-gray-600 dark:text-gray-400 mt-2 uppercase">
+                        <div className="text-sm font-bold text-gray-600 mt-2 uppercase">
                           Try adjusting your filters
                         </div>
                       </div>
@@ -293,12 +294,6 @@ export default function Home() {
                   {players.length > 0 && (
                     <>
                   <div className="mb-8">
-                    <div className="flex items-center gap-3 mb-6">
-                      <div className="bg-retro-red text-white px-4 py-2 subhead-retro text-sm retro-border">
-                        LEAGUE OVERVIEW
-                      </div>
-                      <div className="flex-1 h-1 bg-retro-red"></div>
-                    </div>
                     <DashboardStats players={players} />
                   </div>
 
@@ -312,7 +307,7 @@ export default function Home() {
                   </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
-                    <div className="bg-white dark:bg-gray-900 retro-border shadow-retro p-6 halftone-bg">
+                    <div className="bg-cream retro-border shadow-retro p-6 halftone-bg">
                       <div className="flex items-center gap-3 mb-6">
                         <div className="bg-black text-white px-4 py-2 subhead-retro text-sm">
                           TOP BARGAINS
@@ -326,18 +321,18 @@ export default function Home() {
                           .map((player, idx) => (
                             <div
                               key={player.player_name}
-                              className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-950 retro-border"
+                              className="flex items-center justify-between p-3 bg-green-200 retro-border"
                             >
                               <div>
                                 <div className="font-black text-sm uppercase">
                                   {idx + 1}. {player.player_name}
                                 </div>
-                                <div className="text-xs font-bold text-gray-600 dark:text-gray-400">
+                                <div className="text-xs font-bold text-gray-600">
                                   {player.team_abbreviation} • {player.position}
                                 </div>
                               </div>
                               <div className="text-right">
-                                <div className="text-sm font-black text-green-700 dark:text-green-400">
+                                <div className="text-sm font-black text-green-700">
                                   {(player.inefficiency_score * 100).toFixed(1)}%
                                 </div>
                               </div>
@@ -346,7 +341,7 @@ export default function Home() {
                       </div>
                     </div>
 
-                    <div className="bg-white dark:bg-gray-900 retro-border shadow-retro p-6 halftone-bg">
+                    <div className="bg-cream retro-border shadow-retro p-6 halftone-bg">
                       <div className="flex items-center gap-3 mb-6">
                         <div className="bg-black text-white px-4 py-2 subhead-retro text-sm">
                           MOST OVERPAID
@@ -360,18 +355,18 @@ export default function Home() {
                           .map((player, idx) => (
                             <div
                               key={player.player_name}
-                              className="flex items-center justify-between p-3 bg-red-50 dark:bg-red-950 retro-border"
+                              className="flex items-center justify-between p-3 bg-red-200 retro-border"
                             >
                               <div>
                                 <div className="font-black text-sm uppercase">
                                   {idx + 1}. {player.player_name}
                                 </div>
-                                <div className="text-xs font-bold text-gray-600 dark:text-gray-400">
+                                <div className="text-xs font-bold text-gray-600">
                                   {player.team_abbreviation} • {player.position}
                                 </div>
                               </div>
                               <div className="text-right">
-                                <div className="text-sm font-black text-red-700 dark:text-red-400">
+                                <div className="text-sm font-black text-red-700">
                                   +{(player.inefficiency_score * 100).toFixed(1)}%
                                 </div>
                               </div>
@@ -423,11 +418,11 @@ export default function Home() {
                       />
 
                       {filteredTeams.length === 0 && teams.length > 0 && (
-                        <div className="bg-white dark:bg-gray-900 retro-border-thick shadow-retro-lg p-12 text-center">
-                          <div className="text-2xl font-black uppercase text-black dark:text-white headline-retro">
+                        <div className="bg-cream retro-border-thick shadow-retro-lg p-12 text-center">
+                          <div className="text-2xl font-black uppercase text-black headline-retro">
                             No Teams Found
                           </div>
-                          <div className="text-sm font-bold text-gray-600 dark:text-gray-400 mt-2 uppercase">
+                          <div className="text-sm font-bold text-gray-600 mt-2 uppercase">
                             Try adjusting your search
                           </div>
                         </div>
@@ -440,6 +435,49 @@ export default function Home() {
                   )}
                 </>
               )}
+            </TabPanel>
+
+            <TabPanel tabId="about" activeTab={activeTab}>
+              <div className="bg-white retro-border-thick shadow-retro-lg p-8 halftone-bg">
+                <div className="max-w-4xl mx-auto">
+                  <h2 className="headline-retro text-3xl text-black mb-6">ABOUT NBA CAP OPTIMIZER</h2>
+
+                  <div className="space-y-6 text-black">
+                    <div className="bg-retro-blue bg-opacity-10 p-6 retro-border">
+                      <h3 className="subhead-retro text-xl mb-3">What is This?</h3>
+                      <p className="font-bold leading-relaxed">
+                        NBA Cap Optimizer is an MLOps platform that predicts Fair Market Value (FMV) for NBA players using machine learning models (XGBoost/LightGBM). We compare these predictions to actual salaries to identify undervalued and overvalued contracts.
+                      </p>
+                    </div>
+
+                    <div className="bg-retro-orange bg-opacity-10 p-6 retro-border">
+                      <h3 className="subhead-retro text-xl mb-3">How It Works</h3>
+                      <p className="font-bold leading-relaxed mb-3">
+                        Our machine learning models analyze player performance metrics, team statistics, and market trends to calculate what a player's salary should be based on their production.
+                      </p>
+                      <ul className="list-disc list-inside space-y-2 font-bold ml-4">
+                        <li><span className="text-green-700 font-black">Bargain:</span> Player is producing more than their salary suggests (team-friendly deal)</li>
+                        <li><span className="text-yellow-600 font-black">Fair:</span> Player's salary aligns with their market value</li>
+                        <li><span className="text-red-700 font-black">Overpaid:</span> Player is producing less than their salary suggests (team overspending)</li>
+                      </ul>
+                    </div>
+
+                    <div className="bg-retro-red bg-opacity-10 p-6 retro-border">
+                      <h3 className="subhead-retro text-xl mb-3">Technology Stack</h3>
+                      <p className="font-bold leading-relaxed">
+                        Built with Python, AWS (Lambda, SageMaker, RDS), Terraform for infrastructure, and Next.js for the frontend. The platform uses advanced ML techniques to continuously improve predictions based on the latest player performance data.
+                      </p>
+                    </div>
+
+                    <div className="bg-gray-100 p-6 retro-border">
+                      <h3 className="subhead-retro text-xl mb-3">Data Source</h3>
+                      <p className="font-bold leading-relaxed">
+                        The ML models are trained on multiple years of historical NBA player statistics and salary data. Current predictions are for the 2025-26 season and are updated regularly to reflect the latest performance and market conditions.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </TabPanel>
           </>
         )}

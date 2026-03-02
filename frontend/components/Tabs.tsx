@@ -17,7 +17,7 @@ interface TabsProps {
 export default function Tabs({ tabs, activeTab, onTabChange }: TabsProps) {
   return (
     <div className="mb-8">
-      <div className="flex gap-2 overflow-x-auto">
+      <div className="flex gap-2 overflow-x-auto pt-1">
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -28,7 +28,7 @@ export default function Tabs({ tabs, activeTab, onTabChange }: TabsProps) {
               ${
                 activeTab === tab.id
                   ? 'bg-retro-red text-white shadow-retro transform -translate-y-1'
-                  : 'bg-white dark:bg-gray-800 text-black dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700'
+                  : 'bg-cream text-black hover:bg-gray-100'
               }
             `}
           >
