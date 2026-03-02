@@ -43,9 +43,38 @@ def model_fn(model_dir):
         features_metadata = json.load(f)
         feature_cols = features_metadata["features"]
 
+    # Load smearing factors (for retransformation bias correction)
+    smearing_cap = None
+    smearing_fmv = None
+    try:
+        with open(f"{model_dir}/model_salary_cap_pct_smearing.json", "r") as f:
+            data = json.load(f)
+            smearing_cap = data["smearing_factor"]
+            logger.info(f"Loaded smearing factor for salary_cap_pct: {smearing_cap:.4f}")
+    except FileNotFoundError:
+        logger.warning(
+            "No smearing factor found for model_salary_cap_pct, predictions may be biased"
+        )
+
+    try:
+        with open(f"{model_dir}/model_salary_pct_of_max_smearing.json", "r") as f:
+            data = json.load(f)
+            smearing_fmv = data["smearing_factor"]
+            logger.info(f"Loaded smearing factor for salary_pct_of_max: {smearing_fmv:.4f}")
+    except FileNotFoundError:
+        logger.warning(
+            "No smearing factor found for model_salary_pct_of_max, predictions may be biased"
+        )
+
     logger.info(f"Loaded models with {len(feature_cols)} features")
 
-    return {"model_cap": model_cap, "model_fmv": model_fmv, "features": feature_cols}
+    return {
+        "model_cap": model_cap,
+        "model_fmv": model_fmv,
+        "features": feature_cols,
+        "smearing_cap": smearing_cap,
+        "smearing_fmv": smearing_fmv,
+    }
 
 
 def input_fn(request_body, content_type="text/csv"):
@@ -72,6 +101,31 @@ def input_fn(request_body, content_type="text/csv"):
         raise ValueError(f"Unsupported content type: {content_type}")
 
 
+def apply_smearing(log_predictions, smearing_factor):
+    """
+    Apply smearing correction to log-space predictions.
+
+    Corrects retransformation bias when converting from log space back to original space.
+    Uses the Duan (1983) smearing estimator.
+
+    Args:
+        log_predictions: Predictions in log space
+        smearing_factor: Single smearing factor (float) or None
+
+    Returns:
+        Corrected predictions in original space
+    """
+    if smearing_factor is None:
+        logger.warning("No smearing factor provided, using naive exp() transformation")
+        return np.exp(log_predictions) - 1e-6
+
+    # Convert to original space and apply smearing correction
+    naive_predictions = np.exp(log_predictions) - 1e-6
+    corrected_predictions = naive_predictions * smearing_factor
+
+    return corrected_predictions
+
+
 def predict_fn(input_data, model):
     """
     Make predictions on input data.
@@ -89,6 +143,8 @@ def predict_fn(input_data, model):
     model_cap = model["model_cap"]
     model_fmv = model["model_fmv"]
     feature_cols = model["features"]
+    smearing_cap = model.get("smearing_cap")
+    smearing_fmv = model.get("smearing_fmv")
 
     # Keep player info
     player_info = input_data[["player_name", "season"]].copy()
@@ -104,10 +160,9 @@ def predict_fn(input_data, model):
     player_info["predicted_log_salary_cap_pct"] = pred_cap
     player_info["predicted_log_salary_pct_of_max"] = pred_fmv
 
-    # Convert from log space to percentages
-    # Note: exp() already returns percentages since we took log of percentages during training
-    player_info["predicted_salary_cap_pct"] = np.exp(pred_cap)
-    player_info["predicted_salary_pct_of_max"] = np.exp(pred_fmv)
+    # Convert from log space to percentages with smearing correction
+    player_info["predicted_salary_cap_pct"] = apply_smearing(pred_cap, smearing_cap)
+    player_info["predicted_salary_pct_of_max"] = apply_smearing(pred_fmv, smearing_fmv)
 
     logger.info("Predictions complete")
 

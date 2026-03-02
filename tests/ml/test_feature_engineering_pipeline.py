@@ -22,6 +22,9 @@ class TestEngineerFeaturesPredictMode:
             {
                 "player_name": ["Test Player"],
                 "season": ["2024-25"],
+                "team_abbreviation": ["LAL"],
+                "is_multi_team": [False],
+                "teams_played_for": [["LAL"]],
                 "points": [1800],
                 "rebounds": [400],
                 "assists": [500],
@@ -81,6 +84,9 @@ class TestEngineerFeaturesPredictMode:
             {
                 "player_name": ["Test Player"],
                 "season": ["2024-25"],
+                "team_abbreviation": ["LAL"],
+                "is_multi_team": [False],
+                "teams_played_for": [["LAL"]],
                 "points": [1800],
                 "rebounds": [400],
                 "assists": [500],
@@ -152,6 +158,9 @@ class TestEngineerFeaturesTrainMode:
             {
                 "player_name": ["Test Player"],
                 "season": ["2023-24"],
+                "team_abbreviation": ["LAL"],
+                "is_multi_team": [False],
+                "teams_played_for": [["LAL"]],
                 "annual_salary": [30000000],
                 "points": [1800],
                 "rebounds": [400],
@@ -218,6 +227,9 @@ class TestEngineerFeaturesTrainMode:
             {
                 "player_name": ["Test Player"],
                 "season": ["2023-24"],
+                "team_abbreviation": ["LAL"],
+                "is_multi_team": [False],
+                "teams_played_for": [["LAL"]],
                 "annual_salary": [30000000],
                 "points": [1800],
                 "rebounds": [400],
@@ -279,6 +291,9 @@ class TestEngineerFeaturesTrainMode:
         mock_load_data.return_value = pd.DataFrame(
             {
                 "player_name": ["Test"],
+                "team_abbreviation": ["BOS"],
+                "is_multi_team": [False],
+                "teams_played_for": [["BOS"]],
                 "points": [100],
                 "rebounds": [50],
                 "assists": [30],

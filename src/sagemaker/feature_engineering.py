@@ -186,6 +186,71 @@ def get_max_salary_for_tier(tier: str, salary_cap: float) -> float:
     return salary_cap * max_percentages[tier]
 
 
+def prorate_games_to_full_season(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Pro-rate games_played and games_started to a full 82-game season.
+
+    This handles the distribution shift between training data (complete seasons)
+    and prediction data (incomplete current season). By projecting to 82 games,
+    we preserve the availability/durability signal while normalizing for season progress.
+
+    Algorithm:
+    1. Calculate team max games using only single-team players (excludes multi-team indicators)
+    2. For multi-team players, use max games from any team they played for
+    3. Pro-rate: projected_games = actual_games * (82 / team_games_played)
+
+    Args:
+        df: DataFrame with games_played, games_started, team_abbreviation,
+            is_multi_team, and teams_played_for columns
+
+    Returns:
+        DataFrame with games_played and games_started updated to projected values
+    """
+    logger.info("Pro-rating games_played and games_started to full 82-game season...")
+
+    # Multi-team indicators that should be excluded from team max calculation
+    MULTI_TEAM_INDICATORS = ["TOT", "2TM", "3TM", "4TM", "5TM"]
+
+    # Calculate team max games using only single-team players
+    single_team_mask = ~df["team_abbreviation"].isin(MULTI_TEAM_INDICATORS)
+    single_team_df = df[single_team_mask]
+    team_max_games = single_team_df.groupby("team_abbreviation")["games_played"].max()
+
+    logger.info(f"Calculated max games for {len(team_max_games)} teams")
+
+    # For each player, determine their team's games played
+    def get_team_games_played(row):
+        """Get the number of games the player's team(s) have played."""
+        if row.get("is_multi_team", False):
+            # Multi-team player: use max games from any team they played for
+            teams_list = row.get("teams_played_for", [])
+            if teams_list:
+                team_games = [team_max_games.get(team, 82) for team in teams_list]
+                return max(team_games) if team_games else 82
+            else:
+                return 82  # Fallback
+        else:
+            # Single-team player
+            team = row.get("team_abbreviation")
+            return team_max_games.get(team, 82) if team else 82
+
+    df["team_games_played"] = df.apply(get_team_games_played, axis=1)
+
+    # Pro-rate to 82 games
+    df["games_played"] = (df["games_played"].fillna(0) * (82 / df["team_games_played"])).round(1)
+    df["games_started"] = (df["games_started"].fillna(0) * (82 / df["team_games_played"])).round(1)
+
+    logger.info(
+        f"Pro-rated games - mean games_played: {df['games_played'].mean():.1f}, "
+        f"mean games_started: {df['games_started'].mean():.1f}"
+    )
+
+    # Drop temporary column
+    df = df.drop(columns=["team_games_played"])
+
+    return df
+
+
 def calculate_volume_features(df: pd.DataFrame) -> pd.DataFrame:
     """
     Calculate volume features with transformations.
@@ -576,6 +641,9 @@ def engineer_features(
         salary_cap_df = None
     else:
         raise ValueError(f"Invalid mode: {mode}. Must be 'train' or 'predict'")
+
+    # Pro-rate games to full season (handles incomplete seasons in predict mode)
+    df = prorate_games_to_full_season(df)
 
     # Calculate features
     df = calculate_volume_features(df)
