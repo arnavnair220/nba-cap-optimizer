@@ -485,13 +485,13 @@ export default function Home() {
                           <span className="text-retro-red font-black">ML Pipeline:</span> Python-based training and inference using Random Forest models on AWS SageMaker. Automated feature engineering, hyperparameter tuning, and batch transform jobs for predictions.
                         </p>
                         <p className="font-bold leading-relaxed">
-                          <span className="text-retro-red font-black">MLOps Infrastructure:</span> Fully automated CI/CD with AWS Step Functions orchestrating ETL, training, and prediction pipelines. EventBridge schedules for weekly stats updates and model retraining. Model versioning and metadata tracking for reproducibility.
+                          <span className="text-retro-red font-black">MLOps Infrastructure:</span> Fully automated with AWS Step Functions orchestrating ETL, training, and prediction pipelines. EventBridge schedules for weekly stats updates and model retraining. Model versioning and metadata tracking for reproducibility.
                         </p>
                         <p className="font-bold leading-relaxed">
                           <span className="text-retro-red font-black">Data Engineering:</span> Serverless ETL with AWS Lambda extracting from Basketball Reference, transforming player stats, and loading to PostgreSQL (RDS). S3 for model artifacts and intermediate data storage.
                         </p>
                         <p className="font-bold leading-relaxed">
-                          <span className="text-retro-red font-black">Infrastructure as Code:</span> Terraform managing all AWS resources (Lambda, SageMaker, RDS, VPC, API Gateway, IAM, Route 53, CloudFront, Certificate Manager). Modular architecture with separate environments for dev/prod.
+                          <span className="text-retro-red font-black">Infrastructure as Code:</span> Terraform managing all AWS resources (Lambda, SageMaker, RDS, VPC, API Gateway, IAM, Route 53, CloudFront, Certificate Manager). GitHub Actions CI/CD for automated deployments with approval gates. Modular architecture with separate environments for dev/prod.
                         </p>
                         <p className="font-bold leading-relaxed">
                           <span className="text-retro-red font-black">Frontend & Deployment:</span> Next.js 14 with TypeScript and Tailwind CSS hosted on S3/CloudFront with custom domain via Route 53. SSL/TLS certificates managed through AWS Certificate Manager. RESTful API integration with API Gateway.
@@ -502,7 +502,7 @@ export default function Home() {
                     <div className="bg-yellow-100 p-6 retro-border">
                       <h3 className="subhead-retro text-xl mb-3 text-yellow-700">Data Source & Updates</h3>
                       <p className="font-bold leading-relaxed mb-3">
-                        The ML models are trained on multiple years of historical NBA player statistics and salary data. Current predictions are for the 2025-26 season.
+                        The ML models are trained on multiple years of historical NBA player statistics and salary data sourced from Basketball Reference, ESPN, and official NBA APIs. Current predictions are for the 2025-26 season.
                       </p>
                       <p className="font-bold leading-relaxed mb-2 text-yellow-700">
                         Automated Update Schedule:

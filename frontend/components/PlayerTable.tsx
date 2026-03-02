@@ -172,8 +172,11 @@ export default function PlayerTable({ players, showRank = true, showTeam = true,
             return (
               <tr
                 key={`${player.player_name}-${player.season}`}
-                className="hover:bg-gray-100 transition-colors border-l-4"
+                className={`hover:bg-gray-100 transition-colors border-l-4 ${
+                  onPlayerClick ? 'cursor-pointer' : ''
+                }`}
                 style={{ borderLeftColor: teamColors.primary }}
+                onClick={() => onPlayerClick?.(player.player_name)}
               >
                 {showRank && (
                   <>
@@ -202,12 +205,7 @@ export default function PlayerTable({ players, showRank = true, showTeam = true,
                   </>
                 )}
                 <td className="px-4 py-3 whitespace-nowrap">
-                  <div
-                    className={`text-sm font-bold text-black uppercase ${
-                      onPlayerClick ? 'cursor-pointer hover:text-retro-blue transition-colors' : ''
-                    }`}
-                    onClick={() => onPlayerClick?.(player.player_name)}
-                  >
+                  <div className="text-sm font-bold text-black uppercase">
                     {player.player_name}
                   </div>
                   <div className="text-xs font-semibold text-gray-600">
