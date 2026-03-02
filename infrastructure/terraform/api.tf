@@ -60,6 +60,13 @@ resource "aws_api_gateway_resource" "teams_detail" {
   path_part   = "{team_abbreviation}"
 }
 
+# /metadata
+resource "aws_api_gateway_resource" "metadata" {
+  rest_api_id = aws_api_gateway_rest_api.predictions_api.id
+  parent_id   = aws_api_gateway_rest_api.predictions_api.root_resource_id
+  path_part   = "metadata"
+}
+
 # ============================================================================
 # API GATEWAY METHODS
 # ============================================================================
@@ -174,6 +181,23 @@ resource "aws_api_gateway_integration" "teams_detail_get" {
   uri                     = aws_lambda_function.api_handler.invoke_arn
 }
 
+# GET /metadata
+resource "aws_api_gateway_method" "metadata_get" {
+  rest_api_id   = aws_api_gateway_rest_api.predictions_api.id
+  resource_id   = aws_api_gateway_resource.metadata.id
+  http_method   = "GET"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "metadata_get" {
+  rest_api_id             = aws_api_gateway_rest_api.predictions_api.id
+  resource_id             = aws_api_gateway_resource.metadata.id
+  http_method             = aws_api_gateway_method.metadata_get.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.api_handler.invoke_arn
+}
+
 # ============================================================================
 # CORS CONFIGURATION (Enable OPTIONS for preflight requests)
 # ============================================================================
@@ -220,6 +244,13 @@ module "cors_teams_detail" {
   api_resource_id = aws_api_gateway_resource.teams_detail.id
 }
 
+module "cors_metadata" {
+  source = "./modules/cors"
+
+  api_id          = aws_api_gateway_rest_api.predictions_api.id
+  api_resource_id = aws_api_gateway_resource.metadata.id
+}
+
 # ============================================================================
 # API GATEWAY DEPLOYMENT
 # ============================================================================
@@ -235,18 +266,21 @@ resource "aws_api_gateway_deployment" "predictions_api" {
       aws_api_gateway_resource.predictions_player.id,
       aws_api_gateway_resource.teams.id,
       aws_api_gateway_resource.teams_detail.id,
+      aws_api_gateway_resource.metadata.id,
       aws_api_gateway_method.predictions_get.id,
       aws_api_gateway_method.predictions_undervalued_get.id,
       aws_api_gateway_method.predictions_overvalued_get.id,
       aws_api_gateway_method.predictions_player_get.id,
       aws_api_gateway_method.teams_get.id,
       aws_api_gateway_method.teams_detail_get.id,
+      aws_api_gateway_method.metadata_get.id,
       aws_api_gateway_integration.predictions_get.id,
       aws_api_gateway_integration.predictions_undervalued_get.id,
       aws_api_gateway_integration.predictions_overvalued_get.id,
       aws_api_gateway_integration.predictions_player_get.id,
       aws_api_gateway_integration.teams_get.id,
       aws_api_gateway_integration.teams_detail_get.id,
+      aws_api_gateway_integration.metadata_get.id,
     ]))
   }
 
@@ -293,6 +327,7 @@ resource "aws_lambda_function" "api_handler" {
       ENVIRONMENT    = var.environment
       DB_SECRET_ARN  = aws_secretsmanager_secret.db_credentials.arn
       CURRENT_SEASON = var.current_season
+      DATA_BUCKET    = aws_s3_bucket.data.id
     }
   }
 
