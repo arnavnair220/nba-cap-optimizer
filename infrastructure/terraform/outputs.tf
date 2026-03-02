@@ -80,3 +80,18 @@ output "api_lambda_function" {
   description = "API Lambda function name"
   value       = aws_lambda_function.api_handler.function_name
 }
+
+output "frontend_bucket" {
+  description = "S3 bucket name for frontend hosting"
+  value       = aws_s3_bucket.frontend.bucket
+}
+
+output "frontend_cloudfront_url" {
+  description = "CloudFront distribution URL for frontend"
+  value       = "https://${aws_cloudfront_distribution.frontend.domain_name}"
+}
+
+output "frontend_cloudfront_id" {
+  description = "CloudFront distribution ID (for cache invalidation)"
+  value       = aws_cloudfront_distribution.frontend.id
+}

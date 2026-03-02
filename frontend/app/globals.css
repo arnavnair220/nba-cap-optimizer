@@ -1,0 +1,136 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Anton&family=Bebas+Neue&family=Oswald:wght@600;700&family=Bungee+Shade&display=swap');
+
+:root {
+  --background: #D4C5B0;
+  --foreground: #000000;
+}
+
+body {
+  color: var(--foreground);
+  background-color: #D4C5B0;
+  font-family: Arial, Helvetica, sans-serif;
+  position: relative;
+  overflow-x: hidden;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background-image: url('/images/playbook-pattern.jpg');
+  background-size: 600px;
+  background-position: center;
+  background-repeat: repeat;
+  transform: rotate(90deg);
+  opacity: 0.2;
+  z-index: 0;
+  pointer-events: none;
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #D4C5B0;
+  mix-blend-mode: multiply;
+  opacity: 0.7;
+  z-index: 0;
+  pointer-events: none;
+}
+
+main {
+  position: relative;
+  z-index: 1;
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .retro-border {
+    border: 4px solid black;
+    border-radius: 6px;
+  }
+
+  .retro-border-thick {
+    border: 6px solid black;
+    border-radius: 8px;
+  }
+
+  .halftone-bg {
+    position: relative;
+  }
+
+  .halftone-bg::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: radial-gradient(circle, black 1px, transparent 1px);
+    background-size: 10px 10px;
+    opacity: 0.05;
+    pointer-events: none;
+  }
+
+  .angle-cut {
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - 20px), calc(100% - 20px) 100%, 0 100%);
+  }
+
+  .headline-shadow {
+    text-shadow: 3px 3px 0px rgba(0, 0, 0, 0.3);
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-fadeIn {
+    animation: fadeIn 0.3s ease-out;
+  }
+}
+
+@layer components {
+  .stat-box {
+    @apply bg-black text-white font-bold px-4 py-2 text-center retro-border;
+  }
+
+  .headline-retro {
+    font-family: 'Anton', 'Impact', sans-serif;
+    @apply uppercase tracking-tight headline-shadow;
+  }
+
+  .subhead-retro {
+    font-family: 'Oswald', 'Arial Black', sans-serif;
+    @apply uppercase tracking-wide font-bold;
+  }
+
+  input[type="text"],
+  input[type="search"],
+  select {
+    border-radius: 6px;
+  }
+
+  button {
+    border-radius: 6px;
+  }
+}
