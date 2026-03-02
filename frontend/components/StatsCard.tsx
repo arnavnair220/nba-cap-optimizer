@@ -31,7 +31,7 @@ export default function StatsCard({ title, value, subtitle, trend, colorClass, a
         <div className="subhead-retro text-xs text-gray-600 mb-3">
           {title}
         </div>
-        <div className={`text-4xl md:text-5xl font-black ${colorClass || 'text-black'} mb-2 headline-retro`}>
+        <div className={`text-2xl lg:text-3xl xl:text-4xl font-black ${colorClass || 'text-black'} mb-2 headline-retro`}>
           {value}
         </div>
         {subtitle && (

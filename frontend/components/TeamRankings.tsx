@@ -28,15 +28,15 @@ export default function TeamRankings({ teams, onTeamClick }: TeamRankingsProps) 
   };
 
   const getEfficiencyColor = (score: number) => {
-    if (score < -0.05) return 'text-green-700';
-    if (score > 0.05) return 'text-red-700';
-    return 'text-gray-700';
+    if (score < -0.2) return 'text-green-700';
+    if (score > 0.2) return 'text-red-700';
+    return 'text-yellow-500';
   };
 
   const getEfficiencyBgColor = (netEfficiency: number) => {
-    if (netEfficiency < -5000000) return 'bg-green-200';
-    if (netEfficiency > 5000000) return 'bg-red-200';
-    return 'bg-yellow-200';
+    if (netEfficiency < -10000000) return 'bg-green-100';
+    if (netEfficiency > 10000000) return 'bg-red-100';
+    return 'bg-yellow-100';
   };
 
   const handleColumnClick = (column: SortColumn) => {
@@ -206,7 +206,7 @@ export default function TeamRankings({ teams, onTeamClick }: TeamRankingsProps) 
                 </td>
                 <td className="px-6 py-4 text-right">
                   <div className={`font-black text-sm ${getEfficiencyColor(team.avg_inefficiency_score)}`}>
-                    {formatPercentage(team.avg_inefficiency_score)}
+                    {team.avg_inefficiency_score > 0 ? '+' : ''}{formatPercentage(team.avg_inefficiency_score)}
                   </div>
                 </td>
                 <td className="px-6 py-4 text-right">
