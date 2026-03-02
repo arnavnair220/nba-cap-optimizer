@@ -462,7 +462,7 @@ export default function Home() {
                     <div className="bg-blue-100 p-6 retro-border">
                       <h3 className="subhead-retro text-xl mb-3 text-retro-blue">What is This?</h3>
                       <p className="font-bold leading-relaxed">
-                        NBA Cap Optimizer is an MLOps platform that predicts Fair Market Value (FMV) for NBA players using machine learning models (XGBoost/LightGBM). We compare these predictions to actual salaries to identify undervalued and overvalued contracts.
+                        NBA Cap Optimizer analyzes player performance to predict what each player's salary should be worth. We then compare these predictions to what teams are actually paying to identify team-friendly bargains and overpaid contracts.
                       </p>
                     </div>
 
@@ -480,15 +480,41 @@ export default function Home() {
 
                     <div className="bg-red-100 p-6 retro-border">
                       <h3 className="subhead-retro text-xl mb-3 text-retro-red">Technology Stack</h3>
-                      <p className="font-bold leading-relaxed">
-                        Built with Python, AWS (Lambda, SageMaker, RDS), Terraform for infrastructure, and Next.js for the frontend. The platform uses advanced ML techniques to continuously improve predictions based on the latest player performance and market conditions.
-                      </p>
+                      <div className="space-y-3">
+                        <p className="font-bold leading-relaxed">
+                          <span className="text-retro-red font-black">ML Pipeline:</span> Python-based training and inference using Random Forest models on AWS SageMaker. Automated feature engineering, hyperparameter tuning, and batch transform jobs for predictions.
+                        </p>
+                        <p className="font-bold leading-relaxed">
+                          <span className="text-retro-red font-black">MLOps Infrastructure:</span> Fully automated CI/CD with AWS Step Functions orchestrating ETL, training, and prediction pipelines. EventBridge schedules for weekly stats updates and model retraining. Model versioning and metadata tracking for reproducibility.
+                        </p>
+                        <p className="font-bold leading-relaxed">
+                          <span className="text-retro-red font-black">Data Engineering:</span> Serverless ETL with AWS Lambda extracting from Basketball Reference, transforming player stats, and loading to PostgreSQL (RDS). S3 for model artifacts and intermediate data storage.
+                        </p>
+                        <p className="font-bold leading-relaxed">
+                          <span className="text-retro-red font-black">Infrastructure as Code:</span> Terraform managing all AWS resources (Lambda, SageMaker, RDS, VPC, API Gateway, IAM, Route 53, CloudFront, Certificate Manager). Modular architecture with separate environments for dev/prod.
+                        </p>
+                        <p className="font-bold leading-relaxed">
+                          <span className="text-retro-red font-black">Frontend & Deployment:</span> Next.js 14 with TypeScript and Tailwind CSS hosted on S3/CloudFront with custom domain via Route 53. SSL/TLS certificates managed through AWS Certificate Manager. RESTful API integration with API Gateway.
+                        </p>
+                      </div>
                     </div>
 
                     <div className="bg-yellow-100 p-6 retro-border">
-                      <h3 className="subhead-retro text-xl mb-3 text-yellow-700">Data Source</h3>
-                      <p className="font-bold leading-relaxed">
-                        The ML models are trained on multiple years of historical NBA player statistics and salary data. Current predictions are for the 2025-26 season and are updated regularly to reflect the latest performance and market conditions.
+                      <h3 className="subhead-retro text-xl mb-3 text-yellow-700">Data Source & Updates</h3>
+                      <p className="font-bold leading-relaxed mb-3">
+                        The ML models are trained on multiple years of historical NBA player statistics and salary data. Current predictions are for the 2025-26 season.
+                      </p>
+                      <p className="font-bold leading-relaxed mb-2 text-yellow-700">
+                        Automated Update Schedule:
+                      </p>
+                      <ul className="list-disc list-inside space-y-1 font-bold ml-4">
+                        <li><span className="font-black">Player Stats:</span> Weekly (every Sunday with latest performance data)</li>
+                        <li><span className="font-black">Salaries & Rosters:</span> Monthly (1st of each month with contract updates)</li>
+                        <li><span className="font-black">Predictions Regenerated:</span> Weekly (every Sunday) with updated data</li>
+                        <li><span className="font-black">Model Retrained:</span> Yearly (during off-season with complete historical data)</li>
+                      </ul>
+                      <p className="font-bold leading-relaxed mt-3 text-sm text-gray-700">
+                        Check the season badge above for the exact dates of the latest updates.
                       </p>
                     </div>
 
