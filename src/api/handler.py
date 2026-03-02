@@ -724,6 +724,72 @@ def get_team_detail(conn, team_abbreviation: str) -> Optional[Dict]:
     return team_data
 
 
+def get_metadata(conn) -> Dict:
+    """
+    GET /metadata
+    Get system metadata about data freshness and ML pipeline runs.
+
+    Returns:
+    - Latest prediction date
+    - Latest ETL run ID
+    - Model version
+    - Model training date (from S3)
+    - Current season
+    """
+    query = """
+        WITH latest_prediction AS (
+            SELECT
+                prediction_date,
+                model_version,
+                etl_run_id,
+                run_id
+            FROM predictions
+            WHERE season = %s
+            ORDER BY prediction_date DESC
+            LIMIT 1
+        )
+        SELECT
+            prediction_date as latest_prediction_date,
+            model_version,
+            etl_run_id as latest_etl_run_id,
+            run_id as latest_run_id,
+            %s as current_season
+        FROM latest_prediction
+    """
+
+    cur = conn.cursor()
+    cur.execute(query, [CURRENT_SEASON, CURRENT_SEASON])
+    result = cur.fetchone()
+    cur.close()
+
+    if not result:
+        return {
+            "latest_prediction_date": None,
+            "model_version": None,
+            "latest_etl_run_id": None,
+            "latest_run_id": None,
+            "model_trained_at": None,
+            "current_season": CURRENT_SEASON,
+        }
+
+    metadata = dict(result)
+
+    data_bucket = os.environ.get("DATA_BUCKET")
+    if data_bucket:
+        try:
+            s3_client = boto3.client("s3")
+            model_key = f"ml/models/{CURRENT_SEASON}/model.tar.gz"
+            response = s3_client.head_object(Bucket=data_bucket, Key=model_key)
+            metadata["model_trained_at"] = response["LastModified"]
+        except Exception as e:
+            logger.warning(f"Could not fetch model training date from S3: {e}")
+            metadata["model_trained_at"] = None
+    else:
+        metadata["model_trained_at"] = None
+
+    return metadata
+
+
 def handler(event, context):
     """
     Main Lambda handler for API Gateway requests.
@@ -785,6 +851,10 @@ def handler(event, context):
                 if not result:
                     return error_response(f"Team '{team_abbr}' not found", 404)
 
+                return success_response(result)
+
+            elif path == "/metadata" and http_method == "GET":
+                result = get_metadata(conn)
                 return success_response(result)
 
             else:
