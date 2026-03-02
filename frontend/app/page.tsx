@@ -74,7 +74,7 @@ export default function Home() {
     try {
       setTeamsLoading(true);
       setTeamsError(null);
-      const response = await api.teams.getAll({ sort_by: teamSortBy as any });
+      const response = await api.teams.getAll({});
       setTeams(response.teams);
     } catch (err) {
       if (err instanceof ApiError) {
@@ -147,15 +147,9 @@ export default function Home() {
 
   useEffect(() => {
     fetchPlayers();
+    fetchTeams(); // Pre-fetch teams data on initial load
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
-
-  useEffect(() => {
-    if (activeTab === 'teams') {
-      fetchTeams();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, teamSortBy]);
 
   const filteredPlayers = players.filter((player) => {
     const matchesSearch = player.player_name.toLowerCase().includes(searchQuery.toLowerCase());
@@ -192,6 +186,21 @@ export default function Home() {
       team.team_abbreviation?.toLowerCase().includes(teamSearchQuery.toLowerCase()) ||
       team.full_name?.toLowerCase().includes(teamSearchQuery.toLowerCase());
     return matchesSearch;
+  });
+
+  const sortedTeams = [...filteredTeams].sort((a, b) => {
+    switch (teamSortBy) {
+      case 'avg_inefficiency':
+        return a.avg_inefficiency_score - b.avg_inefficiency_score;
+      case 'net_efficiency':
+        return a.net_efficiency - b.net_efficiency;
+      case 'bargain_count':
+        return b.bargain_count - a.bargain_count;
+      case 'overpaid_count':
+        return b.overpaid_count - a.overpaid_count;
+      default:
+        return 0;
+    }
   });
 
   return (
@@ -422,7 +431,7 @@ export default function Home() {
                         onSearchChange={setTeamSearchQuery}
                       />
 
-                      {filteredTeams.length === 0 && teams.length > 0 && (
+                      {sortedTeams.length === 0 && teams.length > 0 && (
                         <div className="bg-cream retro-border-thick shadow-retro-lg p-12 text-center">
                           <div className="text-2xl font-black uppercase text-black headline-retro">
                             No Teams Found
@@ -433,8 +442,8 @@ export default function Home() {
                         </div>
                       )}
 
-                      {filteredTeams.length > 0 && (
-                        <TeamRankings teams={filteredTeams} onTeamClick={handleTeamClick} />
+                      {sortedTeams.length > 0 && (
+                        <TeamRankings teams={sortedTeams} onTeamClick={handleTeamClick} />
                       )}
                     </>
                   )}
