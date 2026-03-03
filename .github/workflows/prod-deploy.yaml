@@ -96,6 +96,25 @@ jobs:
       - name: Run mypy (type checking)
         run: mypy src/ --ignore-missing-imports
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run ESLint (frontend linting)
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Run TypeScript check (frontend type checking)
+        working-directory: frontend
+        run: npx tsc --noEmit
+
   # Unit Tests (Stricter Coverage for Production)
   test:
     name: Run Tests
@@ -214,10 +233,12 @@ jobs:
           path: sagemaker-code.tar.gz
           retention-days: 30
 
-  # Build Frontend
-  build-frontend:
-    name: Build Frontend Package
+  # Build Frontend for validation (only on PRs)
+  build-frontend-pr:
+    name: Build Frontend (Validation)
     runs-on: ubuntu-latest
+    needs: lint-and-format
+    if: github.event_name == 'pull_request'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -229,28 +250,21 @@ jobs:
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install dependencies
+      - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
 
-      - name: Build Next.js app
+      - name: Build Next.js app (validation)
         working-directory: frontend
         env:
-          NEXT_PUBLIC_API_URL: ${{ secrets.PROD_API_URL || 'https://placeholder-api-url.example.com/v1' }}
+          NEXT_PUBLIC_API_URL: https://placeholder-for-validation.example.com/v1
         run: npm run build
-
-      - name: Upload frontend build
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-build-prod
-          path: frontend/out/
-          retention-days: 30
 
   # Terraform Plan (only on PRs, validates before merge)
   terraform-plan:
     name: Terraform Plan (Validation)
     runs-on: ubuntu-latest
-    needs: [build-backend]
+    needs: [test, security-scan]
     if: github.event_name == 'pull_request'
     permissions:
       id-token: write
@@ -323,26 +337,12 @@ jobs:
         if: steps.plan.outcome == 'failure'
         run: exit 1
 
-  # Manual Approval Gate (only on push, not PRs)
-  approve-deployment:
-    name: Approve Production Deployment
-    runs-on: ubuntu-latest
-    needs: [build-backend]
-    if: github.event_name == 'push' || github.event_name == 'release'
-    environment:
-      name: production
-      url: https://nba-cap-optimizer.com
-    steps:
-      - name: Manual approval checkpoint
-        run: |
-          echo "Production deployment approved by ${{ github.actor }}"
-          echo "Proceeding with deployment to production..."
-
-  # Deploy Infrastructure
+  # Deploy Infrastructure (only on push, not PRs)
   deploy-infrastructure:
     name: Deploy Infrastructure (Terraform)
     runs-on: ubuntu-latest
-    needs: approve-deployment
+    needs: [test, security-scan]
+    if: github.event_name == 'push' || github.event_name == 'release'
     environment: production
     permissions:
       id-token: write
@@ -396,7 +396,7 @@ jobs:
   deploy-backend:
     name: Deploy Backend Code
     runs-on: ubuntu-latest
-    needs: deploy-infrastructure
+    needs: [build-backend, deploy-infrastructure]
     environment: production
     permissions:
       id-token: write
@@ -488,11 +488,11 @@ jobs:
       - name: Wait for Lambda updates to stabilize
         run: sleep 30
 
-  # Deploy Frontend
-  deploy-frontend:
-    name: Deploy Frontend to S3
+  # Build Frontend
+  build-frontend:
+    name: Build Frontend Package
     runs-on: ubuntu-latest
-    needs: [deploy-infrastructure, build-frontend]
+    needs: [deploy-infrastructure]
     if: github.event_name == 'push' || github.event_name == 'release'
     environment: production
     permissions:
@@ -522,7 +522,73 @@ jobs:
         working-directory: ./infrastructure/terraform
         run: terraform workspace select prod || terraform workspace new prod
 
-      - name: Get S3 bucket and CloudFront ID
+      - name: Get API Gateway URL
+        working-directory: ./infrastructure/terraform
+        id: get-api-url
+        run: |
+          API_URL=$(terraform output -raw api_gateway_url)
+          echo "API_URL=$API_URL" >> $GITHUB_OUTPUT
+          echo "Building with API URL: $API_URL"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build Next.js app with correct API URL
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_API_URL: ${{ steps.get-api-url.outputs.API_URL }}
+        run: npm run build
+
+      - name: Upload frontend build
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build-prod
+          path: frontend/out/
+          retention-days: 30
+
+  # Deploy Frontend
+  deploy-frontend:
+    name: Deploy Frontend to S3
+    runs-on: ubuntu-latest
+    needs: [build-frontend, deploy-backend]
+    if: github.event_name == 'push' || github.event_name == 'release'
+    environment: production
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ vars.AWS_DEPLOY_ROLE_NAME || 'nba-cap-github-actions-role' }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
+          terraform_wrapper: false
+
+      - name: Terraform Init
+        working-directory: ./infrastructure/terraform
+        run: terraform init
+
+      - name: Terraform Workspace
+        working-directory: ./infrastructure/terraform
+        run: terraform workspace select prod || terraform workspace new prod
+
+      - name: Get infrastructure outputs
         working-directory: ./infrastructure/terraform
         id: get-outputs
         run: |
