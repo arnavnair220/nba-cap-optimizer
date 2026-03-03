@@ -38,3 +38,60 @@ output "db_secret_arn" {
   description = "Secrets Manager ARN for database credentials"
   value       = aws_secretsmanager_secret.db_credentials.arn
 }
+
+output "bastion_instance_id" {
+  description = "Instance ID of bastion host"
+  value       = aws_instance.bastion.id
+}
+
+output "bastion_public_ip" {
+  description = "Public IP address of bastion host"
+  value       = aws_instance.bastion.public_ip
+}
+
+output "ssm_port_forward_command" {
+  description = "AWS SSM command to port forward to RDS (recommended - no SSH key needed)"
+  value       = "aws ssm start-session --target ${aws_instance.bastion.id} --document-name AWS-StartPortForwardingSessionToRemoteHost --parameters '{\"host\":[\"${aws_db_instance.main.address}\"],\"portNumber\":[\"5432\"],\"localPortNumber\":[\"5432\"]}' --profile personal-account"
+}
+
+output "ssh_connection_command" {
+  description = "SSH command to connect to bastion with port forwarding to RDS (requires SSH key)"
+  value       = var.bastion_key_name != "" ? "ssh -i ${var.bastion_key_name}.pem -L 5432:${aws_db_instance.main.address}:5432 ec2-user@${aws_instance.bastion.public_ip}" : "SSH not configured - use SSM instead"
+}
+
+output "api_gateway_url" {
+  description = "Base URL for the predictions API"
+  value       = "${aws_api_gateway_stage.v1.invoke_url}"
+}
+
+output "api_endpoints" {
+  description = "Available API endpoints"
+  value = {
+    predictions            = "${aws_api_gateway_stage.v1.invoke_url}/predictions"
+    predictions_undervalued = "${aws_api_gateway_stage.v1.invoke_url}/predictions/undervalued"
+    predictions_overvalued  = "${aws_api_gateway_stage.v1.invoke_url}/predictions/overvalued"
+    predictions_player     = "${aws_api_gateway_stage.v1.invoke_url}/predictions/{player_name}"
+    teams                  = "${aws_api_gateway_stage.v1.invoke_url}/teams"
+    teams_detail           = "${aws_api_gateway_stage.v1.invoke_url}/teams/{team_abbreviation}"
+  }
+}
+
+output "api_lambda_function" {
+  description = "API Lambda function name"
+  value       = aws_lambda_function.api_handler.function_name
+}
+
+output "frontend_bucket" {
+  description = "S3 bucket name for frontend hosting"
+  value       = aws_s3_bucket.frontend.bucket
+}
+
+output "frontend_cloudfront_url" {
+  description = "CloudFront distribution URL for frontend"
+  value       = "https://${aws_cloudfront_distribution.frontend.domain_name}"
+}
+
+output "frontend_cloudfront_id" {
+  description = "CloudFront distribution ID (for cache invalidation)"
+  value       = aws_cloudfront_distribution.frontend.id
+}

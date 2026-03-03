@@ -24,9 +24,9 @@ import requests
 from botocore.exceptions import ClientError
 from bs4 import BeautifulSoup
 
-# Keep nba_api imports only for static data (players, teams)
+# Keep nba_api imports only for static data (teams)
 # Stats fetching now uses Basketball-Reference.com scraping
-from nba_api.stats.static import players, teams
+from nba_api.stats.static import teams
 
 # Configure logging
 logger = logging.getLogger()
@@ -72,29 +72,6 @@ def save_to_s3(data: Dict[str, Any], s3_key: str) -> bool:
     except ClientError as e:
         logger.error(f"Failed to save to S3: {e}")
         return False
-
-
-def fetch_active_players() -> List[Dict[str, Any]]:
-    """
-    Fetch all active NBA players.
-
-    Returns raw player data from NBA API with original Unicode names preserved.
-    Name normalization is handled in transform_data for matching purposes.
-
-    Returns:
-        List of player dictionaries with original Unicode names
-    """
-    logger.info("Fetching active players...")
-
-    try:
-        # Get all players from static data (preserves Unicode names)
-        all_players = players.get_active_players()
-
-        logger.info(f"Found {len(all_players)} active players")
-        return cast(List[Dict[str, Any]], all_players)
-    except Exception as e:
-        logger.error(f"Failed to fetch players: {e}")
-        return []
 
 
 def fetch_player_stats(season: str = "2025-26", max_retries: int = 3) -> Optional[Dict[str, Any]]:
@@ -230,12 +207,21 @@ def fetch_espn_salaries(season: str = "2025-26") -> List[Dict[str, Any]]:
     Fetch player salary data from ESPN with pagination support.
 
     Args:
-        season: NBA season (e.g., "2025-26")
+        season: NBA season (e.g., "2025-26", "2023-24")
 
     Returns:
         List of salary dictionaries
     """
-    base_url = "https://www.espn.com/nba/salaries"
+    # Convert season format: "2025-26" -> "2026" (use ending year for ESPN URL)
+    # ESPN uses the ending year in URLs: /nba/salaries/_/year/2026
+    season_year = season.split("-")[1]
+    if len(season_year) == 2:
+        season_year = "20" + season_year
+
+    # ESPN URL structure (always use year parameter for consistency):
+    # https://www.espn.com/nba/salaries/_/year/{year}
+    # Pagination: https://www.espn.com/nba/salaries/_/year/{year}/page/2
+    base_url = f"https://www.espn.com/nba/salaries/_/year/{season_year}"
 
     headers = {
         "User-Agent": (
@@ -245,16 +231,16 @@ def fetch_espn_salaries(season: str = "2025-26") -> List[Dict[str, Any]]:
         )
     }
 
-    logger.info(f"Fetching ESPN salaries from {base_url}")
+    logger.info(f"Fetching ESPN salaries for season {season} from {base_url}")
 
     all_salaries = []
 
-    # ESPN uses _/page/X for pagination
+    # ESPN pagination: /year/YYYY/page/N (no underscore before page)
     for page in range(1, 15):  # Try up to page 15 (should cover all ~530 players)
         if page == 1:
             url = base_url
         else:
-            url = f"{base_url}/_/page/{page}"
+            url = f"{base_url}/page/{page}"
 
         logger.info(f"Fetching page {page}...")
         time.sleep(1)  # Be respectful with rate limiting
@@ -343,6 +329,202 @@ def fetch_espn_salaries(season: str = "2025-26") -> List[Dict[str, Any]]:
     return all_salaries
 
 
+def load_static_salary_cap_data() -> Optional[Dict[str, Any]]:
+    """
+    Load salary cap data from S3 static file as fallback when RealGM is unavailable.
+
+    This static file contains historical NBA salary cap data and is used as a
+    fallback when RealGM blocks requests (common from AWS Lambda IPs).
+
+    Returns:
+        Salary cap history data from S3 static file, or None if file can't be loaded
+    """
+    try:
+        # Load from S3 static location
+        s3_key = "static/salary_cap_history.json"
+        logger.info(f"Loading static salary cap data from s3://{S3_BUCKET}/{s3_key}")
+
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+        data = json.loads(response["Body"].read().decode("utf-8"))
+
+        # Transform keys to match RealGM format (what transform_data expects)
+        # Static data uses snake_case, but RealGM returns Title Case with spaces
+        cap_history_transformed = []
+        for record in data["salary_cap_history"]:
+            cap_history_transformed.append(
+                {
+                    "Season": record["season"],
+                    "Salary Cap": f"${record['salary_cap']:,}",
+                    "Luxury Tax": f"${record['luxury_tax']:,}",
+                    "1st Apron": f"${record['first_apron']:,}" if record["first_apron"] else None,
+                    "2nd Apron": f"${record['second_apron']:,}" if record["second_apron"] else None,
+                    "BAE": f"${record['bae']:,}",
+                    "Non-Taxpayer MLE": f"${record['non_taxpayer_mle']:,}",
+                    "Taxpayer MLE": f"${record['taxpayer_mle']:,}",
+                    "Team Room MLE": f"${record['team_room_mle']:,}",
+                }
+            )
+
+        contract_limits_transformed = []
+        for record in data["contract_limits"]:
+            contract_limits_transformed.append(
+                {
+                    "Season": record["season"],
+                    "0-6 YOS Max": f"${record['max_0_6_years']:,}",
+                    "7-9 YOS Max": f"${record['max_7_9_years']:,}",
+                    "10+ YOS Max": f"${record['max_10_plus_years']:,}",
+                    "0 YOS Min": f"${record['min_0_years']:,}",
+                    "1 YOS Min": f"${record['min_1_years']:,}",
+                    "2 YOS Min": f"${record['min_2_years']:,}",
+                    "10+ YOS Min": f"${record['min_10_plus_years']:,}",
+                }
+            )
+
+        # Transform to match the structure returned by fetch_salary_cap_history
+        result = {
+            "fetch_timestamp": datetime.utcnow().isoformat(),
+            "source": "static_fallback",
+            "salary_cap_history": cap_history_transformed,
+            "contract_limits": contract_limits_transformed,
+            "cap_columns": (
+                list(cap_history_transformed[0].keys()) if cap_history_transformed else []
+            ),
+            "contract_columns": (
+                list(contract_limits_transformed[0].keys()) if contract_limits_transformed else []
+            ),
+        }
+
+        logger.info(
+            f"Successfully loaded static salary cap data from S3: "
+            f"{len(result['salary_cap_history'])} seasons, "
+            f"{len(result['contract_limits'])} contract limits"
+        )
+        return result
+
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse static salary cap JSON from S3: {e}")
+        return None
+    except Exception as e:
+        # Check if it's a NoSuchKey error (S3 file not found)
+        if hasattr(e, "response") and e.response.get("Error", {}).get("Code") == "NoSuchKey":
+            logger.error(
+                f"Static salary cap data not found in S3 at s3://{S3_BUCKET}/{s3_key}. "
+                "Upload data/salary_cap_history.json to S3 static/ folder."
+            )
+        else:
+            logger.error(f"Unexpected error loading static salary cap data from S3: {e}")
+        return None
+
+
+def fetch_salary_cap_history(max_retries: int = 3) -> Optional[Dict[str, Any]]:
+    """
+    Fetch league-wide salary cap history from RealGM with retry logic.
+
+    This includes salary cap, luxury tax, aprons, and exception amounts for each season.
+
+    Args:
+        max_retries: Maximum number of retry attempts
+
+    Returns:
+        Salary cap history data with season-by-season cap information
+
+    Note:
+        If RealGM is unavailable (403/blocked from AWS Lambda IPs), this function
+        automatically falls back to loading static salary cap data from
+        S3 at static/salary_cap_history.json
+    """
+    logger.info("Fetching salary cap history from RealGM...")
+
+    url = "https://basketball.realgm.com/nba/info/salary_cap"
+
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/91.0.4472.124 Safari/537.36"
+        )
+    }
+
+    for attempt in range(max_retries):
+        try:
+            if attempt > 0:
+                backoff_delay = 2**attempt  # Exponential backoff: 2s, 4s, 8s
+                logger.info(
+                    f"Retry attempt {attempt + 1}/{max_retries} after {backoff_delay}s delay"
+                )
+                time.sleep(backoff_delay)
+            else:
+                time.sleep(1)  # Be respectful with rate limiting
+
+            response = requests.get(url, headers=headers, timeout=30)
+
+            if response.status_code == 403:
+                logger.warning(
+                    f"Attempt {attempt + 1}/{max_retries}: Received 403 Forbidden from RealGM. "
+                    "Site may be blocking AWS IPs. Consider using a static data file."
+                )
+                if attempt == max_retries - 1:
+                    logger.warning(
+                        "All retries exhausted. RealGM blocked. Falling back to static data."
+                    )
+                    return load_static_salary_cap_data()
+                continue
+
+            if response.status_code != 200:
+                logger.error(f"Failed to fetch salary cap history: HTTP {response.status_code}")
+                if attempt == max_retries - 1:
+                    logger.warning("All retries exhausted. Falling back to static data.")
+                    return load_static_salary_cap_data()
+                continue
+
+            # Parse tables with pandas
+            from io import StringIO
+
+            tables = pd.read_html(StringIO(response.text))
+
+            if not tables or len(tables) == 0:
+                logger.error("No tables found in salary cap history page")
+                if attempt == max_retries - 1:
+                    logger.warning("All retries exhausted. Falling back to static data.")
+                    return load_static_salary_cap_data()
+                continue
+
+            # First table has salary cap, luxury tax, aprons, and exceptions
+            df_cap = tables[0]
+            cap_records = df_cap.to_dict("records")
+
+            # Second table has max/min contract amounts by years of service
+            df_contracts = tables[1] if len(tables) > 1 else None
+            contract_records = df_contracts.to_dict("records") if df_contracts is not None else []
+
+            data = {
+                "fetch_timestamp": datetime.utcnow().isoformat(),
+                "source": "realgm",
+                "salary_cap_history": cap_records,
+                "contract_limits": contract_records,
+                "cap_columns": list(df_cap.columns),
+                "contract_columns": list(df_contracts.columns) if df_contracts is not None else [],
+            }
+
+            logger.info(
+                f"Successfully fetched salary cap history for {len(cap_records)} seasons "
+                f"and contract limits for {len(contract_records)} seasons"
+            )
+            return data
+
+        except Exception as e:
+            logger.warning(f"Attempt {attempt + 1}/{max_retries} failed: {e}")
+            if attempt == max_retries - 1:
+                logger.warning(
+                    f"All {max_retries} attempts failed to fetch from RealGM. "
+                    "Falling back to static data."
+                )
+                return load_static_salary_cap_data()
+
+    logger.warning("Unexpected: No data fetched from RealGM. Falling back to static data.")
+    return load_static_salary_cap_data()
+
+
 def fetch_salary_data(season: str = "2025-26") -> Dict[str, Any]:
     """
     Fetch player salary data from ESPN.
@@ -414,29 +596,20 @@ def handler(event, context):
 
     # Get execution parameters
     current_date = datetime.utcnow()
-    date_partition = get_date_partition(current_date)
+    base_date_partition = get_date_partition(current_date)
 
     # Determine what to fetch based on event
     fetch_type = event.get("fetch_type", "stats_only")  # stats_only, monthly, or full
     season = event.get("season", "2025-26")
 
+    # Partition by season first for better query patterns and data organization
+    # Format: 2024-25/year=2025/month=02/day=20/
+    date_partition = f"{season}/{base_date_partition}"
+
     results = {"statusCode": 200, "fetched": [], "errors": []}
 
-    players_data = None
-
     try:
-        # 1. Fetch and store active players (monthly or full only)
-        if fetch_type in ["monthly", "full"]:
-            logger.info("Fetching active players...")
-            players_data = fetch_active_players()
-            if players_data:
-                s3_key = f"raw/players/{date_partition}/active_players.json"
-                if save_to_s3({"players": players_data}, s3_key):
-                    results["fetched"].append("active_players")
-            else:
-                results["errors"].append("Failed to fetch active players")
-
-        # 2. Fetch and store player stats (always)
+        # 1. Fetch and store player stats (always)
         logger.info("Fetching player stats...")
         stats_data = fetch_player_stats(season)
         if stats_data:
@@ -446,7 +619,7 @@ def handler(event, context):
         else:
             results["errors"].append("Failed to fetch player stats")
 
-        # 3. Fetch and store team data (monthly or full only)
+        # 2. Fetch and store team data (monthly or full only)
         if fetch_type in ["monthly", "full"]:
             logger.info("Fetching team data...")
             teams_data = fetch_team_data()
@@ -457,7 +630,7 @@ def handler(event, context):
             else:
                 results["errors"].append("Failed to fetch teams")
 
-        # 4. Fetch and store salary data from ESPN (monthly or full only)
+        # 3. Fetch and store salary data from ESPN (monthly or full only)
         if fetch_type in ["monthly", "full"]:
             logger.info("Fetching salary data...")
             salary_data = fetch_salary_data(season)
@@ -467,7 +640,20 @@ def handler(event, context):
             else:
                 results["errors"].append("Failed to save salary data")
 
-        # 5. Fetch detailed game logs for top players (optional, for full fetch)
+        # 4. Fetch and store salary cap history (monthly or full only)
+        if fetch_type in ["monthly", "full"]:
+            logger.info("Fetching salary cap history...")
+            cap_history_data = fetch_salary_cap_history()
+            if cap_history_data:
+                s3_key = f"raw/salary_cap/{date_partition}/salary_cap_history.json"
+                if save_to_s3(cap_history_data, s3_key):
+                    results["fetched"].append("salary_cap_history")
+                else:
+                    results["errors"].append("Failed to save salary cap history")
+            else:
+                results["errors"].append("Failed to fetch salary cap history")
+
+        # 4. Fetch detailed game logs for top players (optional, for full fetch)
         if fetch_type == "full" and stats_data:
             logger.info("Fetching detailed game logs for top players...")
             # Get top 50 players by minutes played
@@ -508,6 +694,8 @@ def handler(event, context):
             "statusCode": 200,
             "body": json.dumps(results),
             "data_location": {"bucket": S3_BUCKET, "partition": date_partition},
+            "season": season,  # Pass season to next step
+            "fetch_type": fetch_type,  # Pass fetch_type to next step
         }
 
     except Exception as e:

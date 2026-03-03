@@ -1,0 +1,225 @@
+{
+  "Comment": "Weekly ML Predictions Pipeline - Generates salary predictions for current season",
+  "StartAt": "GenerateExecutionId",
+  "States": {
+    "GenerateExecutionId": {
+      "Type": "Pass",
+      "Parameters": {
+        "season.$": "$.season",
+        "execution_id.$": "$$.Execution.Name"
+      },
+      "Next": "ExtractPredictionData"
+    },
+    "ExtractPredictionData": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${extract_prediction_data_lambda_arn}",
+        "Payload": {}
+      },
+      "ResultPath": "$.extractResult",
+      "ResultSelector": {
+        "s3_path.$": "$.Payload.s3_path",
+        "s3_bucket.$": "$.Payload.s3_bucket",
+        "s3_key.$": "$.Payload.s3_key",
+        "record_count.$": "$.Payload.record_count",
+        "etl_run_id.$": "$.Payload.etl_run_id"
+      },
+      "Next": "FeatureEngineering",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "PredictionsFailed"
+        }
+      ]
+    },
+    "FeatureEngineering": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sagemaker:createProcessingJob.sync",
+      "Parameters": {
+        "ProcessingJobName.$": "States.Format('feature-eng-predict-{}', $.execution_id)",
+        "RoleArn": "${sagemaker_role_arn}",
+        "ProcessingInputs": [
+          {
+            "InputName": "code",
+            "S3Input": {
+              "S3Uri": "s3://${data_bucket}/ml/code/",
+              "LocalPath": "/opt/ml/processing/input/code",
+              "S3DataType": "S3Prefix",
+              "S3InputMode": "File"
+            }
+          },
+          {
+            "InputName": "input-data",
+            "S3Input": {
+              "S3Uri.$": "$.extractResult.s3_path",
+              "LocalPath": "/opt/ml/processing/input/data",
+              "S3DataType": "S3Prefix",
+              "S3InputMode": "File"
+            }
+          }
+        ],
+        "ProcessingOutputConfig": {
+          "Outputs": [
+            {
+              "OutputName": "features",
+              "S3Output": {
+                "S3Uri.$": "States.Format('s3://${data_bucket}/ml/features/{}/predict/', $.season)",
+                "LocalPath": "/opt/ml/processing/output",
+                "S3UploadMode": "EndOfJob"
+              }
+            }
+          ]
+        },
+        "AppSpecification": {
+          "ImageUri": "${sklearn_image_uri}",
+          "ContainerEntrypoint": [
+            "python3",
+            "/opt/ml/processing/input/code/feature_engineering.py",
+            "--mode",
+            "predict",
+            "--output-path",
+            "/opt/ml/processing/output/features.csv"
+          ]
+        },
+        "ProcessingResources": {
+          "ClusterConfig": {
+            "InstanceCount": 1,
+            "InstanceType": "ml.m5.xlarge",
+            "VolumeSizeInGB": 30
+          }
+        },
+        "NetworkConfig": {
+          "VpcConfig": {
+            "SecurityGroupIds": ["${rds_security_group_id}"],
+            "Subnets": ${private_subnet_ids}
+          }
+        },
+        "Environment": {
+          "INPUT_PATH.$": "$.extractResult.s3_path",
+          "DATA_BUCKET": "${data_bucket}"
+        }
+      },
+      "ResultPath": "$.featureEngineeringResult",
+      "ResultSelector": {
+        "ProcessingJobName.$": "$.ProcessingJobName"
+      },
+      "Next": "CreateModel",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "PredictionsFailed"
+        }
+      ]
+    },
+    "CreateModel": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sagemaker:createModel",
+      "Parameters": {
+        "ModelName.$": "States.Format('salary-predictor-{}', $.execution_id)",
+        "PrimaryContainer": {
+          "Image": "${sklearn_image_uri}",
+          "ModelDataUrl.$": "States.Format('s3://${data_bucket}/ml/models/{}/model.tar.gz', $.season)",
+          "Environment": {
+            "SAGEMAKER_PROGRAM": "inference.py",
+            "SAGEMAKER_SUBMIT_DIRECTORY": "s3://${data_bucket}/ml/code/sourcedir.tar.gz"
+          }
+        },
+        "ExecutionRoleArn": "${sagemaker_role_arn}"
+      },
+      "ResultPath": "$.modelResult",
+      "ResultSelector": {
+        "ModelArn.$": "$.ModelArn"
+      },
+      "Next": "BatchTransform",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "PredictionsFailed"
+        }
+      ]
+    },
+    "BatchTransform": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sagemaker:createTransformJob.sync",
+      "TimeoutSeconds": 600,
+      "Parameters": {
+        "TransformJobName.$": "States.Format('predict-{}', $.execution_id)",
+        "ModelName.$": "States.Format('salary-predictor-{}', $.execution_id)",
+        "TransformInput": {
+          "DataSource": {
+            "S3DataSource": {
+              "S3DataType": "S3Prefix",
+              "S3Uri.$": "States.Format('s3://${data_bucket}/ml/features/{}/predict/features.csv', $.season)"
+            }
+          },
+          "ContentType": "text/csv",
+          "SplitType": "Line"
+        },
+        "TransformOutput": {
+          "S3OutputPath.$": "States.Format('s3://${data_bucket}/ml/predictions/{}/', $.season)",
+          "Accept": "text/csv",
+          "AssembleWith": "Line"
+        },
+        "TransformResources": {
+          "InstanceType": "ml.m5.xlarge",
+          "InstanceCount": 1
+        }
+      },
+      "ResultPath": "$.batchTransformResult",
+      "ResultSelector": {
+        "TransformJobName.$": "$.TransformJobName"
+      },
+      "Next": "LoadPredictions",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "PredictionsFailed"
+        }
+      ]
+    },
+    "LoadPredictions": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${load_predictions_lambda_arn}",
+        "Payload": {
+          "predictions_s3_key.$": "States.Format('ml/predictions/{}/features.csv.out', $.season)",
+          "season.$": "$.season",
+          "model_version": "v1.0.0",
+          "run_id.$": "$.execution_id",
+          "etl_run_id.$": "$.extractResult.etl_run_id"
+        }
+      },
+      "ResultPath": "$.loadPredictionsResult",
+      "Next": "PredictionsSuccess",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "PredictionsFailed"
+        }
+      ]
+    },
+    "PredictionsSuccess": {
+      "Type": "Pass",
+      "Result": {
+        "status": "SUCCESS",
+        "message": "Predictions pipeline completed successfully"
+      },
+      "End": true
+    },
+    "PredictionsFailed": {
+      "Type": "Pass",
+      "Result": {
+        "status": "FAILED",
+        "message": "Predictions pipeline failed"
+      },
+      "End": true
+    }
+  }
+}

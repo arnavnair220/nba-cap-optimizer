@@ -118,184 +118,6 @@ def load_from_s3(s3_key: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def ensure_schema_exists(cursor) -> bool:
-    """
-    Check if database schema exists and create it if needed.
-    This makes the Lambda idempotent - safe to run even on fresh RDS instance.
-
-    Args:
-        cursor: Database cursor
-
-    Returns:
-        True if schema already existed, False if it was created
-    """
-    try:
-        # Check if any of our tables exist
-        cursor.execute("""
-            SELECT EXISTS (
-                SELECT FROM information_schema.tables
-                WHERE table_schema = 'public'
-                AND table_name = 'players'
-            );
-        """)
-
-        schema_exists = cursor.fetchone()[0]
-
-        if schema_exists:
-            logger.info("Database schema already exists")
-            return True
-
-        # Schema doesn't exist - create it
-        logger.info("Database schema not found, creating tables...")
-
-        # Execute schema creation SQL
-        schema_sql = """
--- Players table: Master player list from NBA API
-CREATE TABLE IF NOT EXISTS players (
-    id INTEGER PRIMARY KEY,
-    full_name VARCHAR(255) NOT NULL UNIQUE
-);
-
-CREATE INDEX IF NOT EXISTS idx_players_full_name ON players(full_name);
-
--- Salaries table: Annual salary per player per season
-CREATE TABLE IF NOT EXISTS salaries (
-    id SERIAL PRIMARY KEY,
-    player_id INTEGER REFERENCES players(id),
-    player_name VARCHAR(255) NOT NULL,
-    annual_salary INTEGER NOT NULL,
-    season VARCHAR(20) NOT NULL,
-    source VARCHAR(50),
-    UNIQUE(player_name, season)
-);
-
-CREATE INDEX IF NOT EXISTS idx_salaries_player_id ON salaries(player_id);
-CREATE INDEX IF NOT EXISTS idx_salaries_player_name ON salaries(player_name);
-CREATE INDEX IF NOT EXISTS idx_salaries_season ON salaries(season);
-
--- Player stats table: Per-game and advanced statistics from Basketball Reference
-CREATE TABLE IF NOT EXISTS player_stats (
-    id SERIAL PRIMARY KEY,
-    player_id INTEGER REFERENCES players(id),
-    player_name VARCHAR(255) NOT NULL,
-    season VARCHAR(20) NOT NULL,
-    team_abbreviation VARCHAR(10),
-    age INTEGER,
-    position VARCHAR(10),
-    games_played INTEGER,
-    games_started INTEGER,
-    minutes REAL,
-    points REAL,
-    fgm REAL,
-    fga REAL,
-    fg_pct REAL,
-    fg3m REAL,
-    fg3a REAL,
-    fg3_pct REAL,
-    fg2m REAL,
-    fg2a REAL,
-    fg2_pct REAL,
-    ftm REAL,
-    fta REAL,
-    ft_pct REAL,
-    oreb REAL,
-    dreb REAL,
-    rebounds REAL,
-    assists REAL,
-    steals REAL,
-    blocks REAL,
-    turnovers REAL,
-    fouls REAL,
-    per REAL,
-    ts_pct REAL,
-    efg_pct REAL,
-    usg_pct REAL,
-    ws REAL,
-    ws_per_48 REAL,
-    bpm REAL,
-    obpm REAL,
-    dbpm REAL,
-    vorp REAL,
-    orb_pct REAL,
-    drb_pct REAL,
-    trb_pct REAL,
-    ast_pct REAL,
-    stl_pct REAL,
-    blk_pct REAL,
-    tov_pct REAL,
-    ows REAL,
-    dws REAL,
-    UNIQUE(player_name, season, team_abbreviation)
-);
-
-CREATE INDEX IF NOT EXISTS idx_player_stats_player_id ON player_stats(player_id);
-CREATE INDEX IF NOT EXISTS idx_player_stats_player_name ON player_stats(player_name);
-CREATE INDEX IF NOT EXISTS idx_player_stats_season ON player_stats(season);
-CREATE INDEX IF NOT EXISTS idx_player_stats_team ON player_stats(team_abbreviation);
-
--- Teams table: Team data with aggregated metrics
-CREATE TABLE IF NOT EXISTS teams (
-    id INTEGER PRIMARY KEY,
-    full_name VARCHAR(255),
-    abbreviation VARCHAR(10) UNIQUE NOT NULL,
-    total_payroll BIGINT,
-    roster_count INTEGER,
-    roster_with_salary INTEGER,
-    avg_salary REAL,
-    min_salary INTEGER,
-    max_salary INTEGER,
-    top_paid_player VARCHAR(255),
-    top_paid_salary INTEGER,
-    total_players_with_stats INTEGER,
-    team_total_points REAL,
-    team_total_rebounds REAL,
-    team_total_assists REAL,
-    avg_player_points REAL,
-    avg_player_rebounds REAL,
-    avg_player_assists REAL
-);
-
-CREATE INDEX IF NOT EXISTS idx_teams_abbreviation ON teams(abbreviation);
-        """
-
-        cursor.execute(schema_sql)
-        logger.info("Successfully created database schema")
-        return False
-
-    except Exception as e:
-        logger.error(f"Failed to ensure schema exists: {e}")
-        raise
-
-
-def upsert_players(cursor, players_data: List[Dict[str, Any]]) -> int:
-    """
-    Upsert players into the players table.
-
-    Args:
-        cursor: Database cursor
-        players_data: List of player dictionaries with 'id' and 'full_name'
-
-    Returns:
-        Number of players upserted
-    """
-    if not players_data:
-        logger.warning("No players data to upsert")
-        return 0
-
-    sql = """
-        INSERT INTO players (id, full_name)
-        VALUES (%s, %s)
-        ON CONFLICT (id) DO UPDATE
-        SET full_name = EXCLUDED.full_name
-    """
-
-    data = [(p["id"], p["full_name"]) for p in players_data]
-
-    execute_batch(cursor, sql, data)
-    logger.info(f"Upserted {len(data)} players")
-    return len(data)
-
-
 def upsert_salaries(cursor, salaries_data: List[Dict[str, Any]]) -> int:
     """
     Upsert salaries into the salaries table.
@@ -312,18 +134,16 @@ def upsert_salaries(cursor, salaries_data: List[Dict[str, Any]]) -> int:
         return 0
 
     sql = """
-        INSERT INTO salaries (player_id, player_name, annual_salary, season, source)
-        VALUES (%s, %s, %s, %s, %s)
+        INSERT INTO salaries (player_name, annual_salary, season, source)
+        VALUES (%s, %s, %s, %s)
         ON CONFLICT (player_name, season) DO UPDATE
         SET
-            player_id = EXCLUDED.player_id,
             annual_salary = EXCLUDED.annual_salary,
             source = EXCLUDED.source
     """
 
     data = [
         (
-            s.get("player_id"),
             s["player_name"],
             s["annual_salary"],
             s["season"],
@@ -337,13 +157,17 @@ def upsert_salaries(cursor, salaries_data: List[Dict[str, Any]]) -> int:
     return len(data)
 
 
-def upsert_player_stats(cursor, stats_data: List[Dict[str, Any]]) -> int:
+def upsert_player_stats(
+    cursor, stats_data: List[Dict[str, Any]], season: str, etl_run_id: str
+) -> int:
     """
     Upsert player statistics into the player_stats table.
 
     Args:
         cursor: Database cursor
         stats_data: List of player stat dictionaries from enriched_player_stats.json
+        season: NBA season (e.g., "2025-26", "2024-25")
+        etl_run_id: Unique identifier for this ETL run (e.g., "20260227_143022")
 
     Returns:
         Number of player stats upserted
@@ -354,7 +178,7 @@ def upsert_player_stats(cursor, stats_data: List[Dict[str, Any]]) -> int:
 
     sql = """
         INSERT INTO player_stats (
-            player_id, player_name, season, team_abbreviation,
+            player_name, season, team_abbreviation,
             age, position, games_played, games_started, minutes,
             points, fgm, fga, fg_pct, fg3m, fg3a, fg3_pct,
             fg2m, fg2a, fg2_pct, ftm, fta, ft_pct,
@@ -363,10 +187,11 @@ def upsert_player_stats(cursor, stats_data: List[Dict[str, Any]]) -> int:
             per, ts_pct, efg_pct, usg_pct, ws, ws_per_48,
             bpm, obpm, dbpm, vorp,
             orb_pct, drb_pct, trb_pct, ast_pct, stl_pct, blk_pct, tov_pct,
-            ows, dws
+            ows, dws,
+            etl_run_id
         )
         VALUES (
-            %s, %s, %s, %s,
+            %s, %s, %s,
             %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s,
@@ -375,11 +200,11 @@ def upsert_player_stats(cursor, stats_data: List[Dict[str, Any]]) -> int:
             %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s,
-            %s, %s
+            %s, %s,
+            %s
         )
         ON CONFLICT (player_name, season, team_abbreviation) DO UPDATE
         SET
-            player_id = EXCLUDED.player_id,
             age = EXCLUDED.age,
             position = EXCLUDED.position,
             games_played = EXCLUDED.games_played,
@@ -424,14 +249,14 @@ def upsert_player_stats(cursor, stats_data: List[Dict[str, Any]]) -> int:
             blk_pct = EXCLUDED.blk_pct,
             tov_pct = EXCLUDED.tov_pct,
             ows = EXCLUDED.ows,
-            dws = EXCLUDED.dws
+            dws = EXCLUDED.dws,
+            etl_run_id = EXCLUDED.etl_run_id
     """
 
     data = [
         (
-            s.get("player_id"),
             s["player_name"],
-            "2025-26",  # TODO: Get from event or stats metadata
+            season,  # Season passed as parameter
             s.get("team_abbreviation"),
             s.get("age"),
             s.get("position"),
@@ -478,12 +303,123 @@ def upsert_player_stats(cursor, stats_data: List[Dict[str, Any]]) -> int:
             s.get("tov_pct"),
             s.get("ows"),
             s.get("dws"),
+            etl_run_id,
         )
         for s in stats_data
     ]
 
     execute_batch(cursor, sql, data)
     logger.info(f"Upserted {len(data)} player stats")
+    return len(data)
+
+
+def upsert_salary_cap_history(cursor, cap_history_data: List[Dict[str, Any]]) -> int:
+    """
+    Upsert salary cap history into the salary_cap_history table.
+
+    Args:
+        cursor: Database cursor
+        cap_history_data: List of salary cap dictionaries from transformed data
+
+    Returns:
+        Number of salary cap records upserted
+    """
+    if not cap_history_data:
+        logger.warning("No salary cap history data to upsert")
+        return 0
+
+    sql = """
+        INSERT INTO salary_cap_history (
+            season, salary_cap, luxury_tax, first_apron, second_apron,
+            bae, non_taxpayer_mle, taxpayer_mle, team_room_mle, source
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (season) DO UPDATE
+        SET
+            salary_cap = EXCLUDED.salary_cap,
+            luxury_tax = EXCLUDED.luxury_tax,
+            first_apron = EXCLUDED.first_apron,
+            second_apron = EXCLUDED.second_apron,
+            bae = EXCLUDED.bae,
+            non_taxpayer_mle = EXCLUDED.non_taxpayer_mle,
+            taxpayer_mle = EXCLUDED.taxpayer_mle,
+            team_room_mle = EXCLUDED.team_room_mle,
+            source = EXCLUDED.source,
+            last_updated = CURRENT_TIMESTAMP
+    """
+
+    data = [
+        (
+            c["season"],
+            c.get("salary_cap"),
+            c.get("luxury_tax"),
+            c.get("first_apron"),
+            c.get("second_apron"),
+            c.get("bae"),
+            c.get("non_taxpayer_mle"),
+            c.get("taxpayer_mle"),
+            c.get("team_room_mle"),
+            "realgm",
+        )
+        for c in cap_history_data
+    ]
+
+    execute_batch(cursor, sql, data)
+    logger.info(f"Upserted {len(data)} salary cap history records")
+    return len(data)
+
+
+def upsert_contract_limits(cursor, contract_limits_data: List[Dict[str, Any]]) -> int:
+    """
+    Upsert contract limits into the contract_limits table.
+
+    Args:
+        cursor: Database cursor
+        contract_limits_data: List of contract limit dictionaries from transformed data
+
+    Returns:
+        Number of contract limit records upserted
+    """
+    if not contract_limits_data:
+        logger.warning("No contract limits data to upsert")
+        return 0
+
+    sql = """
+        INSERT INTO contract_limits (
+            season, max_0_6_yos, max_7_9_yos, max_10_plus_yos,
+            min_0_yos, min_1_yos, min_2_yos, min_10_plus_yos, source
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (season) DO UPDATE
+        SET
+            max_0_6_yos = EXCLUDED.max_0_6_yos,
+            max_7_9_yos = EXCLUDED.max_7_9_yos,
+            max_10_plus_yos = EXCLUDED.max_10_plus_yos,
+            min_0_yos = EXCLUDED.min_0_yos,
+            min_1_yos = EXCLUDED.min_1_yos,
+            min_2_yos = EXCLUDED.min_2_yos,
+            min_10_plus_yos = EXCLUDED.min_10_plus_yos,
+            source = EXCLUDED.source,
+            last_updated = CURRENT_TIMESTAMP
+    """
+
+    data = [
+        (
+            c["season"],
+            c.get("max_0_6_yos"),
+            c.get("max_7_9_yos"),
+            c.get("max_10_plus_yos"),
+            c.get("min_0_yos"),
+            c.get("min_1_yos"),
+            c.get("min_2_yos"),
+            c.get("min_10_plus_yos"),
+            "realgm",
+        )
+        for c in contract_limits_data
+    ]
+
+    execute_batch(cursor, sql, data)
+    logger.info(f"Upserted {len(data)} contract limit records")
     return len(data)
 
 
@@ -634,6 +570,16 @@ def handler(event, context):
     partition = event["data_location"]["partition"]
     logger.info(f"Loading data from partition: {partition}")
 
+    # Extract season from event or default to current season
+    season = event.get("season", "2025-26")
+    logger.info(f"Loading data for season: {season}")
+
+    # Generate unique ETL run ID (timestamp-based)
+    from datetime import datetime
+
+    etl_run_id = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    logger.info(f"ETL Run ID: {etl_run_id}")
+
     conn = None
     results = {
         "statusCode": 200,
@@ -646,33 +592,21 @@ def handler(event, context):
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # Ensure database schema exists (idempotent - creates tables if needed)
-        ensure_schema_exists(cursor)
-        conn.commit()  # Commit schema creation
-
         # Load transformed data from S3
         logger.info("Loading transformed data from S3...")
 
-        players_s3 = load_from_s3(f"raw/players/{partition}/active_players.json")
         salaries_s3 = load_from_s3(f"transformed/salaries/{partition}/enriched_salaries.json")
         stats_s3 = load_from_s3(f"transformed/stats/{partition}/enriched_player_stats.json")
         teams_s3 = load_from_s3(f"transformed/teams/{partition}/enriched_teams.json")
+        cap_history_s3 = load_from_s3(f"transformed/salary_cap/{partition}/salary_cap_history.json")
+        contract_limits_s3 = load_from_s3(
+            f"transformed/salary_cap/{partition}/contract_limits.json"
+        )
 
         # Begin transaction
         logger.info("Beginning database transaction...")
 
-        # 1. Upsert players (if available)
-        if players_s3 and players_s3.get("players"):
-            try:
-                count = upsert_players(cursor, players_s3["players"])
-                results["loaded"]["players"] = count
-            except Exception as e:
-                logger.error(f"Failed to upsert players: {e}")
-                results["errors"].append(f"Players upsert failed: {str(e)}")
-        else:
-            logger.warning("No players data found - skipping players upsert")
-
-        # 2. Upsert salaries (if available)
+        # 1. Upsert salaries (if available)
         if salaries_s3 and salaries_s3.get("salaries"):
             try:
                 count = upsert_salaries(cursor, salaries_s3["salaries"])
@@ -683,10 +617,14 @@ def handler(event, context):
         else:
             logger.warning("No salaries data found - skipping salaries upsert")
 
-        # 3. Upsert player stats (required)
+        # 2. Upsert player stats (required)
         if stats_s3 and stats_s3.get("player_stats"):
             try:
-                count = upsert_player_stats(cursor, stats_s3["player_stats"])
+                # Use season from stats metadata if available, otherwise from event
+                stats_season = stats_s3.get("season", season)
+                count = upsert_player_stats(
+                    cursor, stats_s3["player_stats"], stats_season, etl_run_id
+                )
                 results["loaded"]["player_stats"] = count
             except Exception as e:
                 logger.error(f"Failed to upsert player stats: {e}")
@@ -702,7 +640,7 @@ def handler(event, context):
                 "body": json.dumps(results),
             }
 
-        # 4. Upsert teams (if available)
+        # 3. Upsert teams (if available)
         if teams_s3 and teams_s3.get("teams"):
             try:
                 count = upsert_teams(cursor, teams_s3["teams"])
@@ -713,6 +651,28 @@ def handler(event, context):
         else:
             logger.warning("No teams data found - skipping teams upsert")
 
+        # 4. Upsert salary cap history (if available)
+        if cap_history_s3 and cap_history_s3.get("salary_cap_history"):
+            try:
+                count = upsert_salary_cap_history(cursor, cap_history_s3["salary_cap_history"])
+                results["loaded"]["salary_cap_history"] = count
+            except Exception as e:
+                logger.error(f"Failed to upsert salary cap history: {e}")
+                results["errors"].append(f"Salary cap history upsert failed: {str(e)}")
+        else:
+            logger.warning("No salary cap history data found - skipping")
+
+        # 5. Upsert contract limits (if available)
+        if contract_limits_s3 and contract_limits_s3.get("contract_limits"):
+            try:
+                count = upsert_contract_limits(cursor, contract_limits_s3["contract_limits"])
+                results["loaded"]["contract_limits"] = count
+            except Exception as e:
+                logger.error(f"Failed to upsert contract limits: {e}")
+                results["errors"].append(f"Contract limits upsert failed: {str(e)}")
+        else:
+            logger.warning("No contract limits data found - skipping")
+
         # Commit transaction
         conn.commit()
         logger.info("Successfully committed all data to RDS")
@@ -721,6 +681,7 @@ def handler(event, context):
         results["summary"] = {
             "environment": ENVIRONMENT,
             "partition": partition,
+            "etl_run_id": etl_run_id,
             "records_loaded": sum(results["loaded"].values()),
             "tables_updated": len(results["loaded"]),
             "errors_count": len(results["errors"]),
@@ -728,10 +689,14 @@ def handler(event, context):
 
         logger.info(f"Data load completed: {results['summary']}")
 
+        # Return 422 if there were any errors during load, otherwise 200
+        has_errors = len(results["errors"]) > 0
+        status_code = 422 if has_errors else 200
+
         return {
-            "statusCode": 200,
+            "statusCode": status_code,
             "body": json.dumps(results),
-            "load_successful": len(results["errors"]) == 0,
+            "load_successful": not has_errors,
             "records_loaded": results["loaded"],
         }
 

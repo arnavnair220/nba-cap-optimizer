@@ -127,52 +127,130 @@ def save_to_s3(data: Dict[str, Any], s3_key: str) -> bool:
         return False
 
 
-def match_salaries_with_players(
-    salaries: List[Dict[str, Any]], active_players: List[Dict[str, Any]]
-) -> List[Dict[str, Any]]:
+def _is_nan(value: Any) -> bool:
     """
-    Match salary data with player IDs using normalized name matching.
+    Check if a value is NaN (Not a Number).
 
-    Handles Unicode names from NBA API by normalizing to ASCII before matching.
-    Example: "Nikola Jokić" (NBA API) matches "Nikola Jokic" (ESPN)
+    Handles multiple NaN representations: float('nan'), numpy.nan, pandas.NA, etc.
 
     Args:
-        salaries: List of salary dictionaries (from ESPN - has player_name)
-        active_players: List of player dictionaries (from NBA API - has id and full_name)
+        value: Value to check
 
     Returns:
-        Salaries enriched with player_id field
+        True if value is NaN
     """
-    logger.info("Matching salaries with player IDs...")
+    try:
+        return math.isnan(float(value))
+    except (ValueError, TypeError, OverflowError):
+        return False
 
-    # Create a lookup dictionary: normalized_name -> player_id
-    player_lookup = {}
-    for player in active_players:
-        full_name = player.get("full_name", "")
-        player_id = player.get("id")
 
-        if full_name and player_id:
-            # Normalize: ASCII conversion, lowercase, remove extra whitespace
-            normalized_name = " ".join(normalize_to_ascii(full_name).lower().split())
-            player_lookup[normalized_name] = player_id
+def _is_value_zero_or_null(value: Any) -> bool:
+    """
+    Check if a value is null, empty, zero, or NaN.
 
-    # Match salaries
-    matched = 0
-    for salary in salaries:
-        player_name = salary.get("player_name", "")
-        # Normalize: ASCII conversion, lowercase, remove extra whitespace
-        normalized = " ".join(normalize_to_ascii(player_name).lower().split())
+    Args:
+        value: Value to check
 
-        if normalized in player_lookup:
-            salary["player_id"] = player_lookup[normalized]
-            matched += 1
+    Returns:
+        True if value is null, empty, zero, or NaN
+    """
+    if value is None or value == "":
+        return True
+    if _is_nan(value):
+        return True
+    try:
+        return float(value) == 0
+    except (ValueError, TypeError):
+        return False
+
+
+def _filter_bad_rows(stats: List[Dict[str, Any]], stat_type: str = "stats") -> List[Dict[str, Any]]:
+    """
+    Filter out bad rows from player statistics.
+
+    A row is considered "bad" if it has any null/empty/NaN values in columns that
+    should not be null. Columns are allowed to be null only if:
+    - They are in skip_columns (e.g., "Awards")
+    - They are percentage columns with dependency = 0/null (e.g., FG% when FGA=0)
+    - They are warn_only_columns (cross-array dependencies)
+
+    This mirrors the validation logic in validate_data.py._identify_bad_rows()
+
+    Args:
+        stats: List of player stat dictionaries
+        stat_type: Type of stats for logging ("per_game" or "advanced")
+
+    Returns:
+        List of clean player stat dictionaries with bad rows filtered out
+    """
+    if not stats:
+        return stats
+
+    # Filter out "League Average" summary rows
+    stats = [s for s in stats if s.get("Player") != "League Average"]
+
+    if not stats:
+        return stats
+
+    # Define conditional exemptions and skip rules (same as validation)
+    percentage_dependencies = {
+        "FG%": (["FGA"], "any"),
+        "3P%": (["3PA"], "any"),
+        "2P%": (["2PA"], "any"),
+        "FT%": (["FTA"], "any"),
+        "eFG%": (["FGA"], "any"),
+    }
+    skip_columns = ["Awards"]
+    warn_only_columns = ["TOV%", "TS%", "3PAr", "FTr"]
+
+    clean_rows = []
+    filtered_count = 0
+
+    for player_idx, player_stat in enumerate(stats):
+        player_name = player_stat.get("Player", f"Player {player_idx}")
+        is_bad = False
+
+        # Check all columns for null/empty/NaN values
+        for col, value in player_stat.items():
+            # Skip columns that should be ignored
+            if col in skip_columns or col in warn_only_columns:
+                continue
+
+            is_null_or_nan = value is None or value == "" or _is_nan(value)
+            if not is_null_or_nan:
+                continue
+
+            # Check if this is a percentage column with conditional exemption
+            if col in percentage_dependencies:
+                dep_cols, logic = percentage_dependencies[col]
+                all_deps_exist = all(dep_col in player_stat for dep_col in dep_cols)
+
+                if all_deps_exist:
+                    dep_values = [player_stat.get(dep_col) for dep_col in dep_cols]
+                    dep_is_zero_or_null = [_is_value_zero_or_null(v) for v in dep_values]
+
+                    # If all dependencies are zero/null, percentage can be null (valid)
+                    if all(dep_is_zero_or_null):
+                        continue
+
+            # This column has an invalid null value - mark row as bad
+            is_bad = True
+            break  # No need to check remaining columns
+
+        if not is_bad:
+            clean_rows.append(player_stat)
         else:
-            salary["player_id"] = None
+            filtered_count += 1
+            logger.debug(f"Filtered bad row from {stat_type}: {player_name}")
 
-    match_rate = (matched / len(salaries) * 100) if salaries else 0
-    logger.info(f"Matched: {matched}/{len(salaries)} ({match_rate:.1f}%)")
+    if filtered_count > 0:
+        logger.info(
+            f"Filtered {filtered_count} bad rows from {stat_type} "
+            f"({len(clean_rows)} clean rows remaining)"
+        )
 
-    return salaries
+    return clean_rows
 
 
 def _build_stat_dict(pg_stat: Dict[str, Any], team_abbrev: Optional[str]) -> Dict[str, Any]:
@@ -239,6 +317,11 @@ def enrich_player_stats(stats_data: Dict[str, Any]) -> List[Dict[str, Any]]:
             logger.warning("No per-game stats found")
             return []
 
+        # Filter out bad rows (rows with invalid null values)
+        # This is identified during validation; we filter them here during transform
+        per_game_stats = _filter_bad_rows(per_game_stats, "per_game")
+        advanced_stats = _filter_bad_rows(advanced_stats, "advanced")
+
         # Create advanced stats lookup by player name
         advanced_lookup = {}
         for adv_stat in advanced_stats:
@@ -246,7 +329,7 @@ def enrich_player_stats(stats_data: Dict[str, Any]) -> List[Dict[str, Any]]:
                 continue
             player_name = adv_stat.get("Player", "")
             if player_name:
-                normalized_name = " ".join(player_name.lower().split())
+                normalized_name = " ".join(normalize_to_ascii(player_name).lower().split())
                 advanced_lookup[normalized_name] = adv_stat
 
         # Group per_game_stats by player name to handle multi-team players
@@ -310,11 +393,25 @@ def enrich_player_stats(stats_data: Dict[str, Any]) -> List[Dict[str, Any]]:
                 team_rows = [main_row]  # Include single row in stats_by_team
 
             # Build main player stat record from aggregate/single row
+            # Determine team_abbreviation for main record
+            # For multi-team: use indicator like "2TM", "3TM" (from Basketball Reference)
+            # For single-team: use actual team abbreviation
+            main_team = main_row.get("Team", "")
+            if main_team in MULTI_TEAM_INDICATORS:
+                # Multi-team player: keep the indicator (2TM, 3TM, etc.)
+                team_abbreviation = main_team
+            elif main_team:
+                # Single-team player: normalize the team abbreviation
+                team_abbreviation = normalize_team_abbreviation(main_team)
+            else:
+                team_abbreviation = None
+
             player_stat = {
                 # Basic info
-                "player_name": player_name,
+                "player_name": normalize_to_ascii(player_name),
                 "age": main_row.get("Age"),
                 "position": main_row.get("Pos"),
+                "team_abbreviation": team_abbreviation,
                 # Multi-team metadata
                 "is_multi_team": is_multi_team,
                 "teams_played_for": teams_played_for,
@@ -333,6 +430,7 @@ def enrich_player_stats(stats_data: Dict[str, Any]) -> List[Dict[str, Any]]:
                 "fg2m": main_row.get("2P"),
                 "fg2a": main_row.get("2PA"),
                 "fg2_pct": main_row.get("2P%"),
+                "efg_pct": main_row.get("eFG%"),
                 "ftm": main_row.get("FT"),
                 "fta": main_row.get("FTA"),
                 "ft_pct": main_row.get("FT%"),
@@ -362,14 +460,13 @@ def enrich_player_stats(stats_data: Dict[str, Any]) -> List[Dict[str, Any]]:
             player_stat["stats_by_team"] = stats_by_team
 
             # Match with advanced stats (use aggregate row's advanced stats)
-            normalized_name = " ".join(player_name.lower().split())
+            normalized_name = " ".join(normalize_to_ascii(player_name).lower().split())
             if normalized_name in advanced_lookup:
                 adv_stat = advanced_lookup[normalized_name]
 
                 # Add all advanced stats from Basketball Reference
                 player_stat["per"] = adv_stat.get("PER")
                 player_stat["ts_pct"] = adv_stat.get("TS%")
-                player_stat["efg_pct"] = adv_stat.get("eFG%")
                 player_stat["usg_pct"] = adv_stat.get("USG%")
                 player_stat["ws"] = adv_stat.get("WS")
                 player_stat["ws_per_48"] = adv_stat.get("WS/48")
@@ -390,7 +487,6 @@ def enrich_player_stats(stats_data: Dict[str, Any]) -> List[Dict[str, Any]]:
                 # Set to None if no advanced stats match
                 player_stat["per"] = None
                 player_stat["ts_pct"] = None
-                player_stat["efg_pct"] = None
                 player_stat["usg_pct"] = None
                 player_stat["ws"] = None
                 player_stat["ws_per_48"] = None
@@ -422,6 +518,227 @@ def enrich_player_stats(stats_data: Dict[str, Any]) -> List[Dict[str, Any]]:
         return []
 
 
+def _normalize_season_format(season: str) -> str:
+    """
+    Normalize season format from "2025-26" to "2025-2026" to match RealGM format.
+
+    Args:
+        season: Season in format "YYYY-YY" (e.g., "2025-26")
+
+    Returns:
+        Season in format "YYYY-YYYY" (e.g., "2025-2026")
+    """
+    if "-" not in season:
+        return season
+
+    parts = season.split("-")
+    if len(parts) != 2:
+        return season
+
+    start_year = parts[0]
+    end_year_short = parts[1]
+
+    # Convert short year to full year
+    if len(end_year_short) == 2:
+        # Assume 20xx for now (will work until year 2100)
+        end_year = "20" + end_year_short
+    else:
+        end_year = end_year_short
+
+    return f"{start_year}-{end_year}"
+
+
+def _convert_season_to_short_format(season: str) -> str:
+    """
+    Convert season format from "2025-2026" to "2025-26".
+
+    Args:
+        season: Season in format "YYYY-YYYY" (e.g., "2025-2026")
+
+    Returns:
+        Season in format "YYYY-YY" (e.g., "2025-26")
+    """
+    if "-" not in season:
+        return season
+
+    parts = season.split("-")
+    if len(parts) != 2:
+        return season
+
+    start_year = parts[0]
+    end_year_full = parts[1]
+
+    # Convert full year to short year (last 2 digits)
+    if len(end_year_full) == 4:
+        end_year_short = end_year_full[-2:]
+        return f"{start_year}-{end_year_short}"
+
+    # Already in short format
+    return season
+
+
+def transform_contract_limits(
+    cap_data: Dict[str, Any], season: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """
+    Transform and clean contract limits data from RealGM.
+
+    Converts dollar amounts from strings to integers for max/min contract amounts.
+    Optionally filters to a specific season.
+
+    Args:
+        cap_data: Raw salary cap history data from RealGM (includes contract_limits)
+        season: Optional season to filter (e.g., "2025-26"). If None, returns all seasons.
+
+    Returns:
+        List of cleaned contract limit dictionaries (filtered by season if provided)
+    """
+    logger.info("Transforming contract limits...")
+
+    try:
+        contract_limits = cap_data.get("contract_limits", [])
+
+        if not contract_limits:
+            logger.warning("No contract limits found")
+            return []
+
+        def clean_dollar_amount(value: Any) -> Optional[int]:
+            """Convert dollar string to integer."""
+            if value is None or value == "":
+                return None
+            if isinstance(value, (int, float)):
+                return int(value)
+
+            try:
+                cleaned = str(value).replace("$", "").replace(",", "").strip()
+                return int(cleaned) if cleaned else None
+            except (ValueError, AttributeError):
+                return None
+
+        transformed_records = []
+
+        # Normalize filter season if provided
+        filter_season = _normalize_season_format(season) if season else None
+
+        for record in contract_limits:
+            if not isinstance(record, dict):
+                continue
+
+            record_season = record.get("Season")
+            if not record_season:
+                logger.debug("Skipping record with no season")
+                continue
+
+            # Filter by season if specified
+            if filter_season and record_season != filter_season:
+                continue
+
+            transformed_record = {
+                "season": _convert_season_to_short_format(record_season),
+                "max_0_6_yos": clean_dollar_amount(record.get("0-6 YOS Max")),
+                "max_7_9_yos": clean_dollar_amount(record.get("7-9 YOS Max")),
+                "max_10_plus_yos": clean_dollar_amount(record.get("10+ YOS Max")),
+                "min_0_yos": clean_dollar_amount(record.get("0 YOS Min")),
+                "min_1_yos": clean_dollar_amount(record.get("1 YOS Min")),
+                "min_2_yos": clean_dollar_amount(record.get("2 YOS Min")),
+                "min_10_plus_yos": clean_dollar_amount(record.get("10+ YOS Min")),
+            }
+
+            transformed_records.append(transformed_record)
+
+        if filter_season and len(transformed_records) == 0:
+            logger.warning(f"No contract limits found for season {filter_season}")
+
+        logger.info(f"Transformed {len(transformed_records)} contract limit records")
+        return transformed_records
+
+    except Exception as e:
+        logger.error(f"Error transforming contract limits: {e}")
+        return []
+
+
+def transform_salary_cap_history(
+    cap_data: Dict[str, Any], season: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """
+    Transform and clean salary cap history data from RealGM.
+
+    Converts dollar amounts from strings (e.g., "$154,647,000") to integers.
+    Optionally filters to a specific season.
+
+    Args:
+        cap_data: Raw salary cap history data from RealGM
+        season: Optional season to filter (e.g., "2025-26"). If None, returns all seasons.
+
+    Returns:
+        List of cleaned salary cap dictionaries (filtered by season if provided)
+    """
+    logger.info("Transforming salary cap history...")
+
+    try:
+        salary_cap_history = cap_data.get("salary_cap_history", [])
+
+        if not salary_cap_history:
+            logger.warning("No salary cap history found")
+            return []
+
+        def clean_dollar_amount(value: Any) -> Optional[int]:
+            """Convert dollar string to integer."""
+            if value is None or value == "":
+                return None
+            if isinstance(value, (int, float)):
+                return int(value)
+
+            # Remove $, commas, and convert to int
+            try:
+                cleaned = str(value).replace("$", "").replace(",", "").strip()
+                return int(cleaned) if cleaned else None
+            except (ValueError, AttributeError):
+                return None
+
+        transformed_records = []
+
+        # Normalize filter season if provided
+        filter_season = _normalize_season_format(season) if season else None
+
+        for record in salary_cap_history:
+            if not isinstance(record, dict):
+                continue
+
+            record_season = record.get("Season")
+            if not record_season:
+                logger.debug("Skipping record with no season")
+                continue
+
+            # Filter by season if specified
+            if filter_season and record_season != filter_season:
+                continue
+
+            transformed_record = {
+                "season": _convert_season_to_short_format(record_season),
+                "salary_cap": clean_dollar_amount(record.get("Salary Cap")),
+                "luxury_tax": clean_dollar_amount(record.get("Luxury Tax")),
+                "first_apron": clean_dollar_amount(record.get("1st Apron")),
+                "second_apron": clean_dollar_amount(record.get("2nd Apron")),
+                "bae": clean_dollar_amount(record.get("BAE")),
+                "non_taxpayer_mle": clean_dollar_amount(record.get("Non-Taxpayer MLE")),
+                "taxpayer_mle": clean_dollar_amount(record.get("Taxpayer MLE")),
+                "team_room_mle": clean_dollar_amount(record.get("Team Room MLE")),
+            }
+
+            transformed_records.append(transformed_record)
+
+        if filter_season and len(transformed_records) == 0:
+            logger.warning(f"No salary cap data found for season {filter_season}")
+
+        logger.info(f"Transformed {len(transformed_records)} salary cap records")
+        return transformed_records
+
+    except Exception as e:
+        logger.error(f"Error transforming salary cap history: {e}")
+        return []
+
+
 def enrich_team_data(
     teams: List[Dict[str, Any]],
     enriched_salaries: List[Dict[str, Any]],
@@ -446,7 +763,7 @@ def enrich_team_data(
     for sal in enriched_salaries:
         player_name = sal.get("player_name")
         if player_name:
-            normalized_name = " ".join(player_name.lower().split())
+            normalized_name = " ".join(normalize_to_ascii(player_name).lower().split())
             salary_by_player[normalized_name] = sal["annual_salary"]
 
     enriched_teams = []
@@ -463,7 +780,7 @@ def enrich_team_data(
         team_salaries = []
         for player in team_players:
             player_name = player.get("player_name", "")
-            normalized_name = " ".join(player_name.lower().split())
+            normalized_name = " ".join(normalize_to_ascii(player_name).lower().split())
             if normalized_name in salary_by_player:
                 team_salaries.append(salary_by_player[normalized_name])
 
@@ -497,7 +814,7 @@ def enrich_team_data(
             # Find player name with max salary
             for player in team_players:
                 player_name = player.get("player_name", "")
-                normalized_name = " ".join(player_name.lower().split())
+                normalized_name = " ".join(normalize_to_ascii(player_name).lower().split())
                 if salary_by_player.get(normalized_name) == max_salary:
                     enriched_team["top_paid_player"] = player_name
                     enriched_team["top_paid_salary"] = max_salary
@@ -527,7 +844,166 @@ def enrich_team_data(
     return enriched_teams
 
 
-def handler(event, context):
+def _process_salary_data(
+    salary_data: Optional[Dict[str, Any]], partition: str, results: Dict[str, Any]
+) -> List[Dict[str, Any]]:
+    """Process and save salary data."""
+    if not salary_data or not salary_data.get("salaries"):
+        logger.warning("Skipping salary processing - missing salary data")
+        return []
+
+    logger.info("Processing salary data...")
+    # Normalize player names in salary data
+    enriched_salaries = []
+    for salary in salary_data["salaries"]:
+        normalized_salary = salary.copy()
+        if "player_name" in normalized_salary:
+            normalized_salary["player_name"] = normalize_to_ascii(normalized_salary["player_name"])
+        enriched_salaries.append(normalized_salary)
+
+    # Calculate salary statistics
+    total_count = len(enriched_salaries)
+    results["statistics"]["total_salaries"] = total_count
+
+    # Calculate salary aggregations
+    salary_values = [s["annual_salary"] for s in enriched_salaries]
+    if salary_values:
+        results["statistics"]["avg_salary"] = round(sum(salary_values) / len(salary_values), 2)
+        results["statistics"]["min_salary"] = min(salary_values)
+        results["statistics"]["max_salary"] = max(salary_values)
+        results["statistics"]["total_salary_cap"] = sum(salary_values)
+
+    # Save transformed salaries
+    transformed_salary_data = {
+        "transform_timestamp": datetime.utcnow().isoformat(),
+        "source": salary_data.get("source", "unknown"),
+        "season": (
+            salary_data.get("salaries", [{}])[0].get("season", "unknown")
+            if enriched_salaries
+            else "unknown"
+        ),
+        "statistics": {"total_salaries": total_count},
+        "salaries": enriched_salaries,
+    }
+
+    s3_key = f"transformed/salaries/{partition}/enriched_salaries.json"
+    if save_to_s3(transformed_salary_data, s3_key):
+        results["transformed"].append("enriched_salaries")
+        logger.info(f"Saved {total_count} salary records")
+    else:
+        results["errors"].append("Failed to save salary data")
+
+    return enriched_salaries
+
+
+def _process_player_stats(
+    stats_data: Dict[str, Any], partition: str, results: Dict[str, Any]
+) -> Optional[List[Dict[str, Any]]]:
+    """Process and save player stats data."""
+    logger.info("Enriching player statistics...")
+    enriched_stats = enrich_player_stats(stats_data)
+
+    if not enriched_stats:
+        results["errors"].append("Failed to enrich player stats")
+        return None
+
+    results["statistics"]["total_player_stats"] = len(enriched_stats)
+
+    # Calculate stats aggregations
+    players_with_stats = [p for p in enriched_stats if p.get("points") is not None]
+    if players_with_stats:
+        avg_points = sum(float(p["points"] or 0) for p in players_with_stats) / len(
+            players_with_stats
+        )
+        avg_rebounds = sum(float(p["rebounds"] or 0) for p in players_with_stats) / len(
+            players_with_stats
+        )
+        avg_assists = sum(float(p["assists"] or 0) for p in players_with_stats) / len(
+            players_with_stats
+        )
+
+        results["statistics"]["avg_points_per_game"] = round(avg_points, 2)
+        results["statistics"]["avg_rebounds_per_game"] = round(avg_rebounds, 2)
+        results["statistics"]["avg_assists_per_game"] = round(avg_assists, 2)
+
+    # Save enriched stats
+    transformed_stats_data = {
+        "transform_timestamp": datetime.utcnow().isoformat(),
+        "season": stats_data.get("season", "unknown"),
+        "source": stats_data.get("source", "basketball_reference"),
+        "statistics": {"total_players": len(enriched_stats)},
+        "player_stats": enriched_stats,
+    }
+
+    s3_key = f"transformed/stats/{partition}/enriched_player_stats.json"
+    if save_to_s3(transformed_stats_data, s3_key):
+        results["transformed"].append("enriched_player_stats")
+        logger.info(f"Saved enriched stats for {len(enriched_stats)} players")
+    else:
+        results["errors"].append("Failed to save enriched stats")
+
+    return enriched_stats
+
+
+def _process_salary_cap_data(
+    cap_history_data: Optional[Dict[str, Any]],
+    partition: str,
+    season: str,
+    results: Dict[str, Any],
+) -> None:
+    """Process and save salary cap data."""
+    if not cap_history_data:
+        logger.info("No salary cap history data found - skipping")
+        return
+
+    # Transform salary cap history (filter by current season)
+    logger.info(f"Transforming salary cap history for season {season}...")
+    transformed_cap_history = transform_salary_cap_history(cap_history_data, season=season)
+
+    if transformed_cap_history:
+        results["statistics"]["total_cap_seasons"] = len(transformed_cap_history)
+
+        # Save transformed salary cap history
+        s3_key = f"transformed/salary_cap/{partition}/salary_cap_history.json"
+        transformed_cap_data = {
+            "transform_timestamp": datetime.utcnow().isoformat(),
+            "source": cap_history_data.get("source", "realgm"),
+            "statistics": {"total_seasons": len(transformed_cap_history)},
+            "salary_cap_history": transformed_cap_history,
+        }
+        if save_to_s3(transformed_cap_data, s3_key):
+            results["transformed"].append("salary_cap_history")
+            logger.info(f"Saved salary cap history for {len(transformed_cap_history)} seasons")
+        else:
+            results["errors"].append("Failed to save salary cap history")
+    else:
+        results["errors"].append("Failed to transform salary cap history")
+
+    # Transform contract limits
+    logger.info(f"Transforming contract limits for season {season}...")
+    transformed_contract_limits = transform_contract_limits(cap_history_data, season=season)
+
+    if transformed_contract_limits:
+        results["statistics"]["total_contract_limit_seasons"] = len(transformed_contract_limits)
+
+        # Save transformed contract limits
+        s3_key = f"transformed/salary_cap/{partition}/contract_limits.json"
+        transformed_limits_data = {
+            "transform_timestamp": datetime.utcnow().isoformat(),
+            "source": cap_history_data.get("source", "realgm"),
+            "statistics": {"total_seasons": len(transformed_contract_limits)},
+            "contract_limits": transformed_contract_limits,
+        }
+        if save_to_s3(transformed_limits_data, s3_key):
+            results["transformed"].append("contract_limits")
+            logger.info(f"Saved contract limits for {len(transformed_contract_limits)} seasons")
+        else:
+            results["errors"].append("Failed to save contract limits")
+    else:
+        results["errors"].append("Failed to transform contract limits")
+
+
+def handler(event, context):  # noqa: C901
     """
     Lambda handler for transforming NBA data.
 
@@ -595,7 +1071,6 @@ def handler(event, context):
         # 1. Load raw data from S3
         logger.info("Loading raw data from S3...")
 
-        players_data = load_from_s3(f"raw/players/{partition}/active_players.json")
         stats_data = load_from_s3(f"raw/stats/{partition}/league_player_stats.json")
         salary_data = load_from_s3(f"raw/salaries/{partition}/player_salaries.json")
         teams_data = load_from_s3(f"raw/teams/{partition}/nba_teams.json")
@@ -609,23 +1084,23 @@ def handler(event, context):
                 "body": json.dumps(results),
             }
 
-        # 2. Enrich salary data with player IDs (if both datasets available)
+        # 2. Process salary data (if available)
         enriched_salaries = []
-        if salary_data and players_data and salary_data.get("salaries"):
-            logger.info("Enriching salary data with player IDs...")
-            enriched_salaries = match_salaries_with_players(
-                salary_data["salaries"], players_data.get("players", [])
-            )
+        if salary_data and salary_data.get("salaries"):
+            logger.info("Processing salary data...")
+            # Normalize player names in salary data
+            enriched_salaries = []
+            for salary in salary_data["salaries"]:
+                normalized_salary = salary.copy()
+                if "player_name" in normalized_salary:
+                    normalized_salary["player_name"] = normalize_to_ascii(
+                        normalized_salary["player_name"]
+                    )
+                enriched_salaries.append(normalized_salary)
 
             # Calculate salary statistics
-            matched_count = sum(1 for s in enriched_salaries if s.get("player_id") is not None)
             total_count = len(enriched_salaries)
-            match_rate = (matched_count / total_count * 100) if total_count > 0 else 0
-
-            results["statistics"]["salary_match_rate"] = round(match_rate, 2)
             results["statistics"]["total_salaries"] = total_count
-            results["statistics"]["matched_salaries"] = matched_count
-            results["statistics"]["unmatched_salaries"] = total_count - matched_count
 
             # Calculate salary aggregations
             salary_values = [s["annual_salary"] for s in enriched_salaries]
@@ -637,7 +1112,7 @@ def handler(event, context):
                 results["statistics"]["max_salary"] = max(salary_values)
                 results["statistics"]["total_salary_cap"] = sum(salary_values)
 
-            # Save enriched salaries
+            # Save transformed salaries
             transformed_salary_data = {
                 "transform_timestamp": datetime.utcnow().isoformat(),
                 "source": salary_data.get("source", "unknown"),
@@ -648,8 +1123,6 @@ def handler(event, context):
                 ),
                 "statistics": {
                     "total_salaries": total_count,
-                    "matched_salaries": matched_count,
-                    "match_rate": round(match_rate, 2),
                 },
                 "salaries": enriched_salaries,
             }
@@ -657,11 +1130,11 @@ def handler(event, context):
             s3_key = f"transformed/salaries/{partition}/enriched_salaries.json"
             if save_to_s3(transformed_salary_data, s3_key):
                 results["transformed"].append("enriched_salaries")
-                logger.info(f"Saved enriched salaries: {matched_count}/{total_count} matched")
+                logger.info(f"Saved {total_count} salary records")
             else:
-                results["errors"].append("Failed to save enriched salaries")
+                results["errors"].append("Failed to save salary data")
         else:
-            logger.warning("Skipping salary enrichment - missing salary or player data")
+            logger.warning("Skipping salary processing - missing salary data")
 
         # 3. Enrich player stats from Basketball Reference
         logger.info("Enriching player statistics...")
@@ -707,7 +1180,72 @@ def handler(event, context):
         else:
             results["errors"].append("Failed to enrich player stats")
 
-        # 4. Enrich and save team data with aggregations
+        # 4. Transform salary cap history and contract limits (if available)
+        cap_history_data = load_from_s3(f"raw/salary_cap/{partition}/salary_cap_history.json")
+
+        # Extract season from event or partition
+        season = event.get("season", "2025-26")
+
+        if cap_history_data:
+            # Transform salary cap history (filter by current season)
+            logger.info(f"Transforming salary cap history for season {season}...")
+            transformed_cap_history = transform_salary_cap_history(cap_history_data, season=season)
+
+            if transformed_cap_history:
+                results["statistics"]["total_cap_seasons"] = len(transformed_cap_history)
+
+                # Save transformed salary cap history
+                s3_key = f"transformed/salary_cap/{partition}/salary_cap_history.json"
+                transformed_cap_data = {
+                    "transform_timestamp": datetime.utcnow().isoformat(),
+                    "source": cap_history_data.get("source", "realgm"),
+                    "statistics": {
+                        "total_seasons": len(transformed_cap_history),
+                    },
+                    "salary_cap_history": transformed_cap_history,
+                }
+                if save_to_s3(transformed_cap_data, s3_key):
+                    results["transformed"].append("salary_cap_history")
+                    logger.info(
+                        f"Saved salary cap history for {len(transformed_cap_history)} seasons"
+                    )
+                else:
+                    results["errors"].append("Failed to save salary cap history")
+            else:
+                results["errors"].append("Failed to transform salary cap history")
+
+            # Transform contract limits (filter by current season)
+            logger.info(f"Transforming contract limits for season {season}...")
+            transformed_contract_limits = transform_contract_limits(cap_history_data, season=season)
+
+            if transformed_contract_limits:
+                results["statistics"]["total_contract_limit_seasons"] = len(
+                    transformed_contract_limits
+                )
+
+                # Save transformed contract limits
+                s3_key = f"transformed/salary_cap/{partition}/contract_limits.json"
+                transformed_limits_data = {
+                    "transform_timestamp": datetime.utcnow().isoformat(),
+                    "source": cap_history_data.get("source", "realgm"),
+                    "statistics": {
+                        "total_seasons": len(transformed_contract_limits),
+                    },
+                    "contract_limits": transformed_contract_limits,
+                }
+                if save_to_s3(transformed_limits_data, s3_key):
+                    results["transformed"].append("contract_limits")
+                    logger.info(
+                        f"Saved contract limits for {len(transformed_contract_limits)} seasons"
+                    )
+                else:
+                    results["errors"].append("Failed to save contract limits")
+            else:
+                results["errors"].append("Failed to transform contract limits")
+        else:
+            logger.info("No salary cap history data found - skipping")
+
+        # 5. Enrich and save team data with aggregations
         if teams_data and teams_data.get("teams"):
             logger.info("Enriching team data with salary and performance aggregations...")
 
@@ -779,6 +1317,7 @@ def handler(event, context):
             "statusCode": 200,
             "body": json.dumps(results),
             "data_location": event["data_location"],  # Pass through for next step
+            "season": event.get("season", "2025-26"),  # Pass season to next step
             "transformation_successful": len(results["errors"]) == 0,
             "statistics": results["statistics"],
         }

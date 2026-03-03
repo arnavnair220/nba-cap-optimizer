@@ -6,16 +6,16 @@ import json
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 
-from src.etl import validate_data
+from src.lambdas.etl import validate_data
 
 
 class TestEmptyDataValidation:
     """Test validation behavior when no data files exist."""
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
     def test_stats_only_missing_required_file(self, mock_load, mock_save):
         """Test stats_only fetch fails when stats file is missing."""
         mock_load.return_value = None
@@ -33,10 +33,10 @@ class TestEmptyDataValidation:
         assert body["valid"] is False
         assert body["error_count"] == 1
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
     def test_monthly_missing_all_files(self, mock_load, mock_save):
         """Test monthly fetch fails when all files are missing."""
         mock_load.return_value = None
@@ -52,12 +52,14 @@ class TestEmptyDataValidation:
         assert result["validation_passed"] is False
         body = json.loads(result["body"])
         assert body["valid"] is False
-        assert body["error_count"] == 4  # players, stats, teams, salaries
+        assert (
+            body["error_count"] == 5
+        )  # stats, teams, salaries, salary_cap_history, contract_limits
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
     def test_monthly_missing_one_required_file(self, mock_load, mock_save):
         """Test monthly fetch fails when one required file is missing."""
 
@@ -104,10 +106,10 @@ class TestEmptyDataValidation:
         assert body["valid"] is False
         assert body["error_count"] >= 1
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
     def test_stats_only_ignores_missing_monthly_files(self, mock_load, mock_save):
         """Test stats_only fetch doesn't fail when monthly files are missing."""
 
@@ -142,10 +144,10 @@ class TestEmptyDataValidation:
 class TestEmptyDataArrays:
     """Test validation behavior when data files exist but contain empty arrays."""
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
     def test_empty_players_array_fails(self, mock_load, mock_save):
         """Test validation fails when players array is empty."""
         mock_load.return_value = {"players": []}
@@ -167,10 +169,10 @@ class TestEmptyDataArrays:
 
         assert result["validation_passed"] is False
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
     def test_empty_salaries_array_with_warning(self, mock_load, mock_save):
         """Test validation warns when salaries array is empty."""
 
@@ -233,8 +235,8 @@ class TestEmptyDataArrays:
 class TestMissingDataLocationEvent:
     """Test validation behavior when event is missing required fields."""
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
     def test_missing_data_location(self):
         """Test validation fails when data_location is missing from event."""
         event = {}
@@ -249,10 +251,10 @@ class TestMissingDataLocationEvent:
 class TestBasketballReferenceValidation:
     """Test Basketball Reference specific validation logic."""
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
     def test_valid_basketball_reference_data(self, mock_load, mock_save):
         """Test validation passes with properly formatted Basketball Reference data."""
 
@@ -327,10 +329,10 @@ class TestBasketballReferenceValidation:
         assert body["valid"] is True
         assert body["error_count"] == 0
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
     def test_player_count_mismatch_warning(self, mock_load, mock_save):
         """Test warning when player counts differ by more than 2.5%."""
 
@@ -374,10 +376,10 @@ class TestBasketballReferenceValidation:
         # Should still pass validation (warning, not error)
         assert result["statusCode"] == 200
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
     def test_player_count_within_threshold(self, mock_load, mock_save):
         """Test no warning when player counts are within 2.5%."""
 
@@ -420,10 +422,10 @@ class TestBasketballReferenceValidation:
         assert "Player count mismatch" not in str(mock_save.call_args)
         assert result["statusCode"] == 200
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
     def test_missing_expected_columns(self, mock_load, mock_save):
         """Test error when expected columns are missing."""
 
@@ -459,10 +461,10 @@ class TestBasketballReferenceValidation:
         assert body["valid"] is False
         assert body["error_count"] > 0
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
     def test_unrealistic_stat_values(self, mock_load, mock_save):
         """Test warning for unrealistic stat values."""
 
@@ -563,10 +565,10 @@ class TestBasketballReferenceValidation:
         # Should still pass validation (warning, not error)
         assert result["statusCode"] == 200
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
     def test_low_player_count_warning(self, mock_load, mock_save):
         """Test warning when player count is below 300."""
 
@@ -610,10 +612,10 @@ class TestBasketballReferenceValidation:
         # Should still pass validation (warning, not error)
         assert result["statusCode"] == 200
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
     def test_wrong_source_field(self, mock_load, mock_save):
         """Test validation fails when source is not basketball_reference."""
 
@@ -644,10 +646,10 @@ class TestBasketballReferenceValidation:
         body = json.loads(result["body"])
         assert body["valid"] is False
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
     def test_valid_null_percentages_when_attempts_zero(self, mock_load, mock_save):
         """Test that null percentages are valid when corresponding attempts are zero."""
 
@@ -750,10 +752,10 @@ class TestBasketballReferenceValidation:
         assert body["valid"] is True
         assert body["error_count"] == 0
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
     def test_invalid_null_percentages_when_attempts_nonzero(self, mock_load, mock_save):
         """Test that null percentages are invalid when corresponding attempts are non-zero."""
 
@@ -898,10 +900,10 @@ class TestBasketballReferenceValidation:
         assert body["valid"] is False
         assert body["error_count"] > 0
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
     def test_mixed_null_and_zero_attempts(self, mock_load, mock_save):
         """Test players with some zero attempts (null %) and some non-zero attempts (valid %)."""
 
@@ -1028,10 +1030,10 @@ class TestNaNHandling:
         """Test _is_value_zero_or_null handles NaN."""
         assert validate_data._is_value_zero_or_null(float("nan")) is True
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
     def test_nan_in_percentage_allowed_when_attempts_zero(self, mock_load, mock_save):
         """Test NaN in percentage columns is valid when attempts are 0."""
 
@@ -1096,10 +1098,10 @@ class TestNaNHandling:
         result = validate_data.handler(event, MagicMock())
         assert result["statusCode"] == 200
 
-    @patch("src.etl.validate_data.ENVIRONMENT", "test")
-    @patch("src.etl.validate_data.S3_BUCKET", "test-bucket")
-    @patch("src.etl.validate_data.save_validation_report")
-    @patch("src.etl.validate_data.load_from_s3")
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
     def test_nan_in_percentage_invalid_when_attempts_nonzero(self, mock_load, mock_save):
         """Test NaN in percentage columns is invalid when attempts > 0."""
 
@@ -1180,6 +1182,242 @@ class TestNaNHandling:
         }
         result = validate_data.handler(event, MagicMock())
         assert result["statusCode"] == 422
+
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
+    def test_tov_percentage_null_passes_validation(self, mock_load, mock_save):
+        """Test TOV% can be null without failing validation (warn-only column)."""
+
+        def mock_load_side_effect(s3_key):
+            if "stats" in s3_key:
+                per_game = [
+                    {
+                        "Player": "Limited Minutes Player",
+                        "Pos": "C",
+                        "Age": 25,
+                        "Team": "LAL",
+                        "G": 5,
+                        "MP": 2.0,
+                        "PTS": 0.0,
+                        "TRB": 0.0,
+                        "AST": 0.0,
+                        "FGA": 0,
+                        "FTA": 0,
+                        "TOV": 0,
+                        "FG%": float("nan"),
+                    }
+                ]
+                per_game.extend(
+                    [
+                        {
+                            "Player": f"Player {i}",
+                            "Pos": "PG",
+                            "Age": 25,
+                            "Team": "LAL",
+                            "G": 70,
+                            "MP": 30.0,
+                            "PTS": 15.0,
+                            "TRB": 5.0,
+                            "AST": 5.0,
+                            "FGA": 10.0,
+                            "FTA": 5.0,
+                            "TOV": 2.5,
+                            "FG%": 0.45,
+                        }
+                        for i in range(349)
+                    ]
+                )
+                advanced = [
+                    {
+                        "Player": "Limited Minutes Player",
+                        "Pos": "C",
+                        "Age": 25,
+                        "Team": "LAL",
+                        "G": 5,
+                        "MP": 2.0,
+                        "PER": 5.0,
+                        "TOV%": float("nan"),
+                    }
+                ]
+                advanced.extend(
+                    [
+                        {
+                            "Player": f"Player {i}",
+                            "Pos": "PG",
+                            "Age": 25,
+                            "Team": "LAL",
+                            "G": 70,
+                            "MP": 30.0,
+                            "PER": 15.0,
+                            "TOV%": 12.0,
+                        }
+                        for i in range(349)
+                    ]
+                )
+                return {
+                    "season": "2025-26",
+                    "fetch_timestamp": datetime.utcnow().isoformat(),
+                    "source": "basketball_reference",
+                    "per_game_stats": per_game,
+                    "advanced_stats": advanced,
+                    "per_game_columns": [
+                        "Player",
+                        "Pos",
+                        "Age",
+                        "Team",
+                        "G",
+                        "MP",
+                        "PTS",
+                        "TRB",
+                        "AST",
+                        "FGA",
+                        "FTA",
+                        "TOV",
+                        "FG%",
+                    ],
+                    "advanced_columns": [
+                        "Player",
+                        "Pos",
+                        "Age",
+                        "Team",
+                        "G",
+                        "MP",
+                        "PER",
+                        "TOV%",
+                    ],
+                }
+            return None
+
+        mock_load.side_effect = mock_load_side_effect
+        event = {
+            "data_location": {"partition": "year=2026/month=02/day=19"},
+            "fetch_type": "stats_only",
+        }
+        result = validate_data.handler(event, MagicMock())
+        assert result["statusCode"] == 200
+        body = json.loads(result["body"])
+        assert body["valid"] is True
+
+    @patch("src.lambdas.etl.validate_data.ENVIRONMENT", "test")
+    @patch("src.lambdas.etl.validate_data.S3_BUCKET", "test-bucket")
+    @patch("src.lambdas.etl.validate_data.save_validation_report")
+    @patch("src.lambdas.etl.validate_data.load_from_s3")
+    def test_tov_percentage_null_warns_but_passes(self, mock_load, mock_save):
+        """Test TOV% null generates warning but doesn't fail validation (warn-only column)."""
+
+        def mock_load_side_effect(s3_key):
+            if "stats" in s3_key:
+                per_game = [
+                    {
+                        "Player": "Missing TOV% Player",
+                        "Pos": "PG",
+                        "Age": 25,
+                        "Team": "LAL",
+                        "G": 70,
+                        "MP": 30.0,
+                        "PTS": 15.0,
+                        "TRB": 5.0,
+                        "AST": 5.0,
+                        "FGA": 10.0,
+                        "FTA": 5.0,
+                        "TOV": 2.5,
+                        "FG%": 0.45,
+                    }
+                ]
+                per_game.extend(
+                    [
+                        {
+                            "Player": f"Player {i}",
+                            "Pos": "PG",
+                            "Age": 25,
+                            "Team": "LAL",
+                            "G": 70,
+                            "MP": 30.0,
+                            "PTS": 15.0,
+                            "TRB": 5.0,
+                            "AST": 5.0,
+                            "FGA": 10.0,
+                            "FTA": 5.0,
+                            "TOV": 2.5,
+                            "FG%": 0.45,
+                        }
+                        for i in range(349)
+                    ]
+                )
+                advanced = [
+                    {
+                        "Player": "Missing TOV% Player",
+                        "Pos": "PG",
+                        "Age": 25,
+                        "Team": "LAL",
+                        "G": 70,
+                        "MP": 30.0,
+                        "PER": 15.0,
+                        "TOV%": float("nan"),
+                    }
+                ]
+                advanced.extend(
+                    [
+                        {
+                            "Player": f"Player {i}",
+                            "Pos": "PG",
+                            "Age": 25,
+                            "Team": "LAL",
+                            "G": 70,
+                            "MP": 30.0,
+                            "PER": 15.0,
+                            "TOV%": 12.0,
+                        }
+                        for i in range(349)
+                    ]
+                )
+                return {
+                    "season": "2025-26",
+                    "fetch_timestamp": datetime.utcnow().isoformat(),
+                    "source": "basketball_reference",
+                    "per_game_stats": per_game,
+                    "advanced_stats": advanced,
+                    "per_game_columns": [
+                        "Player",
+                        "Pos",
+                        "Age",
+                        "Team",
+                        "G",
+                        "MP",
+                        "PTS",
+                        "TRB",
+                        "AST",
+                        "FGA",
+                        "FTA",
+                        "TOV",
+                        "FG%",
+                    ],
+                    "advanced_columns": [
+                        "Player",
+                        "Pos",
+                        "Age",
+                        "Team",
+                        "G",
+                        "MP",
+                        "PER",
+                        "TOV%",
+                    ],
+                }
+            return None
+
+        mock_load.side_effect = mock_load_side_effect
+        event = {
+            "data_location": {"partition": "year=2026/month=02/day=19"},
+            "fetch_type": "stats_only",
+        }
+        result = validate_data.handler(event, MagicMock())
+        assert result["statusCode"] == 200
+        body = json.loads(result["body"])
+        assert body["valid"] is True
+        # Should have warning about null TOV% (warn-only column doesn't fail validation)
+        assert body["warning_count"] > 0
 
 
 class TestLeagueAverageAndAwardsExclusion:
@@ -1395,3 +1633,537 @@ class TestLeagueAverageAndAwardsExclusion:
         assert result["errors"] == []
         awards_warnings = [w for w in result["warnings"] if "Awards" in w]
         assert len(awards_warnings) == 0
+
+
+class TestSalaryCapValidation:
+    """Test salary cap history validation."""
+
+    def test_valid_salary_cap_data(self):
+        """Test validation of valid salary cap data."""
+        cap_data = {
+            "source": "realgm",
+            "salary_cap_history": [
+                {
+                    "Season": "2025-2026",
+                    "Salary Cap": "$154,647,000",
+                    "Luxury Tax": "$187,895,000",
+                    "1st Apron": "$178,655,000",
+                    "2nd Apron": "$189,495,000",
+                    "BAE": "$5,168,000",
+                    "Non-Taxpayer MLE": "$13,040,000",
+                    "Taxpayer MLE": "$5,685,000",
+                    "Team Room MLE": "$8,781,000",
+                }
+            ],
+        }
+
+        result = validate_data.validate_salary_cap_history(cap_data, "2025-26")
+
+        assert result["valid"] is True
+        assert result["data_type"] == "salary_cap_history"
+        assert result["errors"] == []
+
+    def test_missing_salary_cap_data(self):
+        """Test validation when salary cap data is missing."""
+        result = validate_data.validate_salary_cap_history(None, "2025-26")
+
+        assert result["valid"] is False
+        assert "missing" in result["errors"][0].lower()
+
+    def test_empty_salary_cap_array(self):
+        """Test validation when salary cap array is empty."""
+        cap_data = {"salary_cap_history": []}
+
+        result = validate_data.validate_salary_cap_history(cap_data, "2025-26")
+
+        assert result["valid"] is False
+        assert "empty" in result["errors"][0].lower()
+
+    def test_season_not_found(self):
+        """Test validation when requested season is not in data."""
+        cap_data = {
+            "salary_cap_history": [
+                {"Season": "2024-2025", "Salary Cap": "$140,588,000"},
+                {"Season": "2023-2024", "Salary Cap": "$136,021,000"},
+            ]
+        }
+
+        result = validate_data.validate_salary_cap_history(cap_data, "2025-26")
+
+        assert result["valid"] is False
+        assert "No salary cap data found" in result["errors"][0]
+        assert "2025-2026" in result["errors"][0]
+
+    def test_missing_salary_cap_field(self):
+        """Test validation when salary cap field is missing."""
+        cap_data = {
+            "salary_cap_history": [
+                {
+                    "Season": "2025-2026",
+                    "Luxury Tax": "$187,895,000",
+                }
+            ]
+        }
+
+        result = validate_data.validate_salary_cap_history(cap_data, "2025-26")
+
+        assert result["valid"] is False
+        assert "Salary Cap field is missing" in result["errors"][0]
+
+    def test_negative_salary_cap(self):
+        """Test validation when salary cap is negative."""
+        cap_data = {"salary_cap_history": [{"Season": "2025-2026", "Salary Cap": "$-100,000,000"}]}
+
+        result = validate_data.validate_salary_cap_history(cap_data, "2025-26")
+
+        assert result["valid"] is False
+        assert "must be positive" in result["errors"][0]
+
+    def test_unreasonably_low_salary_cap(self):
+        """Test warning for unreasonably low salary cap."""
+        cap_data = {
+            "salary_cap_history": [
+                {
+                    "Season": "2025-2026",
+                    "Salary Cap": "$10,000,000",
+                    "Luxury Tax": "$15,000,000",
+                    "1st Apron": "$12,000,000",
+                    "BAE": "$1,000,000",
+                    "Non-Taxpayer MLE": "$2,000,000",
+                    "Taxpayer MLE": "$1,500,000",
+                    "Team Room MLE": "$1,800,000",
+                }
+            ]
+        }
+
+        result = validate_data.validate_salary_cap_history(cap_data, "2025-26")
+
+        assert result["valid"] is True
+        assert len(result["warnings"]) > 0
+        assert "seems low" in result["warnings"][0].lower()
+
+    def test_luxury_tax_less_than_salary_cap(self):
+        """Test warning when luxury tax is less than salary cap."""
+        cap_data = {
+            "salary_cap_history": [
+                {
+                    "Season": "2025-2026",
+                    "Salary Cap": "$154,647,000",
+                    "Luxury Tax": "$100,000,000",
+                    "1st Apron": "$178,655,000",
+                    "BAE": "$5,168,000",
+                    "Non-Taxpayer MLE": "$13,040,000",
+                    "Taxpayer MLE": "$5,685,000",
+                    "Team Room MLE": "$8,781,000",
+                }
+            ]
+        }
+
+        result = validate_data.validate_salary_cap_history(cap_data, "2025-26")
+
+        assert result["valid"] is True
+        assert len(result["warnings"]) > 0
+        assert "greater than salary cap" in result["warnings"][0].lower()
+
+    def test_missing_mandatory_fields_cause_errors(self):
+        """Test that missing mandatory fields cause validation errors."""
+        cap_data = {
+            "salary_cap_history": [
+                {
+                    "Season": "2025-2026",
+                    "Salary Cap": "$154,647,000",
+                    # Missing all other required fields
+                }
+            ]
+        }
+
+        result = validate_data.validate_salary_cap_history(cap_data, "2025-26")
+
+        assert result["valid"] is False
+        assert len(result["errors"]) >= 6  # Luxury Tax, 1st Apron, BAE, 3 MLEs
+
+    def test_missing_second_apron_causes_warning(self):
+        """Test that missing 2nd Apron causes a warning but not an error."""
+        cap_data = {
+            "salary_cap_history": [
+                {
+                    "Season": "2025-2026",
+                    "Salary Cap": "$154,647,000",
+                    "Luxury Tax": "$187,895,000",
+                    "1st Apron": "$178,655,000",
+                    # Missing 2nd Apron
+                    "BAE": "$5,168,000",
+                    "Non-Taxpayer MLE": "$13,040,000",
+                    "Taxpayer MLE": "$5,685,000",
+                    "Team Room MLE": "$8,781,000",
+                }
+            ]
+        }
+
+        result = validate_data.validate_salary_cap_history(cap_data, "2025-26")
+
+        assert result["valid"] is True
+        assert len(result["warnings"]) > 0
+        assert any("2nd Apron" in w for w in result["warnings"])
+
+
+class TestContractLimitsValidation:
+    """Test contract limits validation."""
+
+    def test_valid_contract_limits(self):
+        """Test validation of valid contract limits data."""
+        limits_data = {
+            "contract_limits": [
+                {
+                    "Season": "2025-2026",
+                    "0-6 YOS Max": "$38,661,750",
+                    "7-9 YOS Max": "$46,394,100",
+                    "10+ YOS Max": "$54,126,450",
+                    "0 YOS Min": "$1,157,153",
+                    "1 YOS Min": "$1,862,265",
+                    "2 YOS Min": "$2,296,274",
+                    "10+ YOS Min": "$3,634,153",
+                }
+            ]
+        }
+
+        result = validate_data.validate_contract_limits(limits_data, "2025-26")
+
+        assert result["valid"] is True
+        assert result["data_type"] == "contract_limits"
+        assert result["errors"] == []
+
+    def test_missing_contract_limits_data(self):
+        """Test validation when contract limits data is missing."""
+        result = validate_data.validate_contract_limits(None, "2025-26")
+
+        assert result["valid"] is False
+        assert "missing" in result["errors"][0].lower()
+
+    def test_max_salaries_increase_with_yos(self):
+        """Test that max salaries properly increase with years of service."""
+        limits_data = {
+            "contract_limits": [
+                {
+                    "Season": "2025-2026",
+                    "0-6 YOS Max": "$38,661,750",
+                    "7-9 YOS Max": "$46,394,100",
+                    "10+ YOS Max": "$54,126,450",
+                    "0 YOS Min": "$1,157,153",
+                    "1 YOS Min": "$1,862,265",
+                    "2 YOS Min": "$2,296,274",
+                    "10+ YOS Min": "$3,634,153",
+                }
+            ]
+        }
+
+        result = validate_data.validate_contract_limits(limits_data, "2025-26")
+
+        assert result["valid"] is True
+        yos_warnings = [w for w in result["warnings"] if "YOS" in w and "increase" in w.lower()]
+        assert len(yos_warnings) == 0
+
+    def test_max_salaries_wrong_order(self):
+        """Test warning when max salaries do not increase with YOS."""
+        limits_data = {
+            "contract_limits": [
+                {
+                    "Season": "2025-2026",
+                    "0-6 YOS Max": "$54,126,450",
+                    "7-9 YOS Max": "$46,394,100",
+                    "10+ YOS Max": "$38,661,750",
+                    "0 YOS Min": "$1,157,153",
+                    "1 YOS Min": "$1,862,265",
+                    "2 YOS Min": "$2,296,274",
+                    "10+ YOS Min": "$3,634,153",
+                }
+            ]
+        }
+
+        result = validate_data.validate_contract_limits(limits_data, "2025-26")
+
+        assert result["valid"] is True
+        assert len(result["warnings"]) > 0
+        assert "should increase with YOS" in result["warnings"][0]
+
+    def test_missing_mandatory_contract_field(self):
+        """Test that missing mandatory contract limit fields cause errors."""
+        limits_data = {
+            "contract_limits": [
+                {
+                    "Season": "2025-2026",
+                    "0-6 YOS Max": "$38,661,750",
+                    "7-9 YOS Max": "$46,394,100",
+                    # Missing 10+ YOS Max and all minimums
+                }
+            ]
+        }
+
+        result = validate_data.validate_contract_limits(limits_data, "2025-26")
+
+        assert result["valid"] is False
+        assert len(result["errors"]) >= 5  # 10+ YOS Max and 4 minimum fields
+
+    def test_negative_min_salary(self):
+        """Test error when minimum salary is negative."""
+        limits_data = {
+            "contract_limits": [
+                {
+                    "Season": "2025-2026",
+                    "0-6 YOS Max": "$38,661,750",
+                    "7-9 YOS Max": "$46,394,100",
+                    "10+ YOS Max": "$54,126,450",
+                    "0 YOS Min": "$-1,000,000",
+                    "1 YOS Min": "$1,862,265",
+                    "2 YOS Min": "$2,296,274",
+                    "10+ YOS Min": "$3,634,153",
+                }
+            ]
+        }
+
+        result = validate_data.validate_contract_limits(limits_data, "2025-26")
+
+        assert result["valid"] is False
+        assert any("must be positive" in e for e in result["errors"])
+
+
+class TestBadRowDetection:
+    """Test bad row detection and tolerance threshold."""
+
+    def test_identify_bad_rows_with_missing_critical_columns(self):
+        """Test that rows with missing critical columns are identified as bad."""
+        stats = [
+            {"Player": "Good Player", "Pos": "PG", "Age": 25, "Team": "LAL", "PTS": 20.0},
+            {"Player": None, "Pos": "SG", "Age": 28, "Team": "GSW", "PTS": 15.0},
+            {"Player": "Another Good", "Pos": "SF", "Age": 30, "Team": "BOS", "PTS": 18.0},
+        ]
+
+        statistics = {}
+        bad_rows, bad_count, bad_pct = validate_data._identify_bad_rows(stats, statistics)
+
+        assert bad_count == 1
+        assert abs(bad_pct - (1 / 3)) < 0.01
+        assert len(bad_rows) == 1
+        assert bad_rows[0]["player_index"] == 1
+        assert "Player" in bad_rows[0]["bad_columns"]
+
+    def test_identify_bad_rows_with_missing_non_critical_columns(self):
+        """Test that rows with missing non-critical stats are identified as bad."""
+        stats = [
+            {
+                "Player": "Good Player",
+                "Pos": "PG",
+                "Age": 25,
+                "Team": "LAL",
+                "PTS": 20.0,
+                "AST": 5.0,
+            },
+            {
+                "Player": "Bad Player",
+                "Pos": "SG",
+                "Age": 28,
+                "Team": "GSW",
+                "PTS": None,
+                "AST": 3.0,
+            },
+        ]
+
+        statistics = {}
+        bad_rows, bad_count, bad_pct = validate_data._identify_bad_rows(stats, statistics)
+
+        assert bad_count == 1
+        assert bad_pct == 0.5
+        assert "PTS" in bad_rows[0]["bad_columns"]
+
+    def test_identify_bad_rows_allows_null_percentage_when_attempts_zero(self):
+        """Test that null percentages are allowed when attempts = 0."""
+        stats = [
+            {
+                "Player": "Player 1",
+                "Pos": "PG",
+                "Age": 25,
+                "Team": "LAL",
+                "FG%": None,
+                "FGA": 0,
+            },
+            {
+                "Player": "Player 2",
+                "Pos": "SG",
+                "Age": 28,
+                "Team": "GSW",
+                "3P%": None,
+                "3PA": 0,
+            },
+        ]
+
+        statistics = {}
+        bad_rows, bad_count, bad_pct = validate_data._identify_bad_rows(stats, statistics)
+
+        assert bad_count == 0
+        assert bad_pct == 0.0
+
+    def test_identify_bad_rows_skips_warn_only_columns(self):
+        """Test that warn_only_columns (cross-array dependencies) are not marked as bad."""
+        stats = [
+            {
+                "Player": "Player 1",
+                "Pos": "PG",
+                "Age": 25,
+                "Team": "LAL",
+                "TOV%": None,
+                "TS%": None,
+            }
+        ]
+
+        statistics = {}
+        bad_rows, bad_count, bad_pct = validate_data._identify_bad_rows(stats, statistics)
+
+        assert bad_count == 0
+        assert bad_pct == 0.0
+
+    def test_validate_stats_passes_with_bad_rows_under_threshold(self):
+        """Test that validation passes when bad rows <= 1%."""
+        # Create 400 good rows (above 300 minimum) + 4 bad rows (exactly 1%)
+        good_row = {
+            "Player": "Good Player",
+            "Pos": "PG",
+            "Age": 25,
+            "Team": "LAL",
+            "G": 50,
+            "MP": 30.0,
+            "PTS": 20.0,
+            "TRB": 5.0,
+            "AST": 7.0,
+            "FG": 8.0,
+            "FGA": 15.0,
+            "FG%": 0.533,
+        }
+        bad_row = {
+            "Player": None,
+            "Pos": "SG",
+            "Age": 28,
+            "Team": "GSW",
+            "G": 45,
+            "MP": 25.0,
+            "PTS": 15.0,
+            "TRB": 4.0,
+            "AST": 6.0,
+        }
+
+        stats_data = {
+            "season": "2025-26",
+            "fetch_timestamp": datetime.utcnow().isoformat(),
+            "source": "basketball_reference",
+            "per_game_stats": [{**good_row, "Player": f"Player {i}"} for i in range(400)]
+            + [bad_row.copy() for _ in range(4)],
+            "advanced_stats": [
+                {
+                    "Player": f"Player {i}",
+                    "Pos": "PG",
+                    "Age": 25,
+                    "Team": "LAL",
+                    "G": 50,
+                    "MP": 30.0,
+                    "PER": 25.0,
+                }
+                for i in range(404)
+            ],
+            "per_game_columns": ["Player", "Pos", "Age", "Team", "G", "MP", "PTS", "TRB", "AST"],
+            "advanced_columns": ["Player", "Pos", "Age", "Team", "G", "MP", "PER"],
+        }
+
+        result = validate_data.validate_stats_data(stats_data)
+
+        assert result["valid"] is True
+        assert result["statistics"]["bad_rows_identified_per_game"] == 4
+        assert abs(result["statistics"]["bad_row_percentage_per_game"] - 1.0) < 0.1
+        assert any("Identified 4 bad rows" in w for w in result["warnings"])
+
+    def test_validate_stats_fails_with_bad_rows_over_threshold(self):
+        """Test that validation fails when bad rows > 1%."""
+        # Create 390 good rows + 10 bad rows (2.5% bad, over 1% threshold)
+        good_row = {
+            "Player": "Good Player",
+            "Pos": "PG",
+            "Age": 25,
+            "Team": "LAL",
+            "G": 50,
+            "MP": 30.0,
+            "PTS": 20.0,
+            "TRB": 5.0,
+            "AST": 7.0,
+        }
+        bad_row = {"Player": None, "Pos": "SG", "Age": 28, "Team": "GSW", "G": 45, "MP": 25.0}
+
+        stats_data = {
+            "season": "2025-26",
+            "fetch_timestamp": datetime.utcnow().isoformat(),
+            "source": "basketball_reference",
+            "per_game_stats": [{**good_row, "Player": f"Player {i}"} for i in range(390)]
+            + [bad_row.copy() for _ in range(10)],
+            "advanced_stats": [
+                {
+                    "Player": f"Player {i}",
+                    "Pos": "PG",
+                    "Age": 25,
+                    "Team": "LAL",
+                    "G": 50,
+                    "MP": 30.0,
+                    "PER": 25.0,
+                }
+                for i in range(400)
+            ],
+            "per_game_columns": ["Player", "Pos", "Age", "Team", "G", "MP", "PTS", "TRB", "AST"],
+            "advanced_columns": ["Player", "Pos", "Age", "Team", "G", "MP", "PER"],
+        }
+
+        result = validate_data.validate_stats_data(stats_data)
+
+        assert result["valid"] is False
+        assert result["statistics"]["bad_rows_identified_per_game"] == 10
+        assert result["statistics"]["bad_row_percentage_per_game"] == 2.5
+        assert any("exceeds 1.0% threshold" in e for e in result["errors"])
+
+    def test_validate_stats_edge_case_exactly_one_percent(self):
+        """Test edge case: exactly 1% bad rows should pass."""
+        # Create 399 good rows + 1 bad row (0.25% bad, under threshold)
+        good_row = {
+            "Player": "Good Player",
+            "Pos": "PG",
+            "Age": 25,
+            "Team": "LAL",
+            "G": 50,
+            "MP": 30.0,
+            "PTS": 20.0,
+            "TRB": 5.0,
+            "AST": 7.0,
+        }
+        bad_row = {"Player": None, "Pos": "SG", "Age": 28, "Team": "GSW", "G": 45, "MP": 25.0}
+
+        stats_data = {
+            "season": "2025-26",
+            "fetch_timestamp": datetime.utcnow().isoformat(),
+            "source": "basketball_reference",
+            "per_game_stats": [{**good_row, "Player": f"Player {i}"} for i in range(399)]
+            + [bad_row],
+            "advanced_stats": [
+                {
+                    "Player": f"Player {i}",
+                    "Pos": "PG",
+                    "Age": 25,
+                    "Team": "LAL",
+                    "G": 50,
+                    "MP": 30.0,
+                    "PER": 25.0,
+                }
+                for i in range(400)
+            ],
+            "per_game_columns": ["Player", "Pos", "Age", "Team", "G", "MP", "PTS", "TRB", "AST"],
+            "advanced_columns": ["Player", "Pos", "Age", "Team", "G", "MP", "PER"],
+        }
+
+        result = validate_data.validate_stats_data(stats_data)
+
+        assert result["valid"] is True
+        assert result["statistics"]["bad_rows_identified_per_game"] == 1
+        assert result["statistics"]["bad_row_percentage_per_game"] == 0.25
