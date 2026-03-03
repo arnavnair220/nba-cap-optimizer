@@ -95,3 +95,18 @@ output "frontend_cloudfront_id" {
   description = "CloudFront distribution ID (for cache invalidation)"
   value       = aws_cloudfront_distribution.frontend.id
 }
+
+output "route53_nameservers" {
+  description = "Route53 nameservers to configure at Porkbun (production only)"
+  value       = var.environment == "production" ? aws_route53_zone.main[0].name_servers : null
+}
+
+output "custom_domain_frontend" {
+  description = "Custom domain URL for frontend (production only)"
+  value       = var.environment == "production" ? "https://www.dunkonomics.net" : "Not configured for development"
+}
+
+output "custom_domain_api" {
+  description = "Custom domain URL for API (production only)"
+  value       = var.environment == "production" ? "https://api.dunkonomics.net/v1" : "Not configured for development"
+}
