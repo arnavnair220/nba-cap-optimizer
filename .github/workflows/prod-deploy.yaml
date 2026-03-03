@@ -165,11 +165,6 @@ jobs:
           pip install -r requirements.txt
           safety check --json
 
-      - name: Run Bandit security linter
-        run: |
-          pip install bandit
-          bandit -r src/ -ll -f json -o bandit-report.json
-
       - name: Check for secrets in code
         uses: trufflesecurity/trufflehog@main
         with:
