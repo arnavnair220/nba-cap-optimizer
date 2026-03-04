@@ -2,8 +2,11 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "NBA Cap Optimizer - Player Value Dashboard",
-  description: "Interactive dashboard ranking NBA players by fair market value predictions",
+  title: "DUNKONOMICS - NBA Player Value Analytics",
+  description: "Analyze NBA player contract efficiency with machine learning. See which players are bargains vs overpaid based on performance predictions.",
+  icons: {
+    icon: "/favicon.png",
+  },
 };
 
 export default function RootLayout({
