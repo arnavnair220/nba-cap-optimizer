@@ -222,7 +222,7 @@ export default function Home() {
         <div className="bg-cream retro-border-thick shadow-retro-lg p-8 max-w-md text-center">
           <div className="mb-6">
             <img
-              src="https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3djZ6OW14d2UybWowNnQwM2VzbmR0cGNjOWUzOWM0YmNmdzkxcDVvZSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/cUIX3QHGEyfow1QZgw/giphy.gif"
+              src="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZnBza2Ewc3p3ZGQzZnlrZTdjZHdpZ3BpMHR6bnhzeXJueG1haWZyeiZlcD12MV9naWZzX3NlYXJjaCZjdD1n/WUrgA8xOSUJj6JZoJC/giphy.gif"
               alt="Basketball"
               className="w-48 h-48 mx-auto object-cover retro-border"
             />
