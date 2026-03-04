@@ -119,7 +119,7 @@ resource "aws_acm_certificate_validation" "api" {
 # Create the service-linked role that API Gateway needs for custom domains
 resource "aws_iam_service_linked_role" "apigateway" {
   count            = var.environment == "production" ? 1 : 0
-  aws_service_name = "apigateway.amazonaws.com"
+  aws_service_name = "ops.apigateway.amazonaws.com"
   description      = "Allows API Gateway to manage AWS resources on your behalf"
 }
 
@@ -128,10 +128,14 @@ resource "aws_iam_service_linked_role" "apigateway" {
 # ============================================================================
 
 resource "aws_api_gateway_domain_name" "api" {
-  depends_on = [aws_iam_service_linked_role.apigateway]
+  depends_on      = [aws_iam_service_linked_role.apigateway]
   count           = var.environment == "production" ? 1 : 0
   domain_name     = "api.dunkonomics.net"
   certificate_arn = aws_acm_certificate_validation.api[0].certificate_arn
+
+  endpoint_configuration {
+    types = ["EDGE"]
+  }
 
   tags = merge(
     local.common_tags,
