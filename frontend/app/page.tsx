@@ -44,6 +44,18 @@ export default function Home() {
   const [selectedPlayerName, setSelectedPlayerName] = useState<string | null>(null);
   const [selectedPlayerDetail, setSelectedPlayerDetail] = useState<PlayerPrediction | null>(null);
   const [playerDetailLoading, setPlayerDetailLoading] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   const tabs = [
     { id: 'leaderboard', label: 'Leaderboard' },
@@ -204,6 +216,28 @@ export default function Home() {
     }
   });
 
+  if (isMobile) {
+    return (
+      <main className="min-h-screen bg-retro-blue flex items-center justify-center p-6">
+        <div className="bg-cream retro-border-thick shadow-retro-lg p-8 max-w-md text-center">
+          <div className="mb-6">
+            <img
+              src="https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3djZ6OW14d2UybWowNnQwM2VzbmR0cGNjOWUzOWM0YmNmdzkxcDVvZSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/cUIX3QHGEyfow1QZgw/giphy.gif"
+              alt="Basketball"
+              className="w-48 h-48 mx-auto object-cover retro-border"
+            />
+          </div>
+          <h1 className="headline-retro text-3xl text-black mb-4">DESKTOP ONLY</h1>
+          <p className="font-bold text-lg mb-2">Not designed for mobile yet</p>
+          <p className="font-bold text-sm text-gray-600">Coming soon :D</p>
+          <div className="mt-6 pt-6 border-t-4 border-black">
+            <p className="text-xs font-bold text-gray-500">Please visit on a desktop browser</p>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen">
       <div className="max-w-7xl mx-auto px-6 pt-8 pb-6">
@@ -213,7 +247,7 @@ export default function Home() {
               WebkitTextStroke: '1.5px #FEF5E7',
               textShadow: '-3px -3px 0 #000, 3px -3px 0 #000, -3px 3px 0 #000, 3px 3px 0 #000, -3px 0 0 #000, 3px 0 0 #000, 0 -3px 0 #000, 0 3px 0 #000'
             }}>
-              NBA CAP OPTIMIZER
+              DUNKONOMICS.NET
             </h1>
           </div>
           <div className="hidden md:block">
@@ -456,13 +490,13 @@ export default function Home() {
             <TabPanel tabId="about" activeTab={activeTab}>
               <div className="bg-cream retro-border-thick shadow-retro-lg p-8 halftone-bg">
                 <div className="max-w-4xl mx-auto">
-                  <h2 className="headline-retro text-3xl text-black mb-6">ABOUT NBA CAP OPTIMIZER</h2>
+                  <h2 className="headline-retro text-3xl text-black mb-6">ABOUT DUNKONOMICS.NET</h2>
 
                   <div className="space-y-6 text-black">
                     <div className="bg-blue-100 p-6 retro-border">
                       <h3 className="subhead-retro text-xl mb-3 text-retro-blue">What is This?</h3>
                       <p className="font-bold leading-relaxed">
-                        NBA Cap Optimizer analyzes player performance to predict what each player&apos;s salary should be worth. We then compare these predictions to what teams are actually paying to identify team-friendly bargains and overpaid contracts.
+                        Dunkonomics analyzes player performance to predict what each player&apos;s salary should be worth. We then compare these predictions to what teams are actually paying to identify team-friendly bargains and overpaid contracts.
                       </p>
                     </div>
 
