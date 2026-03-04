@@ -113,10 +113,22 @@ resource "aws_acm_certificate_validation" "api" {
 }
 
 # ============================================================================
+# API GATEWAY SERVICE-LINKED ROLE (Production Only)
+# ============================================================================
+
+# Create the service-linked role that API Gateway needs for custom domains
+resource "aws_iam_service_linked_role" "apigateway" {
+  count            = var.environment == "production" ? 1 : 0
+  aws_service_name = "apigateway.amazonaws.com"
+  description      = "Allows API Gateway to manage AWS resources on your behalf"
+}
+
+# ============================================================================
 # API GATEWAY CUSTOM DOMAIN (Production Only)
 # ============================================================================
 
 resource "aws_api_gateway_domain_name" "api" {
+  depends_on = [aws_iam_service_linked_role.apigateway]
   count           = var.environment == "production" ? 1 : 0
   domain_name     = "api.dunkonomics.net"
   certificate_arn = aws_acm_certificate_validation.api[0].certificate_arn
