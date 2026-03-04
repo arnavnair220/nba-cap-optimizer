@@ -65,6 +65,7 @@ resource "aws_cloudfront_distribution" "frontend" {
   is_ipv6_enabled     = true
   default_root_object = "index.html"
   price_class         = "PriceClass_100" # Use only US, Canada, Europe edge locations for cost optimization
+  aliases             = var.environment == "production" ? ["www.dunkonomics.net", "dunkonomics.net"] : []
 
   origin {
     domain_name = aws_s3_bucket.frontend.bucket_regional_domain_name
@@ -117,7 +118,10 @@ resource "aws_cloudfront_distribution" "frontend" {
   }
 
   viewer_certificate {
-    cloudfront_default_certificate = true
+    acm_certificate_arn            = var.environment == "production" ? aws_acm_certificate_validation.frontend[0].certificate_arn : null
+    cloudfront_default_certificate = var.environment == "production" ? false : true
+    ssl_support_method             = var.environment == "production" ? "sni-only" : null
+    minimum_protocol_version       = var.environment == "production" ? "TLSv1.2_2021" : "TLSv1"
   }
 
   tags = {
