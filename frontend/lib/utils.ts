@@ -48,3 +48,65 @@ export function formatSavings(savings: number): string {
   }
   return formatted;
 }
+
+const MULTI_TEAM_INDICATORS = ['TOT', '2TM', '3TM', '4TM', '5TM'];
+
+export function isMultiTeamIndicator(teamAbbr: string): boolean {
+  return MULTI_TEAM_INDICATORS.includes(teamAbbr);
+}
+
+export function getUniquePlayersForLeaderboard(players: PlayerPrediction[]): PlayerPrediction[] {
+  const playerMap = new Map<string, PlayerPrediction[]>();
+
+  players.forEach(player => {
+    const key = `${player.player_name}-${player.season}`;
+    if (!playerMap.has(key)) {
+      playerMap.set(key, []);
+    }
+    playerMap.get(key)!.push(player);
+  });
+
+  const uniquePlayers: PlayerPrediction[] = [];
+
+  playerMap.forEach((playerRows) => {
+    if (playerRows.length === 1) {
+      uniquePlayers.push(playerRows[0]);
+    } else {
+      const aggregateRow = playerRows.find(p => isMultiTeamIndicator(p.team_abbreviation));
+      if (aggregateRow) {
+        uniquePlayers.push(aggregateRow);
+      } else {
+        uniquePlayers.push(playerRows[0]);
+      }
+    }
+  });
+
+  return uniquePlayers;
+}
+
+export function getPlayersCurrentTeamOnly(players: PlayerPrediction[]): PlayerPrediction[] {
+  const playerMap = new Map<string, PlayerPrediction[]>();
+
+  players.forEach(player => {
+    if (isMultiTeamIndicator(player.team_abbreviation)) {
+      return;
+    }
+    const key = `${player.player_name}-${player.season}`;
+    if (!playerMap.has(key)) {
+      playerMap.set(key, []);
+    }
+    playerMap.get(key)!.push(player);
+  });
+
+  const currentTeamPlayers: PlayerPrediction[] = [];
+
+  playerMap.forEach((playerRows) => {
+    if (playerRows.length === 1) {
+      currentTeamPlayers.push(playerRows[0]);
+    } else {
+      currentTeamPlayers.push(playerRows[playerRows.length - 1]);
+    }
+  });
+
+  return currentTeamPlayers;
+}

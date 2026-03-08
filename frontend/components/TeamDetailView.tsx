@@ -3,6 +3,7 @@
 import { TeamDetail } from '@/lib/types';
 import PlayerTable from './PlayerTable';
 import { getTeamColors } from '@/lib/teamColors';
+import { getPlayersCurrentTeamOnly } from '@/lib/utils';
 
 interface TeamDetailViewProps {
   team: TeamDetail;
@@ -12,6 +13,8 @@ interface TeamDetailViewProps {
 
 export default function TeamDetailView({ team, onBack, onPlayerClick }: TeamDetailViewProps) {
   const teamColors = getTeamColors(team.team_abbreviation);
+  const currentTeamPlayers = getPlayersCurrentTeamOnly(team.players);
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -132,11 +135,11 @@ export default function TeamDetailView({ team, onBack, onPlayerClick }: TeamDeta
           <div className="subhead-retro text-lg text-white flex items-center justify-between">
             <span>TEAM ROSTER</span>
             <span className="bg-white text-black px-3 py-1 retro-border">
-              {team.players.length} PLAYERS
+              {currentTeamPlayers.length} PLAYERS
             </span>
           </div>
         </div>
-        <PlayerTable players={team.players} showRank={false} showTeam={false} onPlayerClick={onPlayerClick} />
+        <PlayerTable players={currentTeamPlayers} showRank={false} showTeam={false} onPlayerClick={onPlayerClick} />
       </div>
     </div>
   );
