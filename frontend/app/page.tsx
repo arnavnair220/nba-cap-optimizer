@@ -16,6 +16,7 @@ import TeamFilters from '@/components/TeamFilters';
 import TeamDetailView from '@/components/TeamDetailView';
 import PlayerDetailView from '@/components/PlayerDetailView';
 import DataFreshnessInfo from '@/components/DataFreshnessInfo';
+import { getUniquePlayersForLeaderboard, getPlayersCurrentTeamOnly } from '@/lib/utils';
 
 export default function Home() {
   const [players, setPlayers] = useState<PlayerPrediction[]>([]);
@@ -164,7 +165,9 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
 
-  const filteredPlayers = players.filter((player) => {
+  const uniquePlayers = getUniquePlayersForLeaderboard(players);
+
+  const filteredPlayers = uniquePlayers.filter((player) => {
     const matchesSearch = player.player_name.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesTeam = !team || player.team_abbreviation === team;
     const matchesPosition = !position || player.position === position;
@@ -342,15 +345,15 @@ export default function Home() {
                   {players.length > 0 && (
                     <>
                   <div className="mb-8">
-                    <DashboardStats players={players} />
+                    <DashboardStats players={uniquePlayers} />
                   </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
                     <div className="lg:col-span-1">
-                      <ValueDistributionChart players={players} />
+                      <ValueDistributionChart players={uniquePlayers} />
                     </div>
                     <div className="lg:col-span-2">
-                      <SalaryScatterPlot players={players} />
+                      <SalaryScatterPlot players={uniquePlayers} />
                     </div>
                   </div>
 
@@ -363,7 +366,7 @@ export default function Home() {
                         <div className="flex-1 h-1 bg-black"></div>
                       </div>
                       <div className="space-y-3">
-                        {players
+                        {uniquePlayers
                           .filter((p) => p.value_category === 'Bargain')
                           .sort((a, b) => a.inefficiency_score - b.inefficiency_score)
                           .slice(0, 5)
@@ -398,7 +401,7 @@ export default function Home() {
                         <div className="flex-1 h-1 bg-black"></div>
                       </div>
                       <div className="space-y-3">
-                        {players
+                        {uniquePlayers
                           .filter((p) => p.value_category === 'Overpaid')
                           .sort((a, b) => b.inefficiency_score - a.inefficiency_score)
                           .slice(0, 5)
