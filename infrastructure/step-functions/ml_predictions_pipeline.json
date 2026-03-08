@@ -6,8 +6,10 @@
       "Type": "Pass",
       "Parameters": {
         "season.$": "$.season",
-        "execution_id.$": "$$.Execution.Name"
+        "execution_id.$": "$$.Execution.Name",
+        "job_id.$": "States.UUID()"
       },
+      "ResultPath": "$",
       "Next": "ExtractPredictionData"
     },
     "ExtractPredictionData": {
@@ -38,7 +40,7 @@
       "Type": "Task",
       "Resource": "arn:aws:states:::sagemaker:createProcessingJob.sync",
       "Parameters": {
-        "ProcessingJobName.$": "States.Format('feature-eng-predict-{}', $.execution_id)",
+        "ProcessingJobName.$": "States.Format('feat-eng-pred-{}', $.job_id)",
         "RoleArn": "${sagemaker_role_arn}",
         "ProcessingInputs": [
           {
@@ -118,7 +120,7 @@
       "Type": "Task",
       "Resource": "arn:aws:states:::sagemaker:createModel",
       "Parameters": {
-        "ModelName.$": "States.Format('salary-predictor-{}', $.execution_id)",
+        "ModelName.$": "States.Format('salary-pred-{}', $.job_id)",
         "PrimaryContainer": {
           "Image": "${sklearn_image_uri}",
           "ModelDataUrl.$": "States.Format('s3://${data_bucket}/ml/models/{}/model.tar.gz', $.season)",
@@ -147,8 +149,8 @@
       "Resource": "arn:aws:states:::sagemaker:createTransformJob.sync",
       "TimeoutSeconds": 600,
       "Parameters": {
-        "TransformJobName.$": "States.Format('predict-{}', $.execution_id)",
-        "ModelName.$": "States.Format('salary-predictor-{}', $.execution_id)",
+        "TransformJobName.$": "States.Format('predict-{}', $.job_id)",
+        "ModelName.$": "States.Format('salary-pred-{}', $.job_id)",
         "TransformInput": {
           "DataSource": {
             "S3DataSource": {

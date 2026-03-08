@@ -171,7 +171,7 @@ export default function PlayerTable({ players, showRank = true, showTeam = true,
             const teamColors = getTeamColors(player.team_abbreviation);
             return (
               <tr
-                key={`${player.player_name}-${player.season}`}
+                key={`${player.player_name}-${player.team_abbreviation}-${player.season}`}
                 className={`hover:bg-gray-100 transition-colors border-l-4 ${
                   onPlayerClick ? 'cursor-pointer' : ''
                 }`}
