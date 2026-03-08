@@ -6,8 +6,10 @@
       "Type": "Pass",
       "Parameters": {
         "season.$": "$.season",
-        "execution_id.$": "$$.Execution.Name"
+        "execution_id.$": "$$.Execution.Name",
+        "job_id.$": "States.UUID()"
       },
+      "ResultPath": "$",
       "Next": "ExtractTrainingData"
     },
     "ExtractTrainingData": {
@@ -39,7 +41,7 @@
       "Type": "Task",
       "Resource": "arn:aws:states:::sagemaker:createProcessingJob.sync",
       "Parameters": {
-        "ProcessingJobName.$": "States.Format('feature-eng-{}', $.execution_id)",
+        "ProcessingJobName.$": "States.Format('feat-eng-train-{}', $.job_id)",
         "RoleArn": "${sagemaker_role_arn}",
         "ProcessingInputs": [
           {
@@ -120,7 +122,7 @@
       "Type": "Task",
       "Resource": "arn:aws:states:::sagemaker:createTrainingJob.sync",
       "Parameters": {
-        "TrainingJobName.$": "States.Format('train-{}', $.execution_id)",
+        "TrainingJobName.$": "States.Format('train-{}', $.job_id)",
         "RoleArn": "${sagemaker_role_arn}",
         "AlgorithmSpecification": {
           "TrainingImage": "${sklearn_image_uri}",
