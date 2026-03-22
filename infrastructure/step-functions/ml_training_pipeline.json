@@ -93,12 +93,6 @@
             "VolumeSizeInGB": 30
           }
         },
-        "NetworkConfig": {
-          "VpcConfig": {
-            "SecurityGroupIds": ["${rds_security_group_id}"],
-            "Subnets": ${private_subnet_ids}
-          }
-        },
         "Environment": {
           "INPUT_PATH.$": "$.extractResult.s3_path",
           "DATA_BUCKET": "${data_bucket}"
