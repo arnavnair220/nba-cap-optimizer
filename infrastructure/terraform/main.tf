@@ -340,57 +340,6 @@ resource "aws_vpc_endpoint" "secretsmanager" {
   )
 }
 
-# ECR API VPC Endpoint (for SageMaker to pull container images)
-resource "aws_vpc_endpoint" "ecr_api" {
-  vpc_id              = aws_vpc.main.id
-  service_name        = "com.amazonaws.${var.aws_region}.ecr.api"
-  vpc_endpoint_type   = "Interface"
-  subnet_ids          = [aws_subnet.private_a.id, aws_subnet.private_b.id]
-  security_group_ids  = [aws_security_group.vpc_endpoints.id]
-  private_dns_enabled = true
-
-  tags = merge(
-    local.common_tags,
-    {
-      Name = "${local.name_prefix}-ecr-api-endpoint"
-    }
-  )
-}
-
-# ECR Docker VPC Endpoint (for SageMaker to pull container layers)
-resource "aws_vpc_endpoint" "ecr_dkr" {
-  vpc_id              = aws_vpc.main.id
-  service_name        = "com.amazonaws.${var.aws_region}.ecr.dkr"
-  vpc_endpoint_type   = "Interface"
-  subnet_ids          = [aws_subnet.private_a.id, aws_subnet.private_b.id]
-  security_group_ids  = [aws_security_group.vpc_endpoints.id]
-  private_dns_enabled = true
-
-  tags = merge(
-    local.common_tags,
-    {
-      Name = "${local.name_prefix}-ecr-dkr-endpoint"
-    }
-  )
-}
-
-# CloudWatch Logs VPC Endpoint (for SageMaker container logs)
-resource "aws_vpc_endpoint" "logs" {
-  vpc_id              = aws_vpc.main.id
-  service_name        = "com.amazonaws.${var.aws_region}.logs"
-  vpc_endpoint_type   = "Interface"
-  subnet_ids          = [aws_subnet.private_a.id, aws_subnet.private_b.id]
-  security_group_ids  = [aws_security_group.vpc_endpoints.id]
-  private_dns_enabled = true
-
-  tags = merge(
-    local.common_tags,
-    {
-      Name = "${local.name_prefix}-logs-endpoint"
-    }
-  )
-}
-
 # ============================================================================
 # RDS POSTGRESQL
 # ============================================================================
